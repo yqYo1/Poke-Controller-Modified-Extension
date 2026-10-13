@@ -752,6 +752,7 @@ self.displayText([10, 10], "HP: 100/100", ms=3000, color="green")
 - `self.keys.end() -> None`: 互換シリアル終了行を送信する
 - `self.keys.ser.write()` で生シリアル書き込みが可能（IPCプロキシ経由）。公開型は `bytes | bytearray | memoryview | list[int]`
 - `self.keys.ser.writeRow()` でシリアル行書き込み（末尾に改行自動追加）
+- **入力の合成優先度（2026-10-12決定: 手動優先）**: 同一要素（スティック・Hat・タッチ）を複数の入力元が同時に主張した場合、手動入力（キーボード／マウス、ブラウザゲームパッド、ハードウェアコントローラー）がスクリプト入力を上回る。上流`InputSource`（`COMMAND`＜`KEYBOARD`＜`MOUSE`＜`PROCON`）の順序に準拠し、動的設定入力は最上位を維持する。ボタンは入力元を問わず論理和で合成する
 - **注**: `self.keys` は互換性維持のための旧API。ユーザースクリプトからは引き続き `self.keys` を使用する
 
 #### 10.5.2 Sender

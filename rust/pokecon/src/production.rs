@@ -1713,9 +1713,12 @@ mod tests {
                 lock_wait_nanos.push(lock_wait);
                 apply_nanos.push(apply);
             }
+            // The dynamic-config source keeps the highest priority under the
+            // 2026-10-12 decision (manual and system sources outrank script
+            // input); explicit priority must beat lock arrival order.
             assert_eq!(
                 production_arbiter.lock().output().left_stick,
-                source_specs[1].3,
+                source_specs[5].3,
                 "explicit production priority must win regardless of lock arrival order"
             );
             high_priority_wins += 1;

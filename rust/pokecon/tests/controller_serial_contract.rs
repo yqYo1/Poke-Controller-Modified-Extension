@@ -185,11 +185,19 @@ struct QueuedContentionUpdate {
 fn priority_matrix() -> [PriorityMatrixRow; 5] {
     [
         PriorityMatrixRow {
+            source: "userscript",
+            kind_label: "UserScript",
+            kind: InputSourceKind::UserScript,
+            priority: InputPriority::USER_SCRIPT,
+            priority_value: 100,
+            stick_x: 250,
+        },
+        PriorityMatrixRow {
             source: "kbd",
             kind_label: "Keyboard",
             kind: InputSourceKind::Keyboard,
             priority: InputPriority::KEYBOARD_MOUSE,
-            priority_value: 100,
+            priority_value: 200,
             stick_x: 16,
         },
         PriorityMatrixRow {
@@ -197,7 +205,7 @@ fn priority_matrix() -> [PriorityMatrixRow; 5] {
             kind_label: "BrowserGamepad",
             kind: InputSourceKind::BrowserGamepad,
             priority: InputPriority::BROWSER_GAMEPAD,
-            priority_value: 200,
+            priority_value: 300,
             stick_x: 64,
         },
         PriorityMatrixRow {
@@ -205,7 +213,7 @@ fn priority_matrix() -> [PriorityMatrixRow; 5] {
             kind_label: "HardwareController",
             kind: InputSourceKind::HardwareController,
             priority: InputPriority::HARDWARE_CONTROLLER,
-            priority_value: 300,
+            priority_value: 400,
             stick_x: 192,
         },
         PriorityMatrixRow {
@@ -213,16 +221,8 @@ fn priority_matrix() -> [PriorityMatrixRow; 5] {
             kind_label: "DynamicConfig",
             kind: InputSourceKind::DynamicConfig,
             priority: InputPriority::DYNAMIC_CONFIG,
-            priority_value: 400,
-            stick_x: 224,
-        },
-        PriorityMatrixRow {
-            source: "userscript",
-            kind_label: "UserScript",
-            kind: InputSourceKind::UserScript,
-            priority: InputPriority::USER_SCRIPT,
             priority_value: 500,
-            stick_x: 250,
+            stick_x: 224,
         },
     ]
 }
@@ -270,7 +270,8 @@ async fn priority_contention_matrix_before_after_report() {
     let matrix = priority_matrix();
 
     // Break-red: the five documented priority levels must stay strictly
-    // ordered. (Mouse shares KEYBOARD_MOUSE=100 with Keyboard by design.)
+    // ordered (2026-10-12 manual-wins model; the matrix keeps one row per
+    // level, Mouse shares KEYBOARD_MOUSE with Keyboard by design).
     for window in matrix.windows(2) {
         assert!(
             window[0].priority < window[1].priority,
@@ -283,11 +284,11 @@ async fn priority_contention_matrix_before_after_report() {
             "matrix priority values must stay distinct"
         );
     }
+    assert_eq!(matrix.first().unwrap().priority, InputPriority::USER_SCRIPT);
     assert_eq!(
-        matrix.first().unwrap().priority,
-        InputPriority::KEYBOARD_MOUSE
+        matrix.last().unwrap().priority,
+        InputPriority::DYNAMIC_CONFIG
     );
-    assert_eq!(matrix.last().unwrap().priority, InputPriority::USER_SCRIPT);
 
     let mut arbiter = InputArbiter::default();
     let mut applied_per_source = [0_usize; 5];

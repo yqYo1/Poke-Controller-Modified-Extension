@@ -163,15 +163,20 @@ pub enum InputSourceKind {
 }
 
 /// Explicit continuous-input priority. Buttons remain unioned by ownership.
+///
+/// Script input ranks below every manual source so that manual intervention
+/// wins same-element conflicts (2026-10-12 decision, upstream
+/// `COMMAND < KEYBOARD < MOUSE < PROCON`); the dynamic-config source keeps
+/// its place above the manual sources. Buttons stay a union regardless.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct InputPriority(u16);
 
 impl InputPriority {
-    pub const KEYBOARD_MOUSE: Self = Self(100);
-    pub const BROWSER_GAMEPAD: Self = Self(200);
-    pub const HARDWARE_CONTROLLER: Self = Self(300);
-    pub const DYNAMIC_CONFIG: Self = Self(400);
-    pub const USER_SCRIPT: Self = Self(500);
+    pub const USER_SCRIPT: Self = Self(100);
+    pub const KEYBOARD_MOUSE: Self = Self(200);
+    pub const BROWSER_GAMEPAD: Self = Self(300);
+    pub const HARDWARE_CONTROLLER: Self = Self(400);
+    pub const DYNAMIC_CONFIG: Self = Self(500);
 
     #[must_use]
     pub const fn custom(value: u16) -> Self {
@@ -857,42 +862,44 @@ mod tests {
 
     #[test]
     fn buttons_union_and_continuous_priority_release_deterministically() {
-        let low = id("hardware");
-        let high = id("script");
+        let manual = id("hardware");
+        let script = id("script");
         let mut arbiter = InputArbiter::default();
         arbiter.begin_generation(
-            low.clone(),
+            manual.clone(),
             InputSourceKind::HardwareController,
             InputPriority::HARDWARE_CONTROLLER,
             generation("h1"),
         );
-        let mut low_state = ControllerState::NEUTRAL;
-        low_state.buttons.set(Button::A, true);
-        low_state.left_stick = StickPosition { x: 0, y: 128 };
+        let mut manual_state = ControllerState::NEUTRAL;
+        manual_state.buttons.set(Button::A, true);
+        manual_state.left_stick = StickPosition { x: 0, y: 128 };
         arbiter
-            .apply_snapshot(&low, snapshot("h1", low_state))
+            .apply_snapshot(&manual, snapshot("h1", manual_state))
             .unwrap();
 
         arbiter.begin_generation(
-            high.clone(),
+            script.clone(),
             InputSourceKind::UserScript,
             InputPriority::USER_SCRIPT,
             generation("s1"),
         );
-        let mut high_state = ControllerState::NEUTRAL;
-        high_state.buttons.set(Button::B, true);
-        high_state.left_stick = StickPosition { x: 255, y: 128 };
+        let mut script_state = ControllerState::NEUTRAL;
+        script_state.buttons.set(Button::B, true);
+        script_state.left_stick = StickPosition { x: 255, y: 128 };
         arbiter
-            .apply_snapshot(&high, snapshot("s1", high_state))
+            .apply_snapshot(&script, snapshot("s1", script_state))
             .unwrap();
+        // Buttons union across sources; continuous elements follow the
+        // 2026-10-12 priority decision (manual outranks script).
         assert!(arbiter.output().buttons.a && arbiter.output().buttons.b);
-        assert_eq!(arbiter.output().left_stick.x, 255);
+        assert_eq!(arbiter.output().left_stick.x, 0);
 
-        assert!(arbiter.disconnect_source(&high));
+        assert!(arbiter.disconnect_source(&script));
         assert!(arbiter.output().buttons.a);
         assert!(!arbiter.output().buttons.b);
         assert_eq!(arbiter.output().left_stick.x, 0);
-        assert!(arbiter.disconnect_source(&low));
+        assert!(arbiter.disconnect_source(&manual));
         assert_eq!(arbiter.output(), ControllerState::NEUTRAL);
     }
 
@@ -1335,7 +1342,8 @@ mod tests {
                 InputEvent::Hat(Hat::Right),
             )
             .unwrap();
-        assert_eq!(arbiter.output().hat, Hat::Up);
+        // Manual outranks script for continuous elements (2026-10-12 decision).
+        assert_eq!(arbiter.output().hat, Hat::Right);
         arbiter
             .apply_event(
                 script,

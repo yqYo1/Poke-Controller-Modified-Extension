@@ -5,11 +5,17 @@ import hashlib
 import json
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-from scripts.compatibility.inventory import Baseline
+from scripts.compatibility.inventory import (
+    Baseline,
+    require_mapping,
+    require_sequence,
+)
 from scripts.compatibility.promote import (
     append_decision,
     canonical_sha256,
@@ -21,7 +27,12 @@ from scripts.compatibility.promote import (
     validate_decision_results,
     validate_history,
 )
-from scripts.compatibility.roll import changed_script_paths, discover_candidates
+from scripts.compatibility.public_api import collect_public_api, compare_public_api
+from scripts.compatibility.roll import (
+    changed_script_paths,
+    discover_candidates,
+    evaluate_candidate,
+)
 from scripts.compatibility.runner import (
     command_root_for,
     main,
@@ -32,6 +43,9 @@ from scripts.compatibility.runner import (
     success_report,
     verify_baseline,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 
@@ -668,3 +682,355 @@ def test_compatibility_task_emits_only_its_own_report() -> None:
         "lifecycle-report.json",
     ):
         assert foreign not in body
+
+
+BASELINE_COMMANDS_SOURCE = """\
+class PythonCommand:
+    def __init__(self, cam=None):
+        self.cam = cam
+
+    def press(self, button, duration=1.0):
+        return True
+
+    def _internal(self):
+        return False
+
+
+def convert(fmt="", crop=None):
+    return fmt
+"""
+
+OPTIONAL_ADDITION_COMMANDS_SOURCE = """\
+class PythonCommand:
+    def __init__(self, cam=None):
+        self.cam = cam
+
+    def press(self, button, duration=1.0, hold=False):
+        return True
+
+    def release_all(self):
+        return None
+
+    def _internal(self):
+        return False
+
+
+def convert(fmt="", crop=None):
+    return fmt
+"""
+
+BREAKING_COMMANDS_SOURCE = """\
+class PythonCommand:
+    def __init__(self, cam=None):
+        self.cam = cam
+
+    def press(self, button, duration=1.0, *, mode):
+        return True
+
+    def _internal(self):
+        return False
+
+
+def convert(fmt="", crop=None):
+    return fmt
+"""
+
+
+def write_commands_fixture(root: Path, files: dict[str, str]) -> Path:
+    commands = root / "SerialController" / "Commands"
+    commands.mkdir(parents=True, exist_ok=True)
+    for name, source in files.items():
+        (commands / name).write_text(source, encoding="utf-8")
+    return root
+
+
+def test_public_api_extraction_collects_signatures_and_skips_missing_files(
+    tmp_path: Path,
+) -> None:
+    write_commands_fixture(
+        tmp_path,
+        {
+            "CommandBase.py": (
+                "def helper(a, b=2, *, c=3, **kwargs):\n"
+                "    return a\n"
+                "\n"
+                "class Base:\n"
+                "    CONSTANT = 1\n"
+                "\n"
+                "    def __init__(self):\n"
+                "        self.value = 0\n"
+                "\n"
+                "    def run(self, speed=1):\n"
+                "        return speed\n"
+                "\n"
+                "    def _hidden(self):\n"
+                "        return None\n"
+                "\n"
+                "Direction.UP = 1\n"
+            ),
+            "SwitchKeyboard.py": "KEY = 1\nOTHER = 2\n",
+        },
+    )
+    api = collect_public_api(tmp_path)
+    files = require_mapping(api["files"], "files")
+    assert set(files) == {"Commands/CommandBase.py", "Commands/SwitchKeyboard.py"}
+    base = require_mapping(files["Commands/CommandBase.py"], "base entry")
+    assert base["functions"] == {"helper": ["a", "b=2", "*", "c=3", "**kwargs"]}
+    assert base["classes"] == {
+        "Base": {
+            "bases": [],
+            "methods": {"__init__": ["self"], "run": ["self", "speed=1"]},
+            "attributes": ["CONSTANT", "value"],
+        }
+    }
+    assert base["variables"] == []
+    keyboard = require_mapping(files["Commands/SwitchKeyboard.py"], "keyboard entry")
+    assert keyboard["variables"] == ["KEY"]
+
+
+def test_public_api_comparison_classifies_breaking_changes() -> None:
+    recorded: dict[str, object] = {
+        "files": {
+            "Commands/Keys.py": {
+                "functions": {"press": ["button", "duration=1.0"]},
+                "classes": {
+                    "Button": {
+                        "bases": ["IntFlag"],
+                        "methods": {},
+                        "attributes": ["A", "B"],
+                    }
+                },
+                "variables": ["DEFAULT"],
+            }
+        }
+    }
+    removed, _unrecorded = compare_public_api(recorded, {"files": {}})
+    assert removed == ["removed: files > Commands/Keys.py"]
+    changed, _unrecorded = compare_public_api(
+        recorded,
+        {
+            "files": {
+                "Commands/Keys.py": {
+                    "functions": {"press": ["button"]},
+                    "classes": {
+                        "Button": {
+                            "bases": ["IntFlag"],
+                            "methods": {},
+                            "attributes": ["A", "B"],
+                        }
+                    },
+                    "variables": ["DEFAULT"],
+                }
+            }
+        },
+    )
+    assert changed == [
+        "changed arguments: files > Commands/Keys.py > functions > press: "
+        "(button, duration=1.0) -> (button)"
+    ]
+    narrowed, _unrecorded = compare_public_api(
+        recorded,
+        {
+            "files": {
+                "Commands/Keys.py": {
+                    "functions": {"press": ["button", "duration=1.0"]},
+                    "classes": {
+                        "Button": {
+                            "bases": ["IntFlag"],
+                            "methods": {},
+                            "attributes": ["A"],
+                        }
+                    },
+                    "variables": ["DEFAULT"],
+                }
+            }
+        },
+    )
+    assert narrowed == [
+        "removed: files > Commands/Keys.py > classes > Button > attributes > B"
+    ]
+
+
+def test_public_api_comparison_classifies_required_and_optional_additions() -> None:
+    recorded: dict[str, object] = {
+        "files": {
+            "Commands/Keys.py": {
+                "functions": {"press": ["button"]},
+                "classes": {},
+                "variables": [],
+            }
+        }
+    }
+    required, _unrecorded = compare_public_api(
+        recorded,
+        {
+            "files": {
+                "Commands/Keys.py": {
+                    "functions": {"press": ["button", "mode"]},
+                    "classes": {},
+                    "variables": [],
+                }
+            }
+        },
+    )
+    assert required == [
+        "added required arguments: files > Commands/Keys.py > functions > press: mode"
+    ]
+    optional, unrecorded = compare_public_api(
+        recorded,
+        {
+            "files": {
+                "Commands/Keys.py": {
+                    "functions": {"press": ["button", "hold=False"]},
+                    "classes": {},
+                    "variables": ["EXTRA"],
+                }
+            }
+        },
+    )
+    assert optional == []
+    assert unrecorded == [
+        "files > Commands/Keys.py > functions > press: arguments hold=False",
+        "files > Commands/Keys.py > variables > EXTRA",
+    ]
+
+
+def run_evaluate_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    baseline_source: str | None,
+    candidate_source: str,
+    baseline_api_cache: dict[str, dict[str, object]],
+) -> dict[str, object]:
+    baseline_root = tmp_path / "baseline"
+    if baseline_source is not None:
+        write_commands_fixture(baseline_root, {"PythonCommandBase.py": baseline_source})
+    else:
+        (baseline_root / "SerialController" / "Commands").mkdir(parents=True)
+    candidate_root = write_commands_fixture(
+        tmp_path / "candidate", {"PythonCommandBase.py": candidate_source}
+    )
+    roots = {"yqyo1-extension": baseline_root, "candidate-one": candidate_root}
+
+    @contextmanager
+    def fake_materialize(entry: Baseline, _overrides: object) -> Generator[Path]:
+        yield roots[entry.identifier]
+
+    def fake_inventory(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"id": "candidate-one", "scripts": []}
+
+    def fake_verify(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"scripts": []}
+
+    monkeypatch.setattr(
+        "scripts.compatibility.roll.materialize_repository", fake_materialize
+    )
+    monkeypatch.setattr("scripts.compatibility.roll.inventory_baseline", fake_inventory)
+    monkeypatch.setattr("scripts.compatibility.roll.verify_baseline", fake_verify)
+    protocol = tmp_path / "protocol.json"
+    protocol.write_text("{}\n", encoding="utf-8")
+    baseline = Baseline(
+        identifier="yqyo1-extension",
+        repository="https://example.invalid/repository.git",
+        commit="a" * 40,
+        script_roots=("SerialController/Commands/PythonCommands",),
+    )
+    candidate: dict[str, object] = {
+        "id": "candidate-one",
+        "baseline_id": "yqyo1-extension",
+        "repository": "https://example.invalid/repository.git",
+        "commit": "b" * 40,
+    }
+    return evaluate_candidate(
+        candidate,
+        baseline,
+        {"scripts": []},
+        {
+            "summary": {
+                "result": "passed",
+                "baseline_count": 3,
+                "script_count": 103,
+            },
+            "results_sha256": "d" * 64,
+        },
+        tmp_path / "compatibility",
+        tmp_path / "worker",
+        tmp_path / "site-packages",
+        protocol,
+        {},
+        baseline_api_cache,
+    )
+
+
+def test_evaluate_candidate_flags_breaking_public_api_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = run_evaluate_candidate(
+        tmp_path,
+        monkeypatch,
+        BASELINE_COMMANDS_SOURCE,
+        BREAKING_COMMANDS_SOURCE,
+        {},
+    )
+    assert result["result"] == "breaking"
+    api_surface = require_mapping(result["api_surface"], "api_surface")
+    assert api_surface["result"] == "breaking"
+    breaking = require_sequence(api_surface["breaking_changes"], "breaking_changes")
+    assert breaking == [
+        "added required arguments: files > Commands/PythonCommandBase.py > "
+        "classes > PythonCommand > methods > press: mode"
+    ]
+    candidate = {
+        "id": "candidate-one",
+        "commit": "b" * 40,
+    }
+    failures = promotion_failures(candidate, result)
+    assert "breaking_api_change" in failures
+    assert "api_surface_unverified" in failures
+
+
+def test_evaluate_candidate_records_compatible_additions_as_unrecorded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = run_evaluate_candidate(
+        tmp_path,
+        monkeypatch,
+        BASELINE_COMMANDS_SOURCE,
+        OPTIONAL_ADDITION_COMMANDS_SOURCE,
+        {},
+    )
+    assert result["result"] == "passed"
+    api_surface = require_mapping(result["api_surface"], "api_surface")
+    assert api_surface["result"] == "non_breaking"
+    assert api_surface["breaking_changes"] == []
+    unrecorded = require_sequence(
+        api_surface["unrecorded_additions"], "unrecorded_additions"
+    )
+    assert unrecorded == [
+        "files > Commands/PythonCommandBase.py > classes > PythonCommand > "
+        "methods > press: arguments hold=False",
+        "files > Commands/PythonCommandBase.py > classes > PythonCommand > "
+        "methods > release_all",
+    ]
+    candidate = {
+        "id": "candidate-one",
+        "commit": "b" * 40,
+    }
+    assert promotion_failures(candidate, result) == []
+
+
+def test_evaluate_candidate_fails_closed_without_baseline_api_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = run_evaluate_candidate(
+        tmp_path,
+        monkeypatch,
+        None,
+        BASELINE_COMMANDS_SOURCE,
+        {},
+    )
+    assert result["result"] == "failed"
+    assert result["diagnostic_code"] == "ValueError"

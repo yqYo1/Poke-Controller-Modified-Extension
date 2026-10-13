@@ -29,6 +29,11 @@ from scripts.compatibility.promote import (
     validate_decision_results,
     validate_history,
 )
+from scripts.compatibility.public_api import (
+    collect_public_api,
+    compare_public_api,
+    public_api_file_count,
+)
 from scripts.compatibility.runner import (
     FIXTURE_CATALOG,
     build_results,
@@ -175,6 +180,7 @@ def evaluate_candidate(
     site_packages: Path,
     protocol_path: Path,
     repository_overrides: Mapping[str, Path],
+    baseline_api_cache: dict[str, dict[str, object]],
 ) -> dict[str, object]:
     candidate_id = require_string(candidate.get("id"), "candidate id")
     commit = require_string(candidate.get("commit"), "candidate commit")
@@ -191,6 +197,18 @@ def evaluate_candidate(
             baseline.identifier
         )
         overrides = {candidate_id: override} if override is not None else {}
+        baseline_api = baseline_api_cache.get(baseline.identifier)
+        if baseline_api is None:
+            with materialize_repository(
+                baseline, repository_overrides
+            ) as baseline_materialized:
+                baseline_api = collect_public_api(baseline_materialized)
+            if public_api_file_count(baseline_api) == 0:
+                invalid_value(
+                    f"baseline {baseline.identifier} exposed no comparable "
+                    "public API files"
+                )
+            baseline_api_cache[baseline.identifier] = baseline_api
         with materialize_repository(promoted, overrides) as materialized:
             candidate_manifest = inventory_baseline(
                 promoted, {candidate_id: materialized}
@@ -203,6 +221,10 @@ def evaluate_candidate(
                 worker,
                 site_packages,
             )
+            candidate_api = collect_public_api(materialized)
+        breaking_changes, unrecorded_additions = compare_public_api(
+            baseline_api, candidate_api
+        )
         changed = changed_script_paths(fixed_manifest, candidate_manifest)
         unverified: list[dict[str, object]] = []
         deterministic: list[str] = []
@@ -226,13 +248,17 @@ def evaluate_candidate(
             else:
                 deterministic.append(path)
         runtime_result = "passed" if not unverified else "unverified"
+        if breaking_changes:
+            candidate_result = "breaking"
+        else:
+            candidate_result = "passed" if not unverified else "unverified"
         return {
             "schema_version": 1,
             "candidate_id": candidate_id,
             "baseline_id": baseline.identifier,
             "repository": repository,
             "commit": commit,
-            "result": "passed" if not unverified else "unverified",
+            "result": candidate_result,
             "full_fixed_chain": fixed_chain,
             "runtime": {
                 "result": runtime_result,
@@ -242,10 +268,11 @@ def evaluate_candidate(
                 "hardware_gates": unverified,
             },
             "api_surface": {
-                "result": "non_breaking",
-                "breaking_changes": [],
+                "result": "breaking" if breaking_changes else "non_breaking",
+                "breaking_changes": breaking_changes,
+                "unrecorded_additions": unrecorded_additions,
                 "protocol_sha256": file_sha256(protocol_path),
-                "verification": "generated_contract_and_managed_import_discovery",
+                "verification": "ast_public_api_signature_comparison",
             },
             "fixture_catalog": FIXTURE_CATALOG,
             "corpus_manifest": candidate_manifest,
@@ -329,6 +356,7 @@ def evaluate_pending(
         "+00:00", "Z"
     )
     decisions: list[dict[str, object]] = []
+    baseline_api_cache: dict[str, dict[str, object]] = {}
     for candidate in pending:
         candidate_id = require_string(candidate.get("id"), "candidate id")
         baseline_id = require_string(candidate.get("baseline_id"), "baseline_id")
@@ -348,6 +376,7 @@ def evaluate_pending(
             site_packages,
             protocol_path,
             repository_overrides,
+            baseline_api_cache,
         )
         persist_result(result_directory, candidate_id, report)
         decision = append_decision(

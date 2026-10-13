@@ -34,6 +34,8 @@ struct RecordingScriptHost {
     serial_bytes: Mutex<Vec<Vec<u8>>>,
     serial_rows: Mutex<Vec<String>>,
     serial_reloads: AtomicUsize,
+    data_format: Mutex<String>,
+    keyboard_frames: Mutex<Vec<(u8, u8)>>,
     outputs: Mutex<Vec<HostOutputRequest>>,
     neutralizations: AtomicUsize,
     next_dialog_id: AtomicU64,
@@ -75,6 +77,15 @@ impl ScriptHost for RecordingScriptHost {
 
     fn serial_write_row(&self, row: String) -> Result<(), ScriptHostError> {
         self.serial_rows.lock().unwrap().push(row);
+        Ok(())
+    }
+
+    fn serial_data_format_name(&self) -> Result<String, ScriptHostError> {
+        Ok(self.data_format.lock().unwrap().clone())
+    }
+
+    fn serial_write_nx_keyboard(&self, mode: u8, key: u8) -> Result<(), ScriptHostError> {
+        self.keyboard_frames.lock().unwrap().push((mode, key));
         Ok(())
     }
 
@@ -583,6 +594,151 @@ class Exercise(PythonCommand):
 
     stop_worker(&worker).await;
     assert_eq!(host.neutralizations.load(Ordering::Acquire), 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn script_worker_keyboard_default_format_sends_rows_and_releases_on_end() {
+    const SOURCE: &str = r#"
+from Commands.PythonCommandBase import PythonCommand
+from Commands.SwitchKeyboard import KEY, split_text
+
+
+class ExerciseKeyboard(PythonCommand):
+    def do(self):
+        assert split_text("abcdefghijklmnop") == ["abcdefghijklm", "nop"]
+        self.KeyBoard_Init()
+        self.TypeString("Hey")
+        self.TypeKey(KEY.ENTER)
+        self.PressKey(KEY.BACKSPACE)
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("exercise.py"), SOURCE).expect("script fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    *host.data_format.lock().unwrap() = "Default".to_owned();
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "exercise.py".into(),
+            class_name: "ExerciseKeyboard".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("script execution request succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+    assert_eq!(
+        *host.serial_rows.lock().unwrap(),
+        vec!["end", "\"Hey\"", "Key 40", "Press 42", "Release 42"]
+    );
+    assert!(host.keyboard_frames.lock().unwrap().is_empty());
+    assert!(host.serial_bytes.lock().unwrap().is_empty());
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn script_worker_keyboard_nx_format_sends_frames() {
+    const SOURCE: &str = r#"
+from Commands.PythonCommandBase import PythonCommand
+from Commands.SwitchKeyboard import KEY
+
+
+class ExerciseKeyboardNx(PythonCommand):
+    def do(self):
+        self.KeyBoard_Init()
+        self.TypeString("ab")
+        self.TypeKey(KEY.ENTER)
+        self.PressKey(KEY.BACKSPACE)
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("exercise.py"), SOURCE).expect("script fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    *host.data_format.lock().unwrap() = "NX".to_owned();
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "exercise.py".into(),
+            class_name: "ExerciseKeyboardNx".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("script execution request succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+    assert_eq!(
+        *host.keyboard_frames.lock().unwrap(),
+        vec![
+            (5, 0),
+            (1, 97),
+            (2, 97),
+            (1, 98),
+            (2, 98),
+            (3, 40),
+            (4, 40),
+            (3, 42),
+            (4, 42),
+        ]
+    );
+    assert!(host.serial_rows.lock().unwrap().is_empty());
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn script_worker_keyboard_rejects_unsupported_format_and_invalid_text() {
+    const SOURCE: &str = r#"
+from Commands.PythonCommandBase import PythonCommand
+
+
+class ExerciseKeyboardUnsupported(PythonCommand):
+    def do(self):
+        first = self.TypeString("ok")
+        second = self.TypeString("ok")
+        invalid = self.TypeString("あ")
+        self.print_s(f"results={first},{second},{invalid}")
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("exercise.py"), SOURCE).expect("script fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    *host.data_format.lock().unwrap() = "Qingpi".to_owned();
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "exercise.py".into(),
+            class_name: "ExerciseKeyboardUnsupported".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("script execution request succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+    {
+        let outputs = host.outputs.lock().unwrap();
+        assert!(
+            outputs
+                .iter()
+                .any(|output| output.message.contains("results=False,False,False"))
+        );
+        let warnings = outputs
+            .iter()
+            .filter(|output| {
+                output
+                    .message
+                    .contains("Data Format が Default / NX の場合のみ使えます。(現在: Qingpi)")
+            })
+            .count();
+        assert_eq!(warnings, 1);
+    }
+    assert!(host.keyboard_frames.lock().unwrap().is_empty());
+    assert!(host.serial_rows.lock().unwrap().is_empty());
+
+    stop_worker(&worker).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

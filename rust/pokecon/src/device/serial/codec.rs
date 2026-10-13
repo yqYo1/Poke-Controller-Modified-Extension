@@ -46,6 +46,19 @@ impl ControllerFormat {
         }
         Self::Default
     }
+
+    /// Returns the upstream-facing display name used by user-visible
+    /// compatibility messages for this format.
+    #[must_use]
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            Self::Default => "Default",
+            Self::Nx => "NX",
+            Self::Qingpi => "Qingpi",
+            Self::ThreeDsX4 => "3DS Controller(FW:x.4-)",
+            Self::ThreeDsX3 => "3DS Controller(FW:-x.3)",
+        }
+    }
 }
 
 /// Stateful encoder used to omit unchanged stick coordinates in default mode.
@@ -65,10 +78,6 @@ impl ControllerCodec {
     }
 
     #[must_use]
-    #[cfg_attr(
-        not(test),
-        allow(dead_code, reason = "codec identity is exercised by serial unit tests")
-    )]
     pub const fn format(&self) -> ControllerFormat {
         self.format
     }
@@ -516,6 +525,21 @@ mod tests {
         assert_eq!(
             encode_nx_frame(state, 4, 0x04),
             vec![0xab, 0x04, 0x00, 8, 0x80, 0x80, 0x80, 0x80, 4, 0x04, 0]
+        );
+    }
+
+    #[test]
+    fn controller_formats_report_upstream_display_names() {
+        assert_eq!(ControllerFormat::Default.display_name(), "Default");
+        assert_eq!(ControllerFormat::Nx.display_name(), "NX");
+        assert_eq!(ControllerFormat::Qingpi.display_name(), "Qingpi");
+        assert_eq!(
+            ControllerFormat::ThreeDsX4.display_name(),
+            "3DS Controller(FW:x.4-)"
+        );
+        assert_eq!(
+            ControllerFormat::ThreeDsX3.display_name(),
+            "3DS Controller(FW:-x.3)"
         );
     }
 }

@@ -81,6 +81,7 @@
 | 10.4.2 socket群（8関数） | 実装済み | PythonCommandBase.pyi:133-140; net.pyi:3-10; python.rs:1066 network; protocol.json:166-173+265-272 |
 | 10.4.2 MQTT群（8関数） | 実装済み | PythonCommandBase.pyi:141-148; net.pyi:11-18; python.rs:1066 network; protocol.json:174-181+273-280 |
 | 10.4.2 通知 LINE_text（no-op）/discord_text | 実装済み | PythonCommandBase.pyi:150（v0.2.0意味論：`name`/`keys`優先、`-> bool`）; python.rs:1843 resolve、:1856 keys、:2215 discord_text、:1073 notification; protocol.json:182-183 |
+| 10.4.2 キーボード KeyBoard_Init/TypeString/TypeStringln/TypeKey/PressKey/ReleaseKey + Commands.SwitchKeyboard（KEY/定数/補助関数） | 実装済み | PythonCommandBase.pyi:151-156; SwitchKeyboard.pyi:1-32; Sender.pyi:6 send_keyboard; python.rs:1999 keyboardStepsRaw、:2027 KeyBoard_Init、:2031 TypeString、:1006 serial_write_nx_keyboard、:3841 KEY、:3976 モジュール登録; script_host.rs:484-509（形式名/フレーム合成）; protocol.json:106・120・305-318 |
 | 10.4.3 通知 discord_image/LINE_image + CropFmt/ScreenshotFormat | 実装済み | PythonCommandBase.pyi:15-16、:159（v0.2.0意味論：crop_fmt-as-name、`-> bool`）; python.rs:3311 discord_image、:1073、:911 save_image、:935 popup_image |
 | 10.4.3 ctor + camera/cam/gui/canvas注入 | 実装済み | PythonCommandBase.pyi:153-156、:158 __init__; protocol.json:186-189 |
 | 10.4.3 Camera（image_bgr/readFrame/isOpened/fps/capture_size/flip/flip_mode/set_flip/saveCapture+内部5） | 実装済み | PythonCommandBase.pyi:21-43; python.rs:880 camera_state、:888 camera_control、:895 camera_frame、:911 save_image; protocol.json:207-220 |

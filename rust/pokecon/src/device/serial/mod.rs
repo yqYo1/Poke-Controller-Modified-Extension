@@ -7,7 +7,7 @@ mod native;
 mod selector;
 mod virtual_port;
 
-pub use codec::{ControllerCodec, ControllerFormat};
+pub use codec::{ControllerCodec, ControllerFormat, encode_nx_frame};
 pub use manager::{SerialConfig, SerialError, SerialManager};
 pub use native::NativeSerialBackend;
 pub use selector::{PortSelector, enumerate_native_ports};

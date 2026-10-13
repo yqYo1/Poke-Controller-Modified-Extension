@@ -102,7 +102,8 @@
         "Commands.Keys",
         "Commands.dialogue",
         "Commands.image_proc",
-        "Commands.net"
+        "Commands.net",
+        "Commands.SwitchKeyboard"
       ],
       "required_imports": [
         { "module": "Commands._meta", "symbols": ["CommandMeta"] },
@@ -115,7 +116,8 @@
         {
           "module": "Commands.Keys",
           "symbols": ["Button", "Hat", "Direction", "Touchscreen", "KeyPress", "Stick"]
-        }
+        },
+        { "module": "Commands.SwitchKeyboard", "symbols": ["KEY"] }
       ],
       "external_imports": [
         {
@@ -180,7 +182,13 @@
           "mqtt_change_pub_token",
           "mqtt_change_sub_token",
           "LINE_text",
-          "discord_text"
+          "discord_text",
+          "KeyBoard_Init",
+          "TypeString",
+          "TypeStringln",
+          "TypeKey",
+          "PressKey",
+          "ReleaseKey"
         ],
         "ImageProcPythonCommand": [
           "camera",
@@ -247,7 +255,7 @@
         ],
         "McuCommand": ["start", "end"],
         "KeyPress": ["input", "inputEnd", "hold", "holdEnd", "holdChange", "neutral", "end", "ser"],
-        "Sender": ["writeRow", "write"],
+        "Sender": ["writeRow", "write", "send_keyboard"],
         "Widget": ["value", "has_result"]
       },
       "module_functions": {
@@ -293,6 +301,21 @@
           "get_filespec",
           "displayRectangle",
           "displayText"
+        ],
+        "Commands.SwitchKeyboard": [
+          "MAX_TEXT_LENGTH",
+          "SECONDS_PER_CHARACTER",
+          "SECONDS_PER_KEY_ACTION",
+          "SECONDS_MARGIN",
+          "UNSUPPORTED_ON_SWITCH",
+          "find_invalid_characters",
+          "is_text_format",
+          "key_name",
+          "key_row",
+          "key_seconds",
+          "split_text",
+          "text_row",
+          "text_seconds"
         ]
       },
       "compatibility_projection": "compatibility/fixed-manifest.json#baselines[*].scripts[*].imports",

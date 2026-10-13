@@ -357,6 +357,11 @@ impl SerialManager {
         connection_id
     }
 
+    /// Reports the on-wire controller format of the active serial state.
+    pub async fn data_format(&self) -> ControllerFormat {
+        self.inner.state.lock().await.codec.format()
+    }
+
     /// Writes one controller frame fully. Partial platform writes are retried,
     /// and codec delta state advances only after the final byte succeeds.
     ///

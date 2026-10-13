@@ -2511,6 +2511,14 @@ mod tests {
                 Ok(())
             }
 
+            fn serial_data_format_name(&self) -> Result<String, ScriptHostError> {
+                Ok("Default".to_owned())
+            }
+
+            fn serial_write_nx_keyboard(&self, _mode: u8, _key: u8) -> Result<(), ScriptHostError> {
+                Ok(())
+            }
+
             fn serial_reload(&self) -> Result<(), ScriptHostError> {
                 Ok(())
             }
@@ -2993,6 +3001,14 @@ mod tests {
             }
 
             fn serial_write_row(&self, _row: String) -> Result<(), ScriptHostError> {
+                Ok(())
+            }
+
+            fn serial_data_format_name(&self) -> Result<String, ScriptHostError> {
+                Ok("Default".to_owned())
+            }
+
+            fn serial_write_nx_keyboard(&self, _mode: u8, _key: u8) -> Result<(), ScriptHostError> {
                 Ok(())
             }
 

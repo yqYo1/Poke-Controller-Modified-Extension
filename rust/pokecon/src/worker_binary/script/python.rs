@@ -26,10 +26,10 @@ use super::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-    HostSerialWriteRequest, HostSerialWriteRowRequest, HostTkRequest, HostTkResult,
-    ScriptCommandKind, ScriptControl, ScriptDiscoveredCommand, ScriptExecutionOutcome,
-    ScriptExecutionResult, ScriptInputAction, ScriptOutputMode, ScriptOutputTarget,
-    ScriptPointerEvent, ScriptTkEvent, ScriptWorkerStatus,
+    HostSerialWriteNxKeyboardRequest, HostSerialWriteRequest, HostSerialWriteRowRequest,
+    HostTkRequest, HostTkResult, ScriptCommandKind, ScriptControl, ScriptDiscoveredCommand,
+    ScriptExecutionOutcome, ScriptExecutionResult, ScriptInputAction, ScriptOutputMode,
+    ScriptOutputTarget, ScriptPointerEvent, ScriptTkEvent, ScriptWorkerStatus,
 };
 
 #[derive(Clone, Debug)]
@@ -998,6 +998,17 @@ impl PyApi {
         )
     }
 
+    fn serial_data_format_name(&self) -> PyResult<String> {
+        self.request(protocol::HOST_SERIAL_DATA_FORMAT, &())
+    }
+
+    fn serial_write_nx_keyboard(&self, mode: u8, key: u8) -> PyResult<()> {
+        self.request(
+            protocol::HOST_SERIAL_WRITE_NX_KEYBOARD,
+            &HostSerialWriteNxKeyboardRequest { mode, key },
+        )
+    }
+
     fn serial_reload(&self) -> PyResult<()> {
         self.request(protocol::HOST_SERIAL_RELOAD, &())
     }
@@ -1436,6 +1447,13 @@ class Sender:
         else:
             raw = bytes(bytearray(data))
         _api.serial_write(list(raw))
+
+    def send_keyboard(self, item):
+        if isinstance(item, str):
+            self.writeRow(item)
+            return
+        mode, key = item
+        _api.serial_write_nx_keyboard(int(mode), int(key))
 
 
 class KeyPress:
@@ -1885,6 +1903,9 @@ class PythonCommand(Command):
         self.keys = KeyPress(Sender())
         self.postProcess = None
         self._stop_cleanup_done = False
+        # Keys held by PressKey; released when the command ends.
+        self._keyboard_pressed = []
+        self._keyboard_format_warned = False
 
     @property
     def alive(self):
@@ -1914,6 +1935,10 @@ class PythonCommand(Command):
             self.keys.end()
         except Exception:
             self._logger.exception("failed to release command keys during stop")
+        try:
+            self._releaseKeyboardKeys()
+        except Exception:
+            self._logger.exception("failed to release keyboard keys during stop")
         post_process = self.postProcess
         self.postProcess = None
         if post_process is not None:
@@ -1970,6 +1995,91 @@ class PythonCommand(Command):
     def reload_com_port(self):
         _api.serial_reload()
 
+    def _keyboardStepsRaw(self, kind, value=None):
+        format_name = _api.serial_data_format_name()
+        if format_name == "NX":
+            return _nx_keyboard_steps(kind, value)
+        if format_name == "Default":
+            return _default_keyboard_steps(kind, value)
+        return None
+
+    def _keyboardSteps(self, kind, value=None):
+        format_name = _api.serial_data_format_name()
+        steps = self._keyboardStepsRaw(kind, value)
+        if steps is None and not self._keyboard_format_warned:
+            self._keyboard_format_warned = True
+            print(f"キーボード入力は、Data Format が Default / NX の場合のみ使えます。(現在: {format_name})")
+            self._logger.warning(f"Keyboard input is not available in the data format '{format_name}'.")
+        return steps
+
+    def _keyboardSend(self, kind, value=None):
+        steps = self._keyboardSteps(kind, value)
+        if steps is None:
+            return False
+        for item, seconds in steps:
+            self.keys.ser.send_keyboard(item)
+            # The firmware cannot receive the next data while it types, so wait
+            # for it to finish (without honoring pause).
+            self.wait(seconds)
+        return True
+
+    def KeyBoard_Init(self):
+        self._releaseKeyboardKeys()
+        self._keyboardSend("init")
+
+    def TypeString(self, text):
+        text = str(text)
+        invalid = find_invalid_characters(text)
+        if invalid:
+            shown = " ".join(c if c.isprintable() else repr(c)[1:-1] for c in invalid)
+            print(f"TypeString: 半角以外の文字は入力できません: {shown} (入力文字列: {text!r})")
+            self._logger.warning(f"TypeString: not half-width characters: {invalid}")
+            return False
+        unsupported = [c for c in UNSUPPORTED_ON_SWITCH if c in text]
+        if unsupported:
+            print(f"TypeString: Switchでは入力できない可能性がある文字です: {' '.join(unsupported)}")
+            self._logger.warning(f"TypeString: may not be typed on Switch: {unsupported}")
+        return self._keyboardSend("text", text)
+
+    def TypeStringln(self, text):
+        if not self.TypeString(text):
+            return False
+        self.TypeKey(KEY.ENTER)
+        return True
+
+    def _keyboardKey(self, action, keyvalue, show_value):
+        name = key_name(keyvalue)
+        if show_value:
+            print(f"{action}: {name}")
+        code = int(keyvalue)
+        if not self._keyboardSend(action, code):
+            return None
+        return code
+
+    def TypeKey(self, keyvalue, show_value=False):
+        self._keyboardKey("Key", keyvalue, show_value)
+
+    def PressKey(self, keyvalue, show_value=False):
+        code = self._keyboardKey("Press", keyvalue, show_value)
+        if code is not None and code not in self._keyboard_pressed:
+            self._keyboard_pressed.append(code)
+
+    def ReleaseKey(self, keyvalue, show_value=False):
+        code = self._keyboardKey("Release", keyvalue, show_value)
+        if code in self._keyboard_pressed:
+            self._keyboard_pressed.remove(code)
+
+    def _releaseKeyboardKeys(self):
+        pressed, self._keyboard_pressed = getattr(self, "_keyboard_pressed", []), []
+        for keyvalue in pressed:
+            try:
+                steps = self._keyboardStepsRaw("Release", keyvalue) or []
+                for item, seconds in steps:
+                    self.keys.ser.send_keyboard(item)
+                    _time.sleep(seconds)
+            except Exception as e:
+                self._logger.warning(f"Failed to release the keyboard key {keyvalue}: {e}")
+
     def _print(self, target, mode, objects, sep, end):
         _api.output(target, mode, sep.join(str(item) for item in objects) + end)
 
@@ -2003,6 +2113,8 @@ class PythonCommand(Command):
         internal = {
             "_logger",
             "_stop_cleanup_done",
+            "_keyboard_pressed",
+            "_keyboard_format_warned",
             "isRunning",
             "keys",
             "postProcess",
@@ -3725,6 +3837,120 @@ def _forward(name, image=False):
     return call
 
 
+class KEY(_enum.IntEnum):
+    """Keys for TypeKey / PressKey / ReleaseKey (values are the numbers sent
+    to the firmware; every value except SPACE is a USB keyboard key code)."""
+
+    SPACE = 32
+    ENTER = 40
+    BACKSPACE = 42
+    DELETE = 76
+    RIGHT_ARROW = 79
+    LEFT_ARROW = 80
+    DOWN_ARROW = 81
+    UP_ARROW = 82
+    JP_HANZEN = 0x35
+    JP_BACKSLASH = 0x87
+    JP_HIRAGANA = 0x88
+    JP_HENKAN = 0x8A
+
+
+# Longest text a single firmware row can type (the leading word must hold the
+# quoted text and its terminator in sixteen bytes).
+MAX_TEXT_LENGTH = 13
+# Firmware timing: one character, one key action, and the post-row margin.
+SECONDS_PER_CHARACTER = 0.06
+SECONDS_PER_KEY_ACTION = 0.03
+SECONDS_MARGIN = 0.1
+# Characters that cannot be typed on the Switch (warning only).
+UNSUPPORTED_ON_SWITCH = "@"
+
+_KEYBOARD_PRESS = 1
+_KEYBOARD_RELEASE = 2
+_KEYBOARD_PRESS_CODE = 3
+_KEYBOARD_RELEASE_CODE = 4
+KEYBOARD_RELEASE_ALL = 5
+_KEY_CODES = frozenset(int(key) for key in KEY if key is not KEY.SPACE)
+
+
+def is_text_format(serial_data_format_name):
+    """Whether the data format can send text rows (binary formats cannot)."""
+    return str(serial_data_format_name) == "Default"
+
+
+def find_invalid_characters(text):
+    """Half-width characters (space through '~') outside the range, in first
+    occurrence order, without duplicates."""
+    invalid = []
+    for character in text:
+        if not (0x20 <= ord(character) <= 0x7E) and character not in invalid:
+            invalid.append(character)
+    return invalid
+
+
+def split_text(text):
+    """Splits text into chunks that each fit one firmware row."""
+    return [text[i : i + MAX_TEXT_LENGTH] for i in range(0, len(text), MAX_TEXT_LENGTH)]
+
+
+def text_row(text):
+    """The row that types one text chunk."""
+    return f'"{text}"'
+
+
+def text_seconds(text):
+    """Seconds to wait after sending a text row."""
+    return len(text) * SECONDS_PER_CHARACTER + SECONDS_MARGIN
+
+
+def key_row(action, key):
+    """The row that operates one key: Key (tap) / Press / Release."""
+    return f"{action} {int(key)}"
+
+
+def key_seconds(action):
+    """Seconds to wait after sending a key row."""
+    actions = 2 if action == "Key" else 1
+    return actions * SECONDS_PER_KEY_ACTION + SECONDS_MARGIN
+
+
+def key_name(key):
+    """Display name for a key (numeric keys stay numeric)."""
+    return key.name if isinstance(key, KEY) else str(int(key))
+
+
+def _default_keyboard_steps(kind, value=None):
+    if kind == "init":
+        return [("end", 0.05)]
+    if kind == "text":
+        return [(text_row(part), text_seconds(part)) for part in split_text(value)]
+    return [(key_row(kind, int(value)), key_seconds(kind))]
+
+
+def _nx_keyboard_steps(kind, value=None):
+    wait = SECONDS_PER_KEY_ACTION
+    if kind == "init":
+        return [((KEYBOARD_RELEASE_ALL, 0), 0.05)]
+    if kind == "text":
+        steps = []
+        for character in value:
+            steps.append(((_KEYBOARD_PRESS, ord(character)), wait))
+            steps.append(((_KEYBOARD_RELEASE, ord(character)), wait))
+        return steps
+    code = int(value)
+    if code in _KEY_CODES:
+        press, release = _KEYBOARD_PRESS_CODE, _KEYBOARD_RELEASE_CODE
+    else:
+        press, release = _KEYBOARD_PRESS, _KEYBOARD_RELEASE
+    if kind == "Key":
+        return [((press, code), wait), ((release, code), wait)]
+    if kind == "Press":
+        return [((press, code), wait)]
+    if kind == "Release":
+        return [((release, code), wait)]
+    raise ValueError(f"unknown keyboard action: {kind}")
+
+
 def _module(name, package=False):
     module = _types.ModuleType(name)
     if package:
@@ -3746,6 +3972,7 @@ net_module = _module("Commands.net")
 image_module = _module("Commands.image_proc")
 python_commands = _module("Commands.PythonCommands", True)
 python_commands.__path__.append(_os.path.join(_api.command_root(), "PythonCommands"))
+switch_keyboard_module = _module("Commands.SwitchKeyboard")
 
 meta_module.CommandMeta = CommandMeta
 command_module.Command = Command
@@ -3762,6 +3989,20 @@ for value in (
     setattr(python_module, value.__name__, value)
 mcu_module.McuCommand = McuCommand
 dialogue_module.Widget = Widget
+switch_keyboard_module.KEY = KEY
+switch_keyboard_module.MAX_TEXT_LENGTH = MAX_TEXT_LENGTH
+switch_keyboard_module.SECONDS_PER_CHARACTER = SECONDS_PER_CHARACTER
+switch_keyboard_module.SECONDS_PER_KEY_ACTION = SECONDS_PER_KEY_ACTION
+switch_keyboard_module.SECONDS_MARGIN = SECONDS_MARGIN
+switch_keyboard_module.UNSUPPORTED_ON_SWITCH = UNSUPPORTED_ON_SWITCH
+switch_keyboard_module.is_text_format = is_text_format
+switch_keyboard_module.find_invalid_characters = find_invalid_characters
+switch_keyboard_module.split_text = split_text
+switch_keyboard_module.text_row = text_row
+switch_keyboard_module.text_seconds = text_seconds
+switch_keyboard_module.key_row = key_row
+switch_keyboard_module.key_seconds = key_seconds
+switch_keyboard_module.key_name = key_name
 
 for name in (
     "show_dialog",
@@ -3919,6 +4160,10 @@ def _run_source(source, path, class_name, tags_json):
         try:
             command.do()
         finally:
+            try:
+                command._releaseKeyboardKeys()
+            except Exception:
+                pass
             command.isRunning = False
             if _active_command is command:
                 _active_command = None

@@ -23,6 +23,8 @@ pub const HOST_CONTROLLER_INPUT: &str = "script.host.controller_input";
 pub const HOST_CONTROLLER_NEUTRAL: &str = "script.host.controller_neutral";
 pub const HOST_SERIAL_WRITE: &str = "script.host.serial_write";
 pub const HOST_SERIAL_WRITE_ROW: &str = "script.host.serial_write_row";
+pub const HOST_SERIAL_DATA_FORMAT: &str = "script.host.serial_data_format";
+pub const HOST_SERIAL_WRITE_NX_KEYBOARD: &str = "script.host.serial_write_nx_keyboard";
 pub const HOST_SERIAL_RELOAD: &str = "script.host.serial_reload";
 pub const HOST_OUTPUT: &str = "script.host.output";
 pub const HOST_DIALOG_OPEN: &str = "script.host.dialog_open";
@@ -224,6 +226,13 @@ pub struct HostSerialWriteRequest {
 #[serde(deny_unknown_fields)]
 pub struct HostSerialWriteRowRequest {
     pub row: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostSerialWriteNxKeyboardRequest {
+    pub mode: u8,
+    pub key: u8,
 }
 
 /// Rust-main camera state observed by the compatibility proxy.

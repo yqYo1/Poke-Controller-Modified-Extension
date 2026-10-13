@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
 use crate::camera::{CameraConfig, CameraManager, ScreenshotRuntimeSettings};
+use crate::device::serial::{ControllerFormat, encode_nx_frame};
 use crate::device::{
     ApplyResult, InputArbiter, InputEvent, InputGeneration, InputPriority, InputSequence,
     InputSnapshot, InputSourceId, InputSourceKind, MouseButtons,
@@ -478,6 +479,29 @@ impl ScriptHost for ProductionScriptHost {
         let mut row = row.replace(['\r', '\n'], "");
         row.push_str("\r\n");
         self.serial_write(row.into_bytes())
+    }
+
+    fn serial_data_format_name(&self) -> Result<String, ScriptHostError> {
+        let format = run_sync(&self.shared.runtime, self.shared.serial.data_format());
+        Ok(format.display_name().to_owned())
+    }
+
+    fn serial_write_nx_keyboard(&self, mode: u8, key: u8) -> Result<(), ScriptHostError> {
+        self.shared.ensure_accepting()?;
+        if mode > 5 {
+            return Err(host_error("InvalidInput", "keyboard mode is invalid"));
+        }
+        let format = run_sync(&self.shared.runtime, self.shared.serial.data_format());
+        if format != ControllerFormat::Nx {
+            return Err(host_error(
+                "KeyboardUnavailable",
+                "keyboard frames require the NX data format",
+            ));
+        }
+        let state = self.shared.arbiter.lock().output();
+        let frame = encode_nx_frame(state, mode, key);
+        run_sync(&self.shared.runtime, self.shared.serial.send_raw(&frame))
+            .map_err(serial_host_error)
     }
 
     fn serial_reload(&self) -> Result<(), ScriptHostError> {

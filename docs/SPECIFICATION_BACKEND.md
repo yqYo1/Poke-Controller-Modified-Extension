@@ -554,6 +554,19 @@ type DialogueList = list[DialogueEntry]
 | `LINE_text()` | `LINE_text(txt: str, token: str = "") -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
 | `discord_text()` | `discord_text(content: str = "", index: int = 0, keys: str \| list[str] = "DISCORD_WEBHOOK", name: str \| None = None) -> bool` | Discord Webhookへテキストを送信する互換API（v0.2.0意味論）。`name`/`keys`は通知先名で`index`より優先し、不明名はWARNING＋`index`側へフォールバック、範囲外`index`はWARNING＋`False`。`keys`は`"ALL"`・リスト可。戻り値は全送信先の受付成功で、例外は送出せず`False`。`True`はRust通知キューへの受付成功（配送は非同期・再試行付き）であり、上流の同期送信成功とは厳密に異なる。secretは必ず秘匿化する |
 
+**キーボードメソッド**（Data Formatが`Default`または`NX`の場合のみ。他形式は何も送らず、理由を1回だけ警告する）:
+
+| メソッド | シグネチャ | 説明 |
+|--------|-----------|-------------|
+| `KeyBoard_Init()` | `KeyBoard_Init() -> None` | キーボード入力を始める前に呼ぶ。押したままのキーを離し、コントローラーを無入力にして初期化手順を送る。Switch側の入力モード（かな・カナ・英数）は変えない |
+| `TypeString()` | `TypeString(text: str) -> bool` | 半角文字列を1文字ずつ打つ（改行なし）。半角（0x20〜0x7E）以外を含む場合は何も送らず`False`。`@`は「Switchで入力できない可能性がある」警告のみ。マイコンが打ち終わるまで待機する（一時停止はしない） |
+| `TypeStringln()` | `TypeStringln(text: str) -> bool` | `TypeString(text)`の後、Enter（`KEY.ENTER`）を1回押す |
+| `TypeKey()` | `TypeKey(keyvalue: int, show_value: bool = False) -> None` | キーを1回押して離す。`show_value`で操作とキー名を表示する |
+| `PressKey()` | `PressKey(keyvalue: int, show_value: bool = False) -> None` | キーを押したままにする。command終了時と停止cleanupで自動的に離す |
+| `ReleaseKey()` | `ReleaseKey(keyvalue: int, show_value: bool = False) -> None` | 押したままのキーを離す |
+
+`keyvalue`は`Commands.SwitchKeyboard`の`KEY`（`SPACE`=32・`ENTER`=40・`BACKSPACE`=42・`DELETE`=76・矢印=79〜82・`JP_*`）または数値。`NX`ではキーボード操作を現在のコントローラー状態と合成した11バイトフレームとして送信し、押しているボタンは押したままになる（§11.4.1.3）。`Default`ではテキスト行（`"text"`・`Key 40`等）で送る。1行で送れる文字列は`MAX_TEXT_LENGTH`（13）で自動分割される。`Commands.SwitchKeyboard`は`KEY`、定数`MAX_TEXT_LENGTH`／`SECONDS_PER_CHARACTER`／`SECONDS_PER_KEY_ACTION`／`SECONDS_MARGIN`／`UNSUPPORTED_ON_SWITCH`、補助関数`is_text_format`／`find_invalid_characters`／`split_text`／`text_row`／`text_seconds`／`key_row`／`key_seconds`／`key_name`を提供する。
+
 #### 10.4.3 ImageProcPythonCommand
 
 **インポート**: `from Commands.PythonCommandBase import ImageProcPythonCommand`
@@ -748,6 +761,7 @@ self.displayText([10, 10], "HP: 100/100", ms=3000, color="green")
 |--------|-----------|-------------|
 | `writeRow()` | `writeRow(row: str) -> None` | シリアル行を書き込み（末尾に改行を自動追加） |
 | `write()` | `write(data: bytes \| bytearray \| memoryview \| list[int]) -> None` | 直接シリアル書き込み（IPCプロキシ経由）。変換・互換動作は下記に従う |
+| `send_keyboard()` | `send_keyboard(item: str \| tuple[int, int]) -> None` | キーボード入力の1手順を送る（§10.4.2のキーボードメソッドから使用する）。文字列は行としてそのまま送信し、`(モード, キー)`の値の組は現在のコントローラー状態と合成した11バイトフレームとして送信する（NX形式、§11.4.1.3） |
 
 `write()`は`to_bytes()`互換変換として次を適用する:
 

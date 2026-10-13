@@ -21,10 +21,10 @@ use self::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-    HostSerialWriteRequest, HostSerialWriteRowRequest, HostTkRequest, HostTkResult,
-    ScriptDiscoveryResult, ScriptExecuteRequest, ScriptExecutionResult, ScriptInitializeRequest,
-    ScriptInitializeResult, ScriptPauseResult, ScriptPointerEvent, ScriptStopResult, ScriptTkEvent,
-    ScriptWorkerStatus,
+    HostSerialWriteNxKeyboardRequest, HostSerialWriteRequest, HostSerialWriteRowRequest,
+    HostTkRequest, HostTkResult, ScriptDiscoveryResult, ScriptExecuteRequest,
+    ScriptExecutionResult, ScriptInitializeRequest, ScriptInitializeResult, ScriptPauseResult,
+    ScriptPointerEvent, ScriptStopResult, ScriptTkEvent, ScriptWorkerStatus,
 };
 const LOG_QUEUE_CAPACITY: usize = 128;
 
@@ -75,6 +75,22 @@ pub trait ScriptHost: Send + Sync + 'static {
     ///
     /// Returns a stable host error when the row cannot be written.
     fn serial_write_row(&self, row: String) -> Result<(), ScriptHostError>;
+
+    /// Reports the active serial data format's display name to the
+    /// compatibility keyboard layer.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable host error when the format cannot be read.
+    fn serial_data_format_name(&self) -> Result<String, ScriptHostError>;
+
+    /// Writes one NX keyboard frame composed with the current controller
+    /// state.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable host error when the frame cannot be written.
+    fn serial_write_nx_keyboard(&self, mode: u8, key: u8) -> Result<(), ScriptHostError>;
 
     /// Reloads the active serial connection.
     ///
@@ -462,6 +478,14 @@ fn dispatch_host_call(
         protocol::HOST_SERIAL_WRITE_ROW => {
             let request = decode_host::<HostSerialWriteRowRequest>(payload)?;
             serialize_host(host.serial_write_row(request.row))
+        }
+        protocol::HOST_SERIAL_DATA_FORMAT => {
+            decode_host::<()>(payload)?;
+            serialize_host_value(host.serial_data_format_name())
+        }
+        protocol::HOST_SERIAL_WRITE_NX_KEYBOARD => {
+            let request = decode_host::<HostSerialWriteNxKeyboardRequest>(payload)?;
+            serialize_host(host.serial_write_nx_keyboard(request.mode, request.key))
         }
         protocol::HOST_SERIAL_RELOAD => {
             decode_host::<()>(payload)?;

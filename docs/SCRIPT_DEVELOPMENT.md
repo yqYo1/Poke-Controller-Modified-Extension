@@ -251,6 +251,41 @@ class MixedInput(PythonCommand):
 
 正確な値とconstructorは`Commands/Keys.pyi`を参照します。
 
+## キーボードで文字とキーを送る
+
+`Commands.SwitchKeyboard`と`PythonCommand`のキーボードmethodで、Switchへ文字とキーを送れます（キーボード機能に対応したファームウェアが必要）。
+
+Data Formatが`Default`または`NX`の場合のみ送信でき、他の形式では送信せず理由を1回だけ警告します。
+
+`TypeString(text)`は半角（スペース〜`~`）の文字だけを1文字ずつ打ちます。半角以外が含まれる場合は何も送らず`False`を返します。かなを入力する場合は、Switch側をローマ字入力にしてローマ字を渡します。
+
+`NX`ではキーボード操作もコントローラーの状態と同じ11バイトで送るため、そのとき押しているボタンは押したままになります。
+
+```python
+from Commands.PythonCommandBase import PythonCommand
+from Commands.SwitchKeyboard import KEY
+
+
+class TypeSomeText(PythonCommand):
+    def do(self) -> None:
+        self.KeyBoard_Init()
+        self.TypeString("neko")
+        self.TypeKey(KEY.ENTER)
+        self.PressKey(KEY.DOWN_ARROW)
+        self.wait(0.5)
+        self.ReleaseKey(KEY.DOWN_ARROW)
+```
+
+`TypeStringln(text)`は`TypeString(text)`の後にEnterを押します。
+
+`PressKey`で押したままにしたキーは、commandの終了時に自動で離されます。
+
+1行で送れる文字数は`MAX_TEXT_LENGTH`（13）で、長い文字列は自動で分割されます。
+
+`@`はSwitchでは入力できない可能性があるため、警告だけを行います。
+
+`KEY`の値と補助関数（`split_text`等）は`Commands.SwitchKeyboard`が提供します。
+
 ## 待機方法を選ぶ
 
 `wait(seconds)`は0.1秒を超える待機を小分けにし、停止状態を繰り返し確認します。

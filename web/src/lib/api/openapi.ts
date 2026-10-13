@@ -1029,7 +1029,7 @@ export interface components {
             /** Format: int64 */
             "serial.baud_rate"?: number;
             /** @enum {string} */
-            "serial.data_format"?: "default" | "qingpi" | "3ds";
+            "serial.data_format"?: "default" | "nx" | "qingpi" | "3ds";
             "input.keyboard_enabled"?: boolean;
             "input.left_stick_mouse_enabled"?: boolean;
             "input.right_stick_mouse_enabled"?: boolean;
@@ -1163,7 +1163,7 @@ export interface components {
             /** Format: int64 */
             "serial.baud_rate": number;
             /** @enum {string} */
-            "serial.data_format": "default" | "qingpi" | "3ds";
+            "serial.data_format": "default" | "nx" | "qingpi" | "3ds";
             "input.keyboard_enabled": boolean;
             "input.left_stick_mouse_enabled": boolean;
             "input.right_stick_mouse_enabled": boolean;
@@ -1308,7 +1308,7 @@ export interface components {
             /** Format: int64 */
             "serial.baud_rate"?: number;
             /** @enum {string} */
-            "serial.data_format"?: "default" | "qingpi" | "3ds";
+            "serial.data_format"?: "default" | "nx" | "qingpi" | "3ds";
             "input.keyboard_enabled"?: boolean;
             "input.left_stick_mouse_enabled"?: boolean;
             "input.right_stick_mouse_enabled"?: boolean;

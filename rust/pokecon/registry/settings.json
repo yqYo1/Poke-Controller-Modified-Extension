@@ -876,6 +876,7 @@
         "kind": "enum",
         "values": [
           "default",
+          "nx",
           "qingpi",
           "3ds"
         ],

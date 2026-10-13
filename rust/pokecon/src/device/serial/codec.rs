@@ -8,6 +8,7 @@ use crate::device::controller::{Button, ControllerState, Hat, StickPosition};
 pub enum ControllerFormat {
     #[default]
     Default,
+    Nx,
     Qingpi,
     #[serde(rename = "3ds")]
     ThreeDs,
@@ -18,6 +19,7 @@ impl ControllerFormat {
     pub fn parse(value: &str) -> Option<Self> {
         match value {
             "default" => Some(Self::Default),
+            "nx" => Some(Self::Nx),
             "qingpi" => Some(Self::Qingpi),
             "3ds" => Some(Self::ThreeDs),
             _ => None,
@@ -56,6 +58,7 @@ impl ControllerCodec {
     pub fn encode(&self, state: ControllerState) -> Vec<u8> {
         match self.format {
             ControllerFormat::Default => encode_default(self.previous, state),
+            ControllerFormat::Nx => encode_nx(state),
             ControllerFormat::Qingpi => encode_qingpi(state),
             ControllerFormat::ThreeDs => encode_three_ds(state),
         }
@@ -104,6 +107,35 @@ fn push_stick_text(frame: &mut String, stick: StickPosition) {
     use std::fmt::Write as _;
 
     write!(frame, " {:02x} {:02x}", stick.x, stick.y).expect("writing to String cannot fail");
+}
+
+fn encode_nx(state: ControllerState) -> Vec<u8> {
+    encode_nx_frame(state, 0, 0)
+}
+
+/// Encodes the NX Macro Controller 11-byte frame.
+///
+/// Layout: `0xAB btnLo btnHi hat lx ly rx ry kbdMode key 0x00`. The button mask is
+/// identical to [`ControllerState::switch_bits`] and stick centers are `0x80`.
+/// `keyboard_mode`/`key` carry keyboard actions inside the same frame (0/0 = none);
+/// the key step sequence (init/text/Key/Press/Release with 0.03 s waits) is produced
+/// by the script keyboard layer when it sends frames.
+#[must_use]
+pub fn encode_nx_frame(state: ControllerState, keyboard_mode: u8, key: u8) -> Vec<u8> {
+    let button_bytes = state.buttons.switch_bits().to_le_bytes();
+    vec![
+        0xab,
+        button_bytes[0],
+        button_bytes[1],
+        state.hat.switch_value(),
+        state.left_stick.x,
+        state.left_stick.y,
+        state.right_stick.x,
+        state.right_stick.y,
+        keyboard_mode,
+        key,
+        0,
+    ]
 }
 
 fn encode_qingpi(state: ControllerState) -> Vec<u8> {
@@ -168,7 +200,7 @@ const fn encode_three_ds_axis(value: u8) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::{ControllerCodec, ControllerFormat};
+    use super::{ControllerCodec, ControllerFormat, encode_nx_frame};
     use crate::device::controller::{Button, ControllerState, Hat, StickPosition, TouchPoint};
 
     #[test]
@@ -213,6 +245,79 @@ mod tests {
         assert_eq!(
             ControllerCodec::new(ControllerFormat::ThreeDs).encode(state),
             vec![0xa1, 0x11, 0x14, 0xa2, 127, 128]
+        );
+    }
+
+    #[test]
+    fn nx_matches_golden_button_and_release_vectors() {
+        let codec = ControllerCodec::new(ControllerFormat::Nx);
+        assert_eq!(
+            codec.encode(ControllerState::NEUTRAL),
+            vec![0xab, 0x00, 0x00, 8, 0x80, 0x80, 0x80, 0x80, 0, 0, 0]
+        );
+        let mut state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::A, true);
+        assert_eq!(
+            codec.encode(state),
+            vec![0xab, 0x04, 0x00, 8, 0x80, 0x80, 0x80, 0x80, 0, 0, 0]
+        );
+        state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::Minus, true);
+        assert_eq!(
+            codec.encode(state),
+            vec![0xab, 0x00, 0x01, 8, 0x80, 0x80, 0x80, 0x80, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn nx_matches_golden_hat_stick_and_combination_vectors() {
+        let codec = ControllerCodec::new(ControllerFormat::Nx);
+        let mut state = ControllerState::NEUTRAL;
+        state.hat = Hat::Up;
+        assert_eq!(
+            codec.encode(state),
+            vec![0xab, 0x00, 0x00, 0, 0x80, 0x80, 0x80, 0x80, 0, 0, 0]
+        );
+        state.hat = Hat::UpLeft;
+        assert_eq!(
+            codec.encode(state),
+            vec![0xab, 0x00, 0x00, 7, 0x80, 0x80, 0x80, 0x80, 0, 0, 0]
+        );
+        state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::Zr, true);
+        state.buttons.set(Button::B, true);
+        state.hat = Hat::UpRight;
+        state.left_stick = StickPosition { x: 0x80, y: 0x00 };
+        state.right_stick = StickPosition { x: 0x00, y: 0x80 };
+        assert_eq!(
+            codec.encode(state),
+            vec![0xab, 0x82, 0x00, 1, 0x80, 0x00, 0x00, 0x80, 0, 0, 0]
+        );
+        state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::L, true);
+        state.buttons.set(Button::A, true);
+        state.left_stick = StickPosition { x: 0xff, y: 0x80 };
+        assert_eq!(
+            codec.encode(state),
+            vec![0xab, 0x14, 0x00, 8, 0xff, 0x80, 0x80, 0x80, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn nx_keyboard_frames_keep_the_controller_layout() {
+        let mut state = ControllerState::NEUTRAL;
+        assert_eq!(
+            encode_nx_frame(state, 5, 0),
+            vec![0xab, 0x00, 0x00, 8, 0x80, 0x80, 0x80, 0x80, 5, 0, 0]
+        );
+        state.buttons.set(Button::A, true);
+        assert_eq!(
+            encode_nx_frame(state, 1, b'A'),
+            vec![0xab, 0x04, 0x00, 8, 0x80, 0x80, 0x80, 0x80, 1, 0x41, 0]
+        );
+        assert_eq!(
+            encode_nx_frame(state, 4, 0x04),
+            vec![0xab, 0x04, 0x00, 8, 0x80, 0x80, 0x80, 0x80, 4, 0x04, 0]
         );
     }
 }

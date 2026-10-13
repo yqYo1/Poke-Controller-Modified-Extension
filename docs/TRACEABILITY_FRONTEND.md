@@ -223,7 +223,7 @@
 | COM ポート選択（OS ネイティブ識別子、手動入力可、利用不能値の表示維持・自動選択なし、正規化・解決なし） | 実装済 | `SerialTab.svelte:29,95,149-154`（`input`＋`datalist` による手動入力、表示ラベル分離） | 重複排除・安定セレクター選択の実体は backend 列挙所有 |
 | 更新ボタン（`GET /api/devices/serial-ports` 再スキャン） | 実装済 | `SerialTab.svelte:70-76,155`（`refreshPorts`→`actions.serialPorts()`）; `actions.ts:107` | — |
 | 接続/切断トグル（`POST /api/serial/control`＋実効 `serial.*`） | 実装済 | `SerialTab.svelte:116-120,179-182`（Connect/Disconnect）; `actions.ts:160` | — |
-| ボーレート・データ形式（3種） | 実装済 | `SerialTab.svelte:30-31,164-176`（baud number＋`default/qingpi/3ds`。`qingpi` 選択時は baud 115200 連動：`108-112`） | — |
+| ボーレート・データ形式（4種） | 実装済 | `SerialTab.svelte:30-31,164-176`（baud number＋`default/nx/qingpi/3ds`。`qingpi` 選択時は baud 115200 連動：`108-112`） | — |
 | シリアルモニター（リアルタイム表示・自動スクロール・クリア） | 実装済 | `SerialTab.svelte:42-60,183-192`（`autoScroll`＋`localStorage` 永続、`runtime.clearSerial()`、live `view.serial`） | — |
 
 ### 6.3 手動制御タブ

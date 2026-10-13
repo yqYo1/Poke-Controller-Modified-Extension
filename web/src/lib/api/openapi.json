@@ -4545,6 +4545,7 @@
             "type": "string",
             "enum": [
               "default",
+              "nx",
               "qingpi",
               "3ds"
             ]
@@ -4978,6 +4979,7 @@
             "type": "string",
             "enum": [
               "default",
+              "nx",
               "qingpi",
               "3ds"
             ]
@@ -5525,6 +5527,7 @@
             "type": "string",
             "enum": [
               "default",
+              "nx",
               "qingpi",
               "3ds"
             ]

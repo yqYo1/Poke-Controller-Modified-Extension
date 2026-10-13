@@ -28,7 +28,7 @@ PokeConが公開設定として持つserial項目は次の3個です。
 | `serial.baud_rate` | 1以上のbaud rate | `9600` |
 | `serial.data_format` | controller frame形式 | `default` |
 
-`serial.data_format`は`default`、`qingpi`、`3ds`から選択します。
+`serial.data_format`は`default`、`nx`、`qingpi`、`3ds`から選択します。
 
 UIで`3ds`を選ぶとbaud rateも便宜上115200へ変更します。
 

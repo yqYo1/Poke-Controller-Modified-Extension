@@ -268,7 +268,7 @@ profile切替は旧script workerの停止、新profileの検証、設定適用�
 | `camera.flip_mode` | `none` | `none`、`vertical`、`horizontal`、`both` | I | あり |
 | `serial.port` | 空文字 | 空文字は未選択、その他はnative selector | I | あり |
 | `serial.baud_rate` | `9600` | 1以上 | I | あり |
-| `serial.data_format` | `default` | `default`、`qingpi`、`3ds` | I | あり |
+| `serial.data_format` | `default` | `default`、`nx`、`qingpi`、`3ds` | I | あり |
 | `notifications.line_menu_behavior` | `message` | `message`、`noop` | I | なし |
 | `notifications.discord.webhook_url` | 空文字 | Discord Webhook URLまたは空文字、secret | I | あり |
 | `notifications.discord.username` | 空文字 | 送信時username | I | あり |

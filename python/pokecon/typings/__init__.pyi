@@ -52,6 +52,7 @@ type CameraScreenshotFormat = Literal[
 ]
 type SerialDataFormat = Literal[
     "default",
+    "nx",
     "qingpi",
     "3ds",
 ]

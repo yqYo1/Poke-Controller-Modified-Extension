@@ -169,6 +169,7 @@
       <span class="text-xs text-subtext1">Data format</span>
       <select class="mt-1 w-full rounded-lg border border-text/10 bg-surface1 px-3 py-2 text-sm text-text" value={dataFormat} onchange={(event) => void writeFormat(event)}>
         <option value="default">Default</option>
+        <option value="nx">NX</option>
         <option value="qingpi">Qingpi</option>
         <option value="3ds">3DS Controller</option>
       </select>

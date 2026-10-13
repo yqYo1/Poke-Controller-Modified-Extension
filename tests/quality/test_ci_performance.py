@@ -112,7 +112,7 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
         in build_job
     )
     assert "Save production perf Cargo target" in build_job
-    assert "Upload production perf Cargo target for same-SHA consumers" not in (
+    assert "Upload production perf Cargo target for same-derivation consumers" not in (
         build_job
     )
     assert "contains(fromJSON('[\"yqYo1\"]'), github.actor)" in build_job
@@ -159,8 +159,10 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "restore-keys:" not in upload_job
     assert "nix run" not in upload_job
     assert "actions/cache/save@" not in upload_job
+    assert "Resolve production perf derivation identity" in upload_job
+    assert "id: production_perf_upload_derivation_key" in upload_job
     upload_step_start = upload_job.index(
-        "      - name: Upload production perf Cargo target for same-SHA consumers"
+        "      - name: Upload production perf Cargo target for same-derivation consumers"
     )
     upload_step = upload_job[upload_step_start:]
     assert "success()" in upload_step
@@ -171,7 +173,10 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
         "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
         in upload_step
     )
-    assert "name: pokecon-production-perf-target-${{ github.sha }}" in upload_step
+    assert (
+        "name: pokecon-production-perf-target-${{ steps.production_perf_upload_derivation_key.outputs.key }}"
+        in upload_step
+    )
     assert "path: target/nix-tasks/release" in upload_step
     assert "if-no-files-found: error" in upload_step
     assert "retention-days: 3" in upload_step
@@ -247,6 +252,10 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert ".expired == false" in discover_step
     assert (
         "POKECON_PRODUCTION_PERF_SOURCE_SHA: ${{ steps.production_perf_source.outputs.source_sha }}"
+        in job
+    )
+    assert (
+        "POKECON_PRODUCTION_PERF_DERIVATION_KEY: ${{ steps.production_perf_derivation_key.outputs.key }}"
         in job
     )
     assert "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" in job

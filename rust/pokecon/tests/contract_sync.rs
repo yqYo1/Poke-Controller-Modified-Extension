@@ -1820,9 +1820,10 @@ fn between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
 
 #[test]
 fn design_principles_map_to_runtime_mechanisms_without_drift() {
-    // AR-11-24: docs/ARCHITECTURE.md の設計原則→module／queue／lock／task／thread
-    // 対応表が、実装の実在symbolと一致し続けることを保証する。表の行の欠落・
-    // 変更、symbolのリネーム、moduleの公開API化のいずれもこのtestを失敗させる。
+    // AR-11-24: guarantees that the docs/ARCHITECTURE.md mapping from design
+    // principles to module/queue/lock/task/thread keeps matching the real
+    // symbols in the implementation. A missing or changed table row, a renamed
+    // symbol, or making a module public API all fail this test.
     let architecture = repository_text("docs/ARCHITECTURE.md");
     let section = architecture
         .split_once("## 設計原則と実行時機構の対応")
@@ -1928,9 +1929,11 @@ fn design_principles_map_to_runtime_mechanisms_without_drift() {
 
 #[test]
 fn module_ownership_table_has_unique_owners_without_drift() {
-    // docs/ARCHITECTURE_HANDOFF.md 3.1 module ownership manifest の drift guard。
-    // 表の行の欠落・重複所有行・module名の変更のいずれもこのtestを失敗させる。
-    // worker境界の一点のforbidden edgeのみを検査し、全forbidden edgeの被覆は主張しない。
+    // Drift guard for the docs/ARCHITECTURE_HANDOFF.md 3.1 module ownership
+    // manifest. A missing table row, a doubly owned row, or a changed module
+    // name all fail this test.
+    // Only one worker-boundary forbidden edge is checked; full forbidden-edge
+    // coverage is not claimed.
     let handoff = repository_text("docs/ARCHITECTURE_HANDOFF.md");
     let section = handoff
         .split_once("### 3.1 Module ownership manifest")
@@ -2509,10 +2512,11 @@ fn visible_revision_commit_has_single_owner() {
 #[allow(clippy::too_many_lines)]
 #[test]
 fn module_ownership_manifest_pins_owner_symbols() {
-    // AR-11-33: docs/ARCHITECTURE_HANDOFF.md 3.1 module ownership manifest の
-    // machine-readable pin (rust/pokecon/registry/ownership.json)。
-    // manifest の module id と 3.1 テーブルの行が 1:1 に対応し、各 owner symbol が
-    // 列挙 source 内に実在し、対応する top module が crate-private のままであることを検査する。
+    // AR-11-33: machine-readable pin of the docs/ARCHITECTURE_HANDOFF.md 3.1
+    // module ownership manifest (rust/pokecon/registry/ownership.json).
+    // Verifies that manifest module ids correspond 1:1 to the 3.1 table rows,
+    // that each owner symbol exists in the enumerated sources, and that the
+    // corresponding top module stays crate-private.
     static OWNERSHIP_JSON: LazyLock<String> =
         LazyLock::new(|| repository_text("rust/pokecon/registry/ownership.json"));
     let manifest = parse_json(&OWNERSHIP_JSON);
@@ -2738,14 +2742,17 @@ fn module_ownership_manifest_pins_owner_symbols() {
 #[allow(clippy::too_many_lines)]
 #[test]
 fn forbidden_ownership_manifest_is_enforced() {
-    // AR-11-34: docs/ARCHITECTURE_HANDOFF.md 3.1「所有しない責務」columnの
-    // machine-readable pin (rust/pokecon/registry/ownership.json の
-    // non_responsibilities／forbidden_symbols／forbidden_scan_files)。
-    // 各 module が所有しない責務の代表 symbol を列挙 source 内で参照しないこと、
-    // かつ代表 symbol が他所に実在すること（typo で検査が空回りしないこと）を検査する。
-    // §9.2 の全 forbidden-edge 被覆は主張しない: manifest に列挙された edge のみを
-    // 検査し、§3.2 の重複所有検査 1〜5 の残りは既存 test の範囲に留める
-    // （module_ownership_table_has_unique_owners_without_drift の限定と同じ流儀）。
+    // AR-11-34: machine-readable pin of the docs/ARCHITECTURE_HANDOFF.md 3.1
+    // not-owned-responsibilities column, backed by
+    // rust/pokecon/registry/ownership.json's
+    // non_responsibilities/forbidden_symbols/forbidden_scan_files.
+    // Verifies that each module does not reference representative symbols of
+    // responsibilities it does not own, and that those symbols really exist
+    // elsewhere (so a typo cannot make the check pass vacuously).
+    // The full §9.2 forbidden-edge coverage is not claimed: only manifest-listed
+    // edges are checked, and the rest of the §3.2 duplicate-ownership checks
+    // 1-5 stay within the existing test's scope (same style as the limits in
+    // module_ownership_table_has_unique_owners_without_drift).
     static OWNERSHIP_JSON: LazyLock<String> =
         LazyLock::new(|| repository_text("rust/pokecon/registry/ownership.json"));
     let manifest = parse_json(&OWNERSHIP_JSON);
@@ -3043,20 +3050,22 @@ fn is_forbidden_dependency_edge(
 #[allow(clippy::too_many_lines)]
 #[test]
 fn source_dependency_edges_match_allowed_manifest() {
-    // AR-11-35: 内部依存方向の許可 edge manifest
-    // (rust/pokecon/registry/dependency_edges.json) と
-    // rust/pokecon/src/**/*.rs の `use crate::<top>::...` 行から抽出した実測 edge 集合が
-    // 双方向に一致することを検査する。未知 edge (manifest 漏れ) と stale entry
-    // (実装に存在しない許可) のいずれもこの test を失敗させる。
+    // AR-11-35: verifies that the internal dependency-direction allowance edge
+    // manifest (rust/pokecon/registry/dependency_edges.json) and the measured
+    // edge set extracted from `use crate::<top>::...` lines in
+    // rust/pokecon/src/**/*.rs match in both directions. Unknown edges (missing
+    // from the manifest) and stale entries (allowances absent from the
+    // implementation) both fail this test.
     //
-    // 誠実な範囲限定 (scope):
-    // (1) `use` 行の文字列走査のみ — インライン完全修飾パス
-    //     (例: lib.rs の `crate::platform::PlatformKind`)、
-    //     `use crate::{...}` の brace-group import、
-    //     include!/macro 生成参照は捕捉しない。
-    // (2) `#[cfg(test)]` 末尾を含む全文走査 (test-only の use も edge になる)。
-    // (3) Cargo package 境界の検査は対象外 (AR-10.8-05)。
-    //     single-package 境界は Cargo.toml:1-8 (members = ["rust/pokecon"])。
+    // Honest scope limitations:
+    // (1) String scan of `use` lines only — inline fully-qualified paths
+    //     (e.g. lib.rs's `crate::platform::PlatformKind`), brace-group imports
+    //     (`use crate::{...}`), and include!/macro-generated references are not
+    //     captured.
+    // (2) Full-source scan including `#[cfg(test)]` tails (test-only uses also
+    //     count as edges).
+    // (3) Cargo package boundary checks are out of scope (AR-10.8-05).
+    //     The single-package boundary is Cargo.toml:1-8 (members = ["rust/pokecon"]).
     static DEPENDENCY_EDGES_JSON: LazyLock<String> =
         LazyLock::new(|| repository_text("rust/pokecon/registry/dependency_edges.json"));
     let manifest = parse_json(&DEPENDENCY_EDGES_JSON);
@@ -3138,14 +3147,16 @@ fn source_dependency_edges_match_allowed_manifest() {
 
     // §9.1 drift guard: the allowed-direction table keeps exactly 6 data rows,
     // and every manifest `from` is discoverable in the section text.
-    // 連動検査の意味: §9.1 テーブルは composition root／backend／transport／
-    // supervisor／frontend／tool の6概念しか列挙しない coarse な語彙であり、
-    // 実装の全 top module (desktop・test 支援・service 群など) を網羅しない。
-    // よって各 manifest `from` は (a) 正規化 (小文字化・`_`除去) 後に §9.1 節
-    // テキストの部分文字列として発見できるか、(b) rust/pokecon/src/ 直下に同名の
-    // 実在 top module (dir または .rs、cfg-gated を含む) に対応すること。
-    // どちらにも該当しない from は文書にも実装にも存在しない未知 module として
-    // 失敗させ、manifest の typo を検出する。
+    // Meaning of the cross-check: the §9.1 table is a coarse vocabulary that
+    // lists only six concepts (composition root/backend/transport/supervisor/
+    // frontend/tool) and does not cover every top module in the implementation
+    // (desktop, test support, the service group, and so on). Each manifest
+    // `from` must therefore either (a) be discoverable as a substring of the
+    // §9.1 section text after normalization (lowercasing, `_` removal), or
+    // (b) correspond to a real top module with the same name directly under
+    // rust/pokecon/src/ (dir or .rs, including cfg-gated ones). A `from`
+    // matching neither is failed as an unknown module that exists in neither
+    // the document nor the implementation, detecting manifest typos.
     let handoff = repository_text("docs/ARCHITECTURE_HANDOFF.md");
     let section = handoff
         .split_once("### 9.1 許可する方向")
@@ -3208,16 +3219,17 @@ fn source_dependency_edges_match_allowed_manifest() {
 #[allow(clippy::too_many_lines)]
 #[test]
 fn forbidden_dependency_edges_are_rejected() {
-    // AR-11-36: FORBIDDEN 方向禁止 edge manifest
-    // (rust/pokecon/registry/dependency_edges.json の `forbidden` 配列) に
-    // 対する検査。実測 edge 集合に禁止 edge が1つも含まれないこと、
-    // 意図的な逆流 fixture が同じ抽出器・同じ述語で拒否されること、
-    // fail-closed の番兵制御、lib→production 例外の liveness を検査する。
+    // AR-11-36: check against the FORBIDDEN-direction edge manifest (the
+    // `forbidden` array of rust/pokecon/registry/dependency_edges.json).
+    // Verifies that the measured edge set contains no forbidden edge, that the
+    // intentional reverse-flow fixture is rejected by the same extractor and
+    // predicate, fail-closed sentinel controls, and the liveness of the
+    // lib→production exception.
     //
-    // 誠実な範囲限定 (scope): `use` 行の文字列走査のみであり、
-    // brace-group import (`use crate::{...}`) やインライン完全修飾パスは
-    // 捕捉しない。fixture は file-as-text の positive control であり、
-    // Cargo target としてはコンパイルされない。§9.2 全行の被覆は主張しない。
+    // Honest scope limitations: string scan of `use` lines only; brace-group
+    // imports (`use crate::{...}`) and inline fully-qualified paths are not
+    // captured. The fixture is a file-as-text positive control and is not
+    // compiled as a Cargo target. Full §9.2 line coverage is not claimed.
     static FORBIDDEN_EDGES_JSON: LazyLock<String> =
         LazyLock::new(|| repository_text("rust/pokecon/registry/dependency_edges.json"));
     let manifest = parse_json(&FORBIDDEN_EDGES_JSON);
@@ -3380,14 +3392,16 @@ fn forbidden_dependency_edges_are_rejected() {
 #[allow(clippy::too_many_lines)]
 #[test]
 fn worker_ipc_deployment_boundary_is_pinned() {
-    // AR-11-37: worker IPC の deployment-boundary pin
-    // (rust/pokecon/registry/ipc_boundary.json)。envelope kind・closed 値集合・
-    // 最大 payload・非公開 wire marker・非公開 payload fixture case 名を固定し、
-    // 実装 source との drift を検査する。
+    // AR-11-37: deployment-boundary pin for worker IPC
+    // (rust/pokecon/registry/ipc_boundary.json). Pins the envelope kinds, closed
+    // value sets, maximum payload, non-public wire markers, and non-public
+    // payload fixture case names, and checks for drift against the
+    // implementation sources.
     //
-    // 誠実な範囲限定 (scope): op 名の allowlist、IPC payload 全体の corpus、
-    // プロセス内 (encode 側) 拒否は主張しない。拒否は peer の decode 層で行われ、
-    // 同一プロセス内の呼び出し元は任意の IpcValue を構築できる。
+    // Honest scope limitations: an op-name allowlist, a corpus of full IPC
+    // payloads, and in-process (encode-side) rejection are not claimed.
+    // Rejection happens at the peer's decode layer, and callers in the same
+    // process can build any IpcValue.
     static IPC_BOUNDARY_JSON: LazyLock<String> =
         LazyLock::new(|| repository_text("rust/pokecon/registry/ipc_boundary.json"));
     let manifest = parse_json(&IPC_BOUNDARY_JSON);
@@ -3396,9 +3410,10 @@ fn worker_ipc_deployment_boundary_is_pinned() {
         "IPC boundary manifest schema_version must be 1 (AR-11-37)"
     );
 
-    // (a) Manifest exact-pin: envelope kind・closed 値・最大 payload・非公開
-    // marker・非公開 case 名のいずれの無言の変更もここで失敗させる。意図的な
-    // 変更は manifest とこの期待集合を同時に更新する (AR-11-36 policy pin 流儀)。
+    // (a) Manifest exact-pin: any silent change to an envelope kind, closed
+    // value, maximum payload, non-public marker, or non-public case name fails
+    // here. An intentional change updates the manifest and this expected set
+    // together (AR-11-36 policy-pin style).
     let envelope_kinds = manifest["envelope_kinds"]
         .as_array()
         .expect("IPC boundary manifest must define an envelope_kinds array")
@@ -3483,7 +3498,7 @@ fn worker_ipc_deployment_boundary_is_pinned() {
         "non-public cases must match the reviewed 7-case set exactly (AR-11-37)"
     );
 
-    // (b) Source drift: manifest の各値が実 source に対応すること。
+    // (b) Source drift: every manifest value must correspond to a real source.
     let schema = repository_text("rust/pokecon/src/worker/ipc/schema.rs");
     for (short, declaration) in [
         ("nil", "    Nil,"),
@@ -3525,8 +3540,9 @@ fn worker_ipc_deployment_boundary_is_pinned() {
         "protocol.json ipc.kinds must match the manifest envelope kinds (AR-11-37)"
     );
 
-    // (c) Fixture liveness: manifest の各非公開 case 名が fixture 内に実在し、
-    // 1:1 に対応すること (typo で検査が空回りしないこと)。
+    // (c) Fixture liveness: every non-public case name in the manifest exists
+    // in the fixture and corresponds 1:1 (so a typo cannot make the check pass
+    // vacuously).
     let fixture = repository_text("rust/pokecon/tests/fixtures/ipc_nonpublic_payloads.rs");
     assert!(
         fixture.contains("AR-11-37 intentional non-public wire fixture"),
@@ -3543,7 +3559,8 @@ fn worker_ipc_deployment_boundary_is_pinned() {
         );
     }
 
-    // (d) Fail-closed sentinel controls: 空名の拒否と未知 case の検出。
+    // (d) Fail-closed sentinel controls: rejection of empty names and detection
+    // of unknown cases.
     let is_valid_case_name = |name: &str| !name.trim().is_empty();
     assert!(
         !is_valid_case_name(""),
@@ -3604,20 +3621,23 @@ fn bin_is_covered(name: &str, packaged: &BTreeSet<String>) -> bool {
 #[allow(clippy::too_many_lines)]
 #[test]
 fn strong_boundaries_have_necessity_and_evidence() {
-    // AR-10.8-04: 強い境界ごとの必要性／信頼／配布根拠表
-    // (rust/pokecon/registry/strong_boundaries.json) の pin。各境界が一行の
-    // 非空 necessity と実在する証拠 (source／registry／check 参照) を持ち、
-    // 実装走査の closed-world marker がいずれも根拠付き境界に被覆されること
-    // を検査する。未知の marker class や根拠のない境界はここで失敗させる。
+    // AR-10.8-04: pin of the per-strong-boundary necessity/confidence/
+    // distribution-rationale table (rust/pokecon/registry/strong_boundaries.json).
+    // Verifies that each boundary has a one-line non-empty necessity and real
+    // evidence (source/registry/check references), and that every closed-world
+    // marker from the implementation scan is covered by a justified boundary.
+    // Unknown marker classes and unjustified boundaries fail here.
     //
-    // 誠実な範囲限定 (scope):
-    // (1) source_refs の行番号は存在範囲の検査に留める (1 <= NN <= 総行数)。
-    //     行内容の一致までは主張しない — 内容側の liveness は symbol_anchors
-    //     の正規表現が担う (brittle な行内容 pin を避けるため)。
-    // (2) test-only bin (fault fixture) は closed-world の対象外とし、path で
-    //     明示除外する。macro 生成コードは走査しない。
-    // (3) check_refs は contract_sync test 名または flake task/check 名の
-    //     いずれかへの解決を要求する。
+    // Honest scope limitations:
+    // (1) source_refs line numbers are checked for existence range only
+    //     (1 <= NN <= total line count). Content matching is not claimed — the
+    //     content-side liveness is carried by the symbol_anchors regexes (to
+    //     avoid brittle line-content pins).
+    // (2) The test-only bin (fault fixture) is excluded from the closed world
+    //     and explicitly excluded by path. Macro-generated code is not
+    //     scanned.
+    // (3) check_refs must resolve to either a contract_sync test name or a
+    //     flake task/check name.
     let manifest = parse_json(&STRONG_BOUNDARIES_JSON);
     assert_eq!(
         manifest["schema_version"], 1,
@@ -4163,8 +4183,8 @@ fn worker_bin_boundary_ok(
 
 #[test]
 fn workspace_has_single_member() {
-    // AR-10.8-05: workspace member は `rust/pokecon` 一件であること。
-    // 第二 member の追加はこの test を失敗させる (fail-closed)。
+    // AR-10.8-05: the workspace must have exactly one member, `rust/pokecon`.
+    // Adding a second member fails this test (fail-closed).
     let arrays = parse_workspace_member_arrays(&CARGO_MANIFEST);
     assert!(
         !arrays.is_empty(),
@@ -4194,22 +4214,25 @@ fn workspace_has_single_member() {
 #[allow(clippy::too_many_lines)]
 #[test]
 fn abstraction_baseline_matches_manifest() {
-    // AR-10.8-05: current Cargo.toml manifest の baseline 化
-    // (rust/pokecon/registry/abstraction_baseline.json)。workspace member、
-    // 依存名、bin、feature、trait、service 層、変換型のいずれの無言の追加も
-    // 双方向 diff で失敗させる。未知の追加 (manifest 漏れ) と stale entry
-    // (実装に存在しない宣言) のいずれもこの test を失敗させる。
+    // AR-10.8-05: baselines the current Cargo.toml manifest
+    // (rust/pokecon/registry/abstraction_baseline.json). Any silent addition to
+    // workspace members, dependency names, bins, features, traits, the service
+    // layer, or conversion types fails via a bidirectional diff. Unknown
+    // additions (missing from the manifest) and stale entries (declarations
+    // absent from the implementation) both fail this test.
     //
-    // 誠実な範囲限定 (scope):
-    // (1) 依存は sorted NAME のみを pin し version は見ない (upgrade-proof。
-    //     version は Cargo.lock + workspace-lock-check が担う)。
-    // (2) trait 走査は `pub trait NAME` 行の文字列走査のみ —
-    //     コメント化行、macro 生成 trait は捕捉しない。`#[cfg(test)]`
-    //     module は含め、tests/fixtures 配下は path 除外する。
-    // (3) service／conversion inventory は file-level であり item-level
-    //     diff は主張しない (AR-11-39)。
-    // (4) test 内部で cargo を起動しない (hermeticity)。`cargo metadata`
-    //     は handoff 10.2 の手動検証手順に留める。
+    // Honest scope limitations:
+    // (1) Dependencies pin only sorted names; versions are not observed
+    //     (upgrade-proof — versions are handled by Cargo.lock +
+    //     workspace-lock-check).
+    // (2) Trait scanning is a string scan of `pub trait NAME` lines only —
+    //     commented-out lines and macro-generated traits are not captured.
+    //     `#[cfg(test)]` modules are included; tests/fixtures paths are
+    //     excluded by path.
+    // (3) The service/conversion inventory is file-level; an item-level diff
+    //     is not claimed (AR-11-39).
+    // (4) No cargo invocation from inside the test (hermeticity). `cargo
+    //     metadata` stays in the handoff 10.2 manual verification procedure.
     let manifest = parse_json(&ABSTRACTION_BASELINE_JSON);
     assert_eq!(
         manifest["schema_version"], 1,

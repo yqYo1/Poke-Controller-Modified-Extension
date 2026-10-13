@@ -1,23 +1,24 @@
 // AR-11-37 intentional non-public wire fixture
 // NOT a Cargo target; included as source by the codec unit test
-// (`worker::ipc::codec` の `mod tests` が include! する) and read as text by
+// (included by `worker::ipc::codec`'s `mod tests` via include!) and read as text by
 // contract_sync (`worker_ipc_deployment_boundary_is_pinned`).
-// ワイヤ上に現れてはならない非公開ペイロードの byte 列を pin する。各 case は
-// peer の decode 層で拒否されることを期待する。byte 列は既存 codec negative
-// test と同一の値であり、新規の wire 値を発明しない。
+// Pins byte sequences of non-public payloads that must never appear on the
+// wire. Each case is expected to be rejected at the peer's decode layer. The
+// byte sequences match the existing codec negative tests; no new wire values
+// are invented.
 
-/// Fixture case が期待する拒否層。
+/// Rejection layer a fixture case expects.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FixtureExpectation {
-    /// `CodecError::Decode` (malformed `MessagePack` または closed schema 不一致)。
+    /// `CodecError::Decode` (malformed `MessagePack` or closed-schema mismatch).
     DecodeErr,
-    /// decode は通るが `Envelope::validate` が `CodecError::Schema` で拒否。
+    /// Decode succeeds but `Envelope::validate` rejects with `CodecError::Schema`.
     SchemaErr,
 }
 
-/// 非公開 wire payload fixture: (case 名, wire bytes, 期待する拒否層)。
+/// Non-public wire payload fixture: (case name, wire bytes, expected rejection layer).
 pub const CASES: &[(&str, &[u8], FixtureExpectation)] = &[
-    // (1) top-level fixext4 timestamp (codec negative test の timestamp_ext と同一)。
+    // (1) top-level fixext4 timestamp (same as the codec negative test's timestamp_ext).
     (
         "top_level_fixext4_timestamp",
         &[
@@ -27,7 +28,7 @@ pub const CASES: &[(&str, &[u8], FixtureExpectation)] = &[
         ],
         FixtureExpectation::DecodeErr,
     ),
-    // (2) map 値に nested した ext (codec negative test の nested と同一)。
+    // (2) ext nested in a map value (same as the codec negative test's nested).
     (
         "nested_ext_in_map_value",
         &[
@@ -38,7 +39,7 @@ pub const CASES: &[(&str, &[u8], FixtureExpectation)] = &[
         ],
         FixtureExpectation::DecodeErr,
     ),
-    // (3) 非文字列マップキー (codec negative test の LooseEnvelope 由来)。
+    // (3) non-string map key (from the codec negative test's LooseEnvelope).
     (
         "non_string_map_key",
         &[
@@ -48,7 +49,7 @@ pub const CASES: &[(&str, &[u8], FixtureExpectation)] = &[
         ],
         FixtureExpectation::DecodeErr,
     ),
-    // (4) 未知 envelope フィールド (codec negative test の UnknownFieldEnvelope 由来)。
+    // (4) unknown envelope field (from the codec negative test's UnknownFieldEnvelope).
     (
         "unknown_envelope_field",
         &[
@@ -59,7 +60,7 @@ pub const CASES: &[(&str, &[u8], FixtureExpectation)] = &[
         ],
         FixtureExpectation::DecodeErr,
     ),
-    // (5) frame 末尾の第二 object (codec negative test の trailing 由来)。
+    // (5) second object at the end of the frame (from the codec negative test's trailing).
     (
         "trailing_second_object",
         &[
@@ -69,7 +70,7 @@ pub const CASES: &[(&str, &[u8], FixtureExpectation)] = &[
         ],
         FixtureExpectation::DecodeErr,
     ),
-    // (6) 未知 error payload フィールド (codec negative test の LooseErrorEnvelope 由来)。
+    // (6) unknown error payload field (from the codec negative test's LooseErrorEnvelope).
     (
         "unknown_error_payload_field",
         &[
@@ -84,7 +85,7 @@ pub const CASES: &[(&str, &[u8], FixtureExpectation)] = &[
         ],
         FixtureExpectation::DecodeErr,
     ),
-    // (7) 空 op 文字列 (decode は通るが `Envelope::validate` が拒否)。
+    // (7) empty op string (decodes, but `Envelope::validate` rejects it).
     (
         "empty_op_string",
         &[

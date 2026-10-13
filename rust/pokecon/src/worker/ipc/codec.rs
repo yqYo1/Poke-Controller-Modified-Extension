@@ -196,8 +196,9 @@ mod tests {
         Envelope, IpcErrorPayload, IpcValue, LogLevel, LogPayload, LogTarget,
     };
 
-    // AR-11-37 非公開 wire payload fixture (source として include; Cargo target
-    // ではない。fixture 側の `pub` item のため fn 内ではなく module 直下に置く)。
+    // AR-11-37 non-public wire payload fixture (included as source; not a Cargo
+    // target. Placed directly under the module, not inside a fn, because the
+    // fixture declares `pub` items).
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/tests/fixtures/ipc_nonpublic_payloads.rs"
@@ -373,10 +374,10 @@ mod tests {
 
     #[test]
     fn fixture_nonpublic_wire_payloads_are_rejected_at_decode() {
-        // AR-11-37: ワイヤ上の非公開値 (MessagePack ext・非文字列マップキー・
-        // 未知フィールド・trailing object・空 op) は peer の decode 層で拒否
-        // される。同一プロセス内の encode 側呼び出し元は任意の IpcValue を
-        // 構築できるため、プロセス内拒否は主張しない。
+        // AR-11-37: non-public wire values (MessagePack ext, non-string map
+        // keys, unknown fields, trailing objects, empty op) are rejected at the
+        // peer's decode layer. In-process rejection is not claimed, because
+        // encode-side callers in the same process can build any IpcValue.
         for &(name, bytes, expectation) in CASES {
             let result = decode_payload(bytes);
             match expectation {
@@ -390,7 +391,7 @@ mod tests {
                 ),
             }
         }
-        // Positive control: 公開 IpcValue は encode→decode で round-trip する。
+        // Positive control: public IpcValue round-trips through encode→decode.
         let public = Envelope::Event {
             op: "worker.ready".to_owned(),
             payload: IpcValue::String("ok".to_owned()),
@@ -400,7 +401,7 @@ mod tests {
             decode_payload(&frame[4..]).expect("public envelope decodes"),
             public
         );
-        // Sentinel control: 空 bytes は拒否される (空入力で pass しないこと)。
+        // Sentinel control: empty bytes are rejected (empty input must not pass).
         assert!(decode_payload(&[]).is_err(), "empty bytes must be rejected");
     }
 

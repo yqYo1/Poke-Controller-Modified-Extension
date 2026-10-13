@@ -177,8 +177,9 @@ impl GpuiFakeView {
     }
 
     /// Shapes the exact single-line string rendered by the input element. The
-    /// displayed `入力: ` prefix is included so IME candidate and hit-test
-    /// positions refer to the pixels the user actually sees.
+    /// displayed `入力: ` prefix (the input label shown on screen) is included
+    /// so IME candidate and hit-test positions refer to the pixels the user
+    /// actually sees.
     fn input_line(&self, window: &Window) -> (ShapedLine, usize) {
         let displayed = format!("入力: {}", self.input_text);
         let prefix_bytes = "入力: ".len();

@@ -947,6 +947,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn send_formatter_follows_the_connected_port_format() {
+        let backend = VirtualSerialBackend::default();
+        let endpoint = VirtualSerialEndpoint::new();
+        backend
+            .push_plan(VirtualOpenPlan::Success(endpoint.clone()))
+            .await;
+        let manager = SerialManager::new(Arc::new(backend.clone()));
+
+        // The port opens with the Default format and encodes rows as text.
+        manager.apply_config(config("port")).await.unwrap();
+        let mut pressed = ControllerState::NEUTRAL;
+        pressed.buttons.set(Button::A, true);
+        manager.send_controller_state(pressed).await.unwrap();
+        let rows = std::str::from_utf8(&endpoint.written().await)
+            .unwrap()
+            .to_owned();
+        assert!(
+            rows.contains("0x0013 8 80 80 80 80"),
+            "default port must encode text rows: {rows}"
+        );
+
+        // After the atomic format change the port carries the new format, so
+        // the next frame uses the DS FT MPSSE encoding instead of a text row
+        // (upstream `port.format_name` priority: sends follow the port).
+        let switched = VirtualSerialEndpoint::new();
+        backend
+            .push_plan(VirtualOpenPlan::Success(switched.clone()))
+            .await;
+        manager
+            .update_config(SerialConfig::new("port", 9600, ControllerFormat::DsFtRev1).unwrap())
+            .await
+            .unwrap();
+        manager.send_controller_state(pressed).await.unwrap();
+        let frames = switched.written().await;
+        assert!(
+            frames
+                .windows(6)
+                .any(|window| window == [0x82, 0xef, 0x10, 0x80, 0xff, 0x00]),
+            "switched port must encode DS FT MPSSE frames: {frames:02x?}"
+        );
+        assert!(
+            !frames.windows(6).any(|window| window == b"0x0013"),
+            "switched port must not emit the old text rows: {frames:02x?}"
+        );
+    }
+
+    #[tokio::test]
     async fn reconnect_is_bounded_to_twenty_attempts() {
         let backend = VirtualSerialBackend::default();
         let endpoint = VirtualSerialEndpoint::new();

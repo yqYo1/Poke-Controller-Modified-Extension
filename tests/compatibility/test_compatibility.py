@@ -789,11 +789,69 @@ def test_public_api_extraction_collects_signatures_and_skips_missing_files(
             "bases": [],
             "methods": {"__init__": ["self"], "run": ["self", "speed=1"]},
             "attributes": ["CONSTANT", "value"],
+            "values": {"CONSTANT": "1"},
         }
     }
     assert base["variables"] == []
+    assert base["constants"] == {}
     keyboard = require_mapping(files["Commands/SwitchKeyboard.py"], "keyboard entry")
     assert keyboard["variables"] == ["KEY"]
+    assert keyboard["constants"] == {"KEY": "1"}
+
+
+def test_public_api_value_extraction_covers_literals_and_aliases(
+    tmp_path: Path,
+) -> None:
+    write_commands_fixture(
+        tmp_path,
+        {
+            "Keys.py": (
+                "from enum import IntFlag, auto\n"
+                "\n"
+                "class Button(IntFlag):\n"
+                "    Y = 1\n"
+                "    B = 2\n"
+                "    SELECT = Y\n"
+                "    AUTO = auto()\n"
+                "\n"
+                "LIMIT = 13\n"
+                "RATIO = 0.06\n"
+                "NAME = 'x'\n"
+                "COMPUTED = LIMIT + 1\n"
+            ),
+        },
+    )
+    api = collect_public_api(tmp_path)
+    files = require_mapping(api["files"], "files")
+    keys = require_mapping(files["Commands/Keys.py"], "keys entry")
+    classes = require_mapping(keys["classes"], "classes")
+    button = require_mapping(classes["Button"], "Button")
+    # Literal values and single-name aliases are captured; call-computed values
+    # (``auto()``) stay outside the static literal scope.
+    assert button["values"] == {"B": "2", "SELECT": "1", "Y": "1"}
+    assert keys["constants"] == {"LIMIT": "13", "NAME": "'x'", "RATIO": "0.06"}
+
+
+def test_public_api_changed_literal_value_is_breaking() -> None:
+    recorded = {
+        "files": {
+            "Commands/Keys.py": {
+                "classes": {"Button": {"values": {"A": "4"}}},
+            }
+        }
+    }
+    current = {
+        "files": {
+            "Commands/Keys.py": {
+                "classes": {"Button": {"values": {"A": "8"}}},
+            }
+        }
+    }
+    broken, unrecorded = compare_public_api(recorded, current)
+    assert broken == [
+        "changed value: files > Commands/Keys.py > classes > Button > values > A: 4 -> 8"
+    ]
+    assert unrecorded == []
 
 
 def test_public_api_comparison_classifies_breaking_changes() -> None:

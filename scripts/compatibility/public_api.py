@@ -39,7 +39,8 @@ PUBLIC_API_FILES: tuple[tuple[str, tuple[str, ...] | None], ...] = (
 _FUNCTION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef)
 _PARAMETER_LISTS = ("functions", "methods")
 _NAME_LISTS = ("bases", "attributes", "variables")
-_KINDS = (*_PARAMETER_LISTS, *_NAME_LISTS)
+_VALUE_LISTS = ("values", "constants")
+_KINDS = (*_PARAMETER_LISTS, *_NAME_LISTS, *_VALUE_LISTS)
 
 
 def invalid_value(message: str) -> Never:
@@ -110,9 +111,41 @@ def _assigned_attributes(
     return found
 
 
+def _literal_value(
+    statement: ast.stmt, scope: dict[str, str]
+) -> tuple[str, str] | None:
+    """Single-name assignment with a statically known value (literal or alias).
+
+    Covers ``A = <literal>``, ``A: T = <literal>`` and ``A = <earlier name>`` where the
+    earlier name was captured in the same scope. Values computed by calls (``auto()``),
+    multi-target assignments and module attributes are outside the literal-evaluable
+    scope and are skipped; enum values built with ``auto()`` therefore remain covered
+    only by the runtime corpus gate, not by this static comparison.
+    """
+    value: ast.expr
+    if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+        target = statement.targets[0]
+        value = statement.value
+    elif isinstance(statement, ast.AnnAssign) and statement.value is not None:
+        target = statement.target
+        value = statement.value
+    else:
+        return None
+    if not isinstance(target, ast.Name):
+        return None
+    if isinstance(value, ast.Name):
+        alias = scope.get(value.id)
+        return (target.id, alias) if alias is not None else None
+    try:
+        return (target.id, repr(ast.literal_eval(value)))
+    except ValueError, SyntaxError:
+        return None
+
+
 def _class_entry(node: ast.ClassDef) -> dict[str, object]:
     methods: dict[str, list[str]] = {}
     attributes: set[str] = set()
+    values: dict[str, str] = {}
     for item in node.body:
         if isinstance(item, _FUNCTION_NODES):
             if item.name == "__init__":
@@ -125,10 +158,14 @@ def _class_entry(node: ast.ClassDef) -> dict[str, object]:
                 methods[item.name] = _parameters(item)
         else:
             attributes.update(_assigned_names(item))
+            literal = _literal_value(item, values)
+            if literal is not None:
+                values[literal[0]] = literal[1]
     return {
         "bases": [ast.unparse(base) for base in node.bases],
         "methods": dict(sorted(methods.items())),
         "attributes": sorted(name for name in attributes if _public(name)),
+        "values": dict(sorted(values.items())),
     }
 
 
@@ -156,6 +193,7 @@ def _module(
     functions: dict[str, list[str]] = {}
     classes: dict[str, dict[str, object]] = {}
     variables: set[str] = set()
+    constants: dict[str, str] = {}
     added: list[tuple[str, str]] = []
     for item in tree.body:
         if isinstance(item, _FUNCTION_NODES):
@@ -166,6 +204,9 @@ def _module(
             variables.update(_assigned_names(item))
             # Attributes added outside the class body (``Direction.UP = ...``).
             added.extend(_assigned_attributes(item))
+            literal = _literal_value(item, constants)
+            if literal is not None:
+                constants[literal[0]] = literal[1]
     for owner, name in added:
         if owner in classes and _public(name):
             classes[owner] = _with_added_attribute(classes[owner], name)
@@ -181,6 +222,9 @@ def _module(
             name: value for name, value in sorted(classes.items()) if wanted(name)
         },
         "variables": sorted(name for name in variables if wanted(name)),
+        "constants": {
+            name: value for name, value in sorted(constants.items()) if wanted(name)
+        },
     }
 
 
@@ -274,6 +318,9 @@ def compare_public_api(
             broken,
             unrecorded,
         )
+    elif kind in _VALUE_LISTS:
+        if recorded != current:
+            broken.append(f"changed value: {path}: {recorded} -> {current}")
     elif kind in _NAME_LISTS:
         recorded_names = _require_string_list(recorded, path)
         current_names = _require_string_list(current, path)

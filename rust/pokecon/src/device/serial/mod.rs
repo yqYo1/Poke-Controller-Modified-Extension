@@ -2,6 +2,7 @@
 //! and a deterministic virtual fixture.
 
 mod codec;
+#[cfg(target_os = "linux")]
 mod ftdi;
 mod manager;
 mod native;

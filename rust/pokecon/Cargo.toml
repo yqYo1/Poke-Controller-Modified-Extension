@@ -165,7 +165,6 @@ sha2.workspace = true
 shared_memory.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
-libftdi1-sys.workspace = true
 tauri.workspace = true
 tauri-plugin-single-instance.workspace = true
 tokio.workspace = true
@@ -203,6 +202,7 @@ nix = { workspace = true, features = ["fs", "mman"] }
 nix.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
+libftdi1-sys.workspace = true
 nokhwa = { workspace = true, features = ["input-v4l"] }
 v4l.workspace = true
 

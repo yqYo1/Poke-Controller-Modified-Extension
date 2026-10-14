@@ -1666,7 +1666,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         )
     ]
     expected_production_build_input_hashes = {
-        "@.gitignore": "21697367d7af25feda8242b1aa9ddde844c79bef88cb97b34a8492e9faf1479f",
+        "@.gitignore": "6634af075741b14ba1ed181461619edef4813f2e7eaddf295f8c283bcd44ad36",
         "@LICENSE": "263a077fd442c4196f1f54ef8840025030b6016d39192840651d3c7eb9330e4c",
         "@pyproject.toml": (
             "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"

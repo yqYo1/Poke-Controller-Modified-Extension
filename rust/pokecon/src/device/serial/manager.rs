@@ -65,6 +65,8 @@ struct ConnectionState {
     config: Option<SerialConfig>,
     io: Option<Arc<dyn SerialIo>>,
     codec: ControllerCodec,
+    /// Last fully written frame, used by `skip_unchanged` formats.
+    last_frame: Option<Vec<u8>>,
     connection_id: u64,
 }
 
@@ -75,6 +77,7 @@ impl std::fmt::Debug for ConnectionState {
             .field("config", &self.config)
             .field("connected", &self.io.is_some())
             .field("codec", &self.codec)
+            .field("has_last_frame", &self.last_frame.is_some())
             .field("connection_id", &self.connection_id)
             .finish()
     }
@@ -132,6 +135,7 @@ impl SerialManager {
                     config: None,
                     io: None,
                     codec: ControllerCodec::new(ControllerFormat::Default),
+                    last_frame: None,
                     connection_id: 0,
                 }),
                 write_gate: Mutex::new(()),
@@ -355,9 +359,11 @@ impl SerialManager {
     ) -> u64 {
         let connection_id = self.inner.next_connection_id.fetch_add(1, Ordering::AcqRel);
         let mut state = self.inner.state.lock().await;
+        let neutral_frame = codec.encode(ControllerState::NEUTRAL);
         state.config = Some(config);
         state.io = Some(io);
         state.codec = codec;
+        state.last_frame = Some(neutral_frame);
         state.connection_id = connection_id;
         drop(state);
         self.publish_connection_status(true);
@@ -388,17 +394,25 @@ impl SerialManager {
         if epoch.is_cancelled() {
             return Err(SerialError::SendCancelled);
         }
-        let (io, frame, connection_id) = {
+        let (io, frame, connection_id, skip) = {
             let state = self.inner.state.lock().await;
             let io = state.io.clone().ok_or(SerialError::Disconnected)?;
-            (io, state.codec.encode(controller), state.connection_id)
+            let frame = state.codec.encode(controller);
+            let skip = state.codec.format().skip_unchanged()
+                && state.last_frame.as_deref() == Some(frame.as_slice());
+            (io, frame, state.connection_id, skip)
         };
+        if skip {
+            return Ok(());
+        }
         if write_all(&io, &frame).await.is_err() {
             drop(write_guard);
             self.handle_io_failure(io, connection_id).await;
             return Err(SerialError::WriteFailed);
         }
-        self.inner.state.lock().await.codec.commit(controller);
+        let mut state = self.inner.state.lock().await;
+        state.codec.commit(controller);
+        state.last_frame = Some(frame);
         Ok(())
     }
 
@@ -748,6 +762,37 @@ mod tests {
                 ("virtual".to_owned(), 9600)
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn skip_unchanged_formats_dedupe_identical_frames() {
+        let backend = VirtualSerialBackend::default();
+        let endpoint = VirtualSerialEndpoint::new();
+        backend
+            .push_plan(VirtualOpenPlan::Success(endpoint.clone()))
+            .await;
+        let manager = SerialManager::new(Arc::new(backend.clone()));
+
+        manager
+            .apply_config(SerialConfig::new("virtual", 9600, ControllerFormat::DsFtRev1).unwrap())
+            .await
+            .unwrap();
+
+        let mut state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::A, true);
+        manager.send_controller_state(state).await.unwrap();
+        let after_first = endpoint.written().await.len();
+        manager.send_controller_state(state).await.unwrap();
+        let after_second = endpoint.written().await.len();
+        assert_eq!(
+            after_first, after_second,
+            "identical frames must be skipped for skip_unchanged formats"
+        );
+
+        let mut changed = ControllerState::NEUTRAL;
+        changed.buttons.set(Button::B, true);
+        manager.send_controller_state(changed).await.unwrap();
+        assert!(endpoint.written().await.len() > after_second);
     }
 
     #[tokio::test]

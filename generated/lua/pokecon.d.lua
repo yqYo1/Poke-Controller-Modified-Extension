@@ -31,7 +31,7 @@
 ---@alias CameraCaptureResolution "640x360"|"1280x720"|"1920x1080"
 ---@alias CameraFlipMode "none"|"vertical"|"horizontal"|"both"
 ---@alias CameraScreenshotFormat "png"|"jpeg"
----@alias SerialDataFormat "default"|"nx"|"qingpi"|"3ds_x4"|"3ds_x3"
+---@alias SerialDataFormat "default"|"nx"|"qingpi"|"3ds_x4"|"3ds_x3"|"ds_ft_rev3"|"ds_ft_rev2"|"ds_ft_rev1"
 ---@alias NotificationsLineMenuBehavior "message"|"noop"
 ---@alias UiWidgetMode "all"|"outputs"|"output_1_controller"|"output_2_controller"|"output_1"|"output_2"|"controller"
 ---@alias UiStdoutDestination "output_1"|"output_2"

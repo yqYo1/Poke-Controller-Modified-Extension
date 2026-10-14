@@ -85,7 +85,7 @@ Web browser / Tauri WebView / GPUI native window
 | 設定 | オプション | デフォルト |
 |---------|---------|---------|
 | **ボーレート** | 4800 / 9600 / 115200、およびOS／ドライバーが受理する任意の正整数（実効値は形式の既定値で強制される） | 9600 |
-| **データ形式** | デフォルト / NX / Qingpi / 3DS Controller (FW:x.4-) / 3DS Controller (FW:-x.3) | デフォルト |
+| **データ形式** | デフォルト / NX / Qingpi / 3DS Controller (FW:x.4-) / 3DS Controller (FW:-x.3) / DS FT (Rev3) / DS FT (Rev2) / DS FT (Rev1) | デフォルト |
 
 **UI連動**: UIでデータ形式を変更した場合は、その形式が定義する既定ボーレート（デフォルト／NX／Qingpi = `9600`、3DS Controller両mode = `115200`）を、同一の設定書き込みトランザクションで`serial.baud_rate`へ反映する。実効ボーレートは常に形式の既定値であり（[バックエンド定義書](SPECIFICATION_BACKEND.md) §11.4.1.1の`serial.baud_rate`参照）、TOML、CLI、環境変数、動的設定、OpenAPIで設定された値は保存・表示用として保持されるが、デバイスを開く際は形式の既定値で強制される。この反映はUI操作の補助動作であり、形式の検証制約ではない。
 

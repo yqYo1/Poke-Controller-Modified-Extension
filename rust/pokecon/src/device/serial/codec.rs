@@ -14,6 +14,9 @@ pub enum ControllerFormat {
     ThreeDsX4,
     #[serde(rename = "3ds_x3")]
     ThreeDsX3,
+    DsFtRev3,
+    DsFtRev2,
+    DsFtRev1,
 }
 
 impl ControllerFormat {
@@ -25,17 +28,27 @@ impl ControllerFormat {
             "qingpi" => Some(Self::Qingpi),
             "3ds_x4" => Some(Self::ThreeDsX4),
             "3ds_x3" => Some(Self::ThreeDsX3),
+            "ds_ft_rev3" => Some(Self::DsFtRev3),
+            "ds_ft_rev2" => Some(Self::DsFtRev2),
+            "ds_ft_rev1" => Some(Self::DsFtRev1),
             _ => None,
         }
     }
 
     /// Resolves a format name with the upstream `get_transport` fallback: an
-    /// exact canonical value wins; a name containing `3DS Controller` selects
-    /// by the `x.3` marker; anything else falls back to `Default`.
+    /// exact canonical value or exact display name wins; a name containing
+    /// `3DS Controller` selects by the `x.3` marker; anything else falls back
+    /// to `Default`.
     #[must_use]
     pub fn resolve(name: &str) -> Self {
         if let Some(format) = Self::parse(name) {
             return format;
+        }
+        match name {
+            "DS FT (Rev3)" => return Self::DsFtRev3,
+            "DS FT (Rev2)" => return Self::DsFtRev2,
+            "DS FT (Rev1)" => return Self::DsFtRev1,
+            _ => {}
         }
         if name.contains("3DS Controller") {
             return if name.contains("x.3") {
@@ -57,6 +70,9 @@ impl ControllerFormat {
             Self::Qingpi => "Qingpi",
             Self::ThreeDsX4 => "3DS Controller(FW:x.4-)",
             Self::ThreeDsX3 => "3DS Controller(FW:-x.3)",
+            Self::DsFtRev3 => "DS FT (Rev3)",
+            Self::DsFtRev2 => "DS FT (Rev2)",
+            Self::DsFtRev1 => "DS FT (Rev1)",
         }
     }
 
@@ -66,6 +82,7 @@ impl ControllerFormat {
         match self {
             Self::Default | Self::Nx | Self::Qingpi => Some(9600),
             Self::ThreeDsX4 | Self::ThreeDsX3 => Some(115_200),
+            Self::DsFtRev3 | Self::DsFtRev2 | Self::DsFtRev1 => None,
         }
     }
 
@@ -80,7 +97,13 @@ impl ControllerFormat {
     pub const fn end_row(self) -> Option<&'static str> {
         match self {
             Self::Default => Some("end"),
-            Self::Nx | Self::Qingpi | Self::ThreeDsX4 | Self::ThreeDsX3 => None,
+            Self::Nx
+            | Self::Qingpi
+            | Self::ThreeDsX4
+            | Self::ThreeDsX3
+            | Self::DsFtRev3
+            | Self::DsFtRev2
+            | Self::DsFtRev1 => None,
         }
     }
 
@@ -114,6 +137,9 @@ impl ControllerFormat {
     pub const fn raw_write_message(self) -> &'static str {
         match self {
             Self::Default | Self::Nx | Self::Qingpi | Self::ThreeDsX4 | Self::ThreeDsX3 => "",
+            Self::DsFtRev3 | Self::DsFtRev2 | Self::DsFtRev1 => {
+                "FTDI: このData Formatでは、Mcuコマンドやシリアルコマンドの直接送信は行いません。"
+            }
         }
     }
 
@@ -122,6 +148,9 @@ impl ControllerFormat {
     pub const fn raw_write_log(self) -> &'static str {
         match self {
             Self::Default | Self::Nx | Self::Qingpi | Self::ThreeDsX4 | Self::ThreeDsX3 => "",
+            Self::DsFtRev3 | Self::DsFtRev2 | Self::DsFtRev1 => {
+                "Raw serial write is blocked in the FTDI data format."
+            }
         }
     }
 }
@@ -157,6 +186,9 @@ impl ControllerCodec {
             ControllerFormat::Qingpi => encode_qingpi(state),
             ControllerFormat::ThreeDsX4 => encode_three_ds_x4(state),
             ControllerFormat::ThreeDsX3 => encode_three_ds_x3(state),
+            ControllerFormat::DsFtRev3 => encode_ds_ft(state, DsFtPins::REV3),
+            ControllerFormat::DsFtRev2 => encode_ds_ft(state, DsFtPins::REV2),
+            ControllerFormat::DsFtRev1 => encode_ds_ft(state, DsFtPins::REV1),
         }
     }
 
@@ -203,6 +235,96 @@ fn push_stick_text(frame: &mut String, stick: StickPosition) {
     use std::fmt::Write as _;
 
     write!(frame, " {:02x} {:02x}", stick.x, stick.y).expect("writing to String cannot fail");
+}
+
+/// Pin assignment (bus, bit) of the DS FT board revisions. Only B, X and Y
+/// differ between revisions; every other pin is shared (upstream
+/// `FTDI_PIN_MAPS`).
+#[derive(Clone, Copy)]
+struct DsFtPins {
+    b: (u8, u8),
+    x: (u8, u8),
+    y: (u8, u8),
+}
+
+impl DsFtPins {
+    const REV1: Self = Self {
+        b: (0, 5),
+        x: (0, 6),
+        y: (0, 7),
+    };
+    const REV2: Self = Self {
+        b: (1, 6),
+        x: (1, 7),
+        y: (1, 5),
+    };
+    const REV3: Self = Self {
+        b: (0, 5),
+        x: (0, 6),
+        y: (1, 5),
+    };
+}
+
+/// Encodes the DS FT MPSSE payload: `0x82 C ~C 0x80 D ~D` with every pressed
+/// pin pulled low on the C/D buses (upstream `encode_pin_states`). Sticks and
+/// touch are ignored; unmapped buttons (ZL/ZR/RCLICK/HOME/CAPTURE) have no pin.
+fn encode_ds_ft(state: ControllerState, pins: DsFtPins) -> Vec<u8> {
+    let mut c = 0xff_u8;
+    let mut d = 0xff_u8;
+    let mut press = |(bus, bit): (u8, u8)| {
+        if bus == 0 {
+            c &= !(1 << bit);
+        } else {
+            d &= !(1 << bit);
+        }
+    };
+    let buttons = state.buttons;
+    if buttons.a {
+        press((0, 4));
+    }
+    if buttons.b {
+        press(pins.b);
+    }
+    if buttons.x {
+        press(pins.x);
+    }
+    if buttons.y {
+        press(pins.y);
+    }
+    if buttons.l {
+        press((1, 0));
+    }
+    if buttons.r {
+        press((1, 1));
+    }
+    if buttons.minus {
+        press((1, 2));
+    }
+    if buttons.plus {
+        press((1, 3));
+    }
+    if buttons.lclick {
+        press((1, 4));
+    }
+    for pin in ds_ft_hat_pins(state.hat) {
+        press(*pin);
+    }
+    vec![0x82, c, !c, 0x80, d, !d]
+}
+
+/// D-pad pins pressed for one hat direction (diagonals press two pins).
+fn ds_ft_hat_pins(hat: Hat) -> &'static [(u8, u8)] {
+    match hat {
+        Hat::Up => &[(0, 3)],
+        Hat::UpRight => &[(0, 3), (0, 2)],
+        Hat::Right => &[(0, 2)],
+        Hat::DownRight => &[(0, 1), (0, 2)],
+        Hat::Down => &[(0, 1)],
+        Hat::DownLeft => &[(0, 1), (0, 0)],
+        Hat::Left => &[(0, 0)],
+        Hat::UpLeft => &[(0, 3), (0, 0)],
+        Hat::Neutral => &[],
+    }
 }
 
 fn encode_nx(state: ControllerState) -> Vec<u8> {
@@ -630,5 +752,141 @@ mod tests {
         assert!(!ControllerFormat::Qingpi.skip_unchanged());
         assert_eq!(ControllerFormat::Default.raw_write_message(), "");
         assert_eq!(ControllerFormat::Nx.raw_write_log(), "");
+        assert_eq!(ControllerFormat::DsFtRev1.default_baud(), None);
+        assert!(!ControllerFormat::DsFtRev1.supports_text());
+        assert!(!ControllerFormat::DsFtRev1.has_touchscreen());
+        assert!(!ControllerFormat::DsFtRev1.allows_raw_write());
+        assert!(ControllerFormat::DsFtRev1.skip_unchanged());
+        assert!(!ControllerFormat::DsFtRev2.raw_write_message().is_empty());
+        assert!(!ControllerFormat::DsFtRev2.raw_write_log().is_empty());
+        assert_eq!(ControllerFormat::DsFtRev3.display_name(), "DS FT (Rev3)");
+    }
+
+    #[test]
+    fn ds_ft_resolution_matches_upstream_names() {
+        assert_eq!(
+            ControllerFormat::resolve("DS FT (Rev1)"),
+            ControllerFormat::DsFtRev1
+        );
+        assert_eq!(
+            ControllerFormat::resolve("DS FT (Rev2)"),
+            ControllerFormat::DsFtRev2
+        );
+        assert_eq!(
+            ControllerFormat::resolve("DS FT (Rev3)"),
+            ControllerFormat::DsFtRev3
+        );
+        assert_eq!(
+            ControllerFormat::resolve("ds_ft_rev2"),
+            ControllerFormat::DsFtRev2
+        );
+        assert_eq!(
+            ControllerFormat::resolve("DS FT"),
+            ControllerFormat::Default
+        );
+        assert_eq!(
+            ControllerFormat::parse("ds_ft_rev1"),
+            Some(ControllerFormat::DsFtRev1)
+        );
+    }
+
+    #[test]
+    fn ds_ft_rev1_matches_golden_pin_vectors() {
+        let codec = ControllerCodec::new(ControllerFormat::DsFtRev1);
+        assert_eq!(
+            codec.encode(ControllerState::NEUTRAL),
+            vec![0x82, 0xff, 0x00, 0x80, 0xff, 0x00]
+        );
+        let mut state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::A, true);
+        assert_eq!(
+            codec.encode(state),
+            vec![0x82, 0xef, 0x10, 0x80, 0xff, 0x00]
+        );
+        for (button, bytes) in [
+            (Button::Y, vec![0x82, 0x7f, 0x80, 0x80, 0xff, 0x00]),
+            (Button::B, vec![0x82, 0xdf, 0x20, 0x80, 0xff, 0x00]),
+            (Button::X, vec![0x82, 0xbf, 0x40, 0x80, 0xff, 0x00]),
+            (Button::L, vec![0x82, 0xff, 0x00, 0x80, 0xfe, 0x01]),
+            (Button::R, vec![0x82, 0xff, 0x00, 0x80, 0xfd, 0x02]),
+            (Button::Minus, vec![0x82, 0xff, 0x00, 0x80, 0xfb, 0x04]),
+            (Button::Plus, vec![0x82, 0xff, 0x00, 0x80, 0xf7, 0x08]),
+            (Button::Lclick, vec![0x82, 0xff, 0x00, 0x80, 0xef, 0x10]),
+        ] {
+            let mut state = ControllerState::NEUTRAL;
+            state.buttons.set(button, true);
+            assert_eq!(codec.encode(state), bytes, "{button:?}");
+        }
+        for (hat, bytes) in [
+            (Hat::Up, vec![0x82, 0xf7, 0x08, 0x80, 0xff, 0x00]),
+            (Hat::UpRight, vec![0x82, 0xf3, 0x0c, 0x80, 0xff, 0x00]),
+            (Hat::Right, vec![0x82, 0xfb, 0x04, 0x80, 0xff, 0x00]),
+            (Hat::DownRight, vec![0x82, 0xf9, 0x06, 0x80, 0xff, 0x00]),
+            (Hat::Down, vec![0x82, 0xfd, 0x02, 0x80, 0xff, 0x00]),
+            (Hat::DownLeft, vec![0x82, 0xfc, 0x03, 0x80, 0xff, 0x00]),
+            (Hat::Left, vec![0x82, 0xfe, 0x01, 0x80, 0xff, 0x00]),
+            (Hat::UpLeft, vec![0x82, 0xf6, 0x09, 0x80, 0xff, 0x00]),
+        ] {
+            let mut state = ControllerState::NEUTRAL;
+            state.hat = hat;
+            assert_eq!(codec.encode(state), bytes, "{hat:?}");
+        }
+        let mut state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::B, true);
+        state.hat = Hat::UpRight;
+        assert_eq!(
+            codec.encode(state),
+            vec![0x82, 0xd3, 0x2c, 0x80, 0xff, 0x00]
+        );
+    }
+
+    #[test]
+    fn ds_ft_rev2_matches_golden_pin_vectors() {
+        let codec = ControllerCodec::new(ControllerFormat::DsFtRev2);
+        assert_eq!(
+            codec.encode(ControllerState::NEUTRAL),
+            vec![0x82, 0xff, 0x00, 0x80, 0xff, 0x00]
+        );
+        for (button, bytes) in [
+            (Button::Y, vec![0x82, 0xff, 0x00, 0x80, 0xdf, 0x20]),
+            (Button::B, vec![0x82, 0xff, 0x00, 0x80, 0xbf, 0x40]),
+            (Button::X, vec![0x82, 0xff, 0x00, 0x80, 0x7f, 0x80]),
+        ] {
+            let mut state = ControllerState::NEUTRAL;
+            state.buttons.set(button, true);
+            assert_eq!(codec.encode(state), bytes, "{button:?}");
+        }
+        let mut state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::B, true);
+        state.hat = Hat::UpRight;
+        assert_eq!(
+            codec.encode(state),
+            vec![0x82, 0xf3, 0x0c, 0x80, 0xbf, 0x40]
+        );
+    }
+
+    #[test]
+    fn ds_ft_rev3_matches_golden_pin_vectors() {
+        let codec = ControllerCodec::new(ControllerFormat::DsFtRev3);
+        assert_eq!(
+            codec.encode(ControllerState::NEUTRAL),
+            vec![0x82, 0xff, 0x00, 0x80, 0xff, 0x00]
+        );
+        for (button, bytes) in [
+            (Button::Y, vec![0x82, 0xff, 0x00, 0x80, 0xdf, 0x20]),
+            (Button::B, vec![0x82, 0xdf, 0x20, 0x80, 0xff, 0x00]),
+            (Button::X, vec![0x82, 0xbf, 0x40, 0x80, 0xff, 0x00]),
+        ] {
+            let mut state = ControllerState::NEUTRAL;
+            state.buttons.set(button, true);
+            assert_eq!(codec.encode(state), bytes, "{button:?}");
+        }
+        let mut state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::B, true);
+        state.hat = Hat::UpRight;
+        assert_eq!(
+            codec.encode(state),
+            vec![0x82, 0xd3, 0x2c, 0x80, 0xff, 0x00]
+        );
     }
 }

@@ -56,6 +56,9 @@ type SerialDataFormat = Literal[
     "qingpi",
     "3ds_x4",
     "3ds_x3",
+    "ds_ft_rev3",
+    "ds_ft_rev2",
+    "ds_ft_rev1",
 ]
 type NotificationsLineMenuBehavior = Literal[
     "message",

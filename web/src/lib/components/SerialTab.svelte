@@ -33,15 +33,20 @@
 
   // Each data format owns its baud rate (upstream transport `baud_rate`); the
   // UI mirrors the effective value into the setting on every format change.
+  // DS FT formats have no baud rate (FTDI MPSSE), so the baud setting is left
+  // untouched for them.
   const FORMAT_DEFAULT_BAUD: Record<
     NonNullable<SettingsWriteValues['serial.data_format']>,
-    number
+    number | null
   > = {
     default: 9600,
     nx: 9600,
     qingpi: 9600,
     '3ds_x4': 115200,
-    '3ds_x3': 115200
+    '3ds_x3': 115200,
+    ds_ft_rev3: null,
+    ds_ft_rev2: null,
+    ds_ft_rev1: null
   };
 
   $effect(() => {
@@ -120,10 +125,12 @@
   async function writeFormat(event: Event): Promise<void> {
     const format = (event.currentTarget as HTMLSelectElement)
       .value as NonNullable<SettingsWriteValues['serial.data_format']>;
-    await write({
-      'serial.baud_rate': FORMAT_DEFAULT_BAUD[format],
-      'serial.data_format': format
-    });
+    const baud = FORMAT_DEFAULT_BAUD[format];
+    await write(
+      baud === null
+        ? { 'serial.data_format': format }
+        : { 'serial.baud_rate': baud, 'serial.data_format': format }
+    );
   }
 
   async function control(action: SerialControlRequest['action']): Promise<void> {

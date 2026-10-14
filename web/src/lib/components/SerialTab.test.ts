@@ -149,4 +149,19 @@ describe('SerialTab', () => {
       });
     });
   });
+
+  it('lists data formats in the upstream registration order', () => {
+    const { runtime, view } = runtimeView();
+    const actions = serialActions();
+    render(SerialTab, { actions, autoLoad: false, runtime, view });
+
+    const select = screen.getByLabelText('Data format');
+    expect([...select.querySelectorAll('option')].map((option) => option.value)).toEqual([
+      'default',
+      'nx',
+      'qingpi',
+      '3ds_x4',
+      '3ds_x3'
+    ]);
+  });
 });

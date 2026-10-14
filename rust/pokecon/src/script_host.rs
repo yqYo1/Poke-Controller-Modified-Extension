@@ -368,12 +368,18 @@ impl GenerationResources {
             .map_err(serial_host_error)
     }
 
-    fn neutralize(&self) -> Result<(), ScriptHostError> {
-        self.ensure_accepting()?;
+    fn neutralize(&self) -> Result<bool, ScriptHostError> {
+        // Releasing inputs is a safety operation: it stays available while the
+        // generation is stopping (upstream `end()` releases during command
+        // cleanup), so it deliberately skips `ensure_accepting`.
         initialize_source(&self.arbiter, &self.source, &self.generation)
             .map_err(|_error| host_error("InvalidInput", "controller input is invalid"))?;
         self.sequence.store(0, Ordering::Release);
-        self.publish_output()
+        self.publish_output()?;
+        // Upstream `release()` reports whether other input sources remain; the
+        // composed output is non-neutral only when another source is active.
+        let remaining = self.arbiter.lock().output() != ControllerState::NEUTRAL;
+        Ok(remaining)
     }
 
     fn clear_ui(&self) {
@@ -472,7 +478,7 @@ impl ScriptHost for ProductionScriptHost {
         self.shared.publish_output()
     }
 
-    fn controller_neutral(&self) -> Result<(), ScriptHostError> {
+    fn controller_neutral(&self) -> Result<bool, ScriptHostError> {
         self.shared.neutralize()
     }
 

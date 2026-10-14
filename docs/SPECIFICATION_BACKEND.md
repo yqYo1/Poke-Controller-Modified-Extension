@@ -749,8 +749,8 @@ self.displayText([10, 10], "HP: 100/100", ms=3000, color="green")
 - `self.keys.inputEnd(btns: GamepadInput, ifPrint: bool = True, unset_hat: bool = True, unset_Touchscreen: bool = True) -> None`: 指定入力を解放する。既存のcamelCaseキーワード`ifPrint`／`unset_Touchscreen`を変更しない
 - `self.keys.hold(btns: GamepadInput) -> None`／`self.keys.holdEnd(btns: GamepadInput) -> None`: 保持集合を更新して押下／解放する
 - `self.keys.holdChange(btns: GamepadInput) -> None`: 保持中のスティックの向き・倒し量、Hatの向き、タッチ位置を離さずに切り替える（`holdEnd`→`hold`では一度ニュートラルが送信されるため）。同じスティック・Hat・タッチを保持していない場合は`hold`と同じ
-- `self.keys.neutral() -> None`: 全保持状態をクリアしてコントローラーをニュートラル状態にリセットする
-- `self.keys.end() -> None`: 互換シリアル終了行を送信する
+- `self.keys.neutral() -> None`: この入力源（スクリプト）の入力をすべて離し、合成後の状態を送信する。終了行は送らない。上流v0.2.0は`hold()`で保持した入力のみを対象とするが、本実装では`hold()`が`input()`と同一（保持リストを区別しない）ため入力源単位で解放する
+- `self.keys.end() -> None`: この入力源の入力をすべて離し、送信方式が定める終了行を送る（Default形式は`"end"`、他の形式は`None`のため送らない。v0.2.0準拠）
 - `self.keys.ser.write()` で生シリアル書き込みが可能（IPCプロキシ経由）。公開型は `bytes | bytearray | memoryview | list[int]`
 - `self.keys.ser.writeRow()` でシリアル行書き込み（末尾に改行自動追加）
 - **入力の合成優先度（2026-10-12決定: 手動優先）**: 同一要素（スティック・Hat・タッチ）を複数の入力元が同時に主張した場合、手動入力（キーボード／マウス、ブラウザゲームパッド、ハードウェアコントローラー）がスクリプト入力を上回る。上流`InputSource`（`COMMAND`＜`KEYBOARD`＜`MOUSE`＜`PROCON`）の順序に準拠し、動的設定入力は最上位を維持する。ボタンは入力元を問わず論理和で合成する
@@ -769,7 +769,7 @@ self.displayText([10, 10], "HP: 100/100", ms=3000, color="green")
 | `send_keyboard()` | `send_keyboard(item: str \| tuple[int, int]) -> None` | キーボード入力の1手順を送る（§10.4.2のキーボードメソッドから使用する）。文字列は行としてそのまま送信し、`(モード, キー)`の値の組は現在のコントローラー状態と合成した11バイトフレームとして送信する（NX形式、§11.4.1.3） |
 | `writeRow_wo_perf_counter()` | `writeRow_wo_perf_counter(row: str, is_show: bool = False) -> None` | 計測なしの行書き込み（本実装の`writeRow`は常に計測なし） |
 | `send_state()` | `send_state(source: object, priority: int, state: dict) -> None` | v0.2.0互換。入力源の状態（`SendFormat.format`形式）をスクリプト入力源へ差分適用する（ボタンは押下差分、十字キー・スティック・タッチは変化時に適用）。合成と優先度はRustのarbiterが所有し、`source`／`priority`は受理のみ |
-| `release()` | `release(source: object, end_row: str \| None = None) -> bool` | v0.2.0互換。この入力源の入力を離す（本実装ではスクリプト入力をニュートラルへ戻す）。`end_row`指定時はその行を送る。戻り値は常に`False`（他の入力源の所有はRust側） |
+| `release()` | `release(source: object, end_row: str \| None = None) -> bool` | v0.2.0互換。この入力源の入力を離す（本実装ではスクリプト入力をニュートラルへ戻す）。`end_row`は、他の入力源（手動操作）の状態が残っていない場合のみ送る。戻り値は、他の入力源の状態が残っているか（v0.2.0準拠） |
 | `release_all()` | `release_all(end_row: str \| None = None) -> None` | v0.2.0互換。全入力源の入力を離す（メニューの「すべての入力を離す」相当） |
 | `transport()` | `transport() -> object` | 今のData Formatの互換送信方式（`name`／`supports_text`／`end_row`／`has_touchscreen`／`button_conversion`／`keyboard_steps()`）を返す互換オブジェクト |
 

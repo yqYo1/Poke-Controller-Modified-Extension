@@ -641,7 +641,7 @@ fn execute_command(config: &PythonActorConfig, state: &ExecutionState, command: 
             message: format!("overlay cleanup failed: {error}"),
         };
     }
-    if let Err(error) = request_host::<_, ()>(
+    if let Err(error) = request_host::<_, bool>(
         &config.connection,
         &config.runtime_handle,
         protocol::HOST_CONTROLLER_NEUTRAL,
@@ -981,7 +981,7 @@ impl PyApi {
         )
     }
 
-    fn controller_neutral(&self) -> PyResult<()> {
+    fn controller_neutral(&self) -> PyResult<bool> {
         self.request(protocol::HOST_CONTROLLER_NEUTRAL, &())
     }
 
@@ -1849,14 +1849,15 @@ class Sender:
     def release(self, source, end_row=None):
         """この入力源の入力を離し、残りの入力源の状態を送信する(互換API)。
 
-        本実装では入力源はスクリプト自身のみのため、スクリプト入力をニュートラルへ戻す。
-        戻り値は、ほかの入力源が残っているか(常に False)。
+        本実装では入力源はスクリプト自身のみがAPI管理下のため、スクリプト入力をニュートラルへ戻す。
+        `end_row`は、ほかの入力源(手動操作)が残っていない場合のみ送る(v0.2.0準拠)。
+        戻り値は、ほかの入力源の状態が残っているか。
         """
-        _api.controller_neutral()
+        remaining = _api.controller_neutral()
         self._state = None
-        if end_row is not None:
+        if end_row is not None and not remaining:
             self.writeRow(end_row)
-        return False
+        return remaining
 
     def release_all(self, end_row=None):
         """すべての入力源の入力を離す(互換API: メニューの「すべての入力を離す」相当)"""
@@ -1868,6 +1869,11 @@ class Sender:
     def transport(self):
         """今のData Formatの互換送信方式オブジェクトを返す"""
         return _CompatTransport(_json.loads(_api.serial_format_attributes()))
+
+
+# Formats that define an end row (upstream `Transport.end_row`); only the
+# Default format sends "end" when a command ends.
+_END_ROWS = {"Default": "end"}
 
 
 class KeyPress:
@@ -1922,10 +1928,21 @@ class KeyPress:
         _api.controller_input("press", _controls(btns), False, False)
 
     def neutral(self):
+        """この入力源(スクリプト)の入力をすべて離し、合成後の状態を送信する。
+
+        上流v0.2.0はhold()で保持した入力のみを対象とするが、本実装ではhold()がinput()と
+        同一(保持リストを区別しない)ため、入力源単位で解放する。終了行は送らない。
+        """
         _api.controller_neutral()
 
     def end(self):
-        self.ser.writeRow("end")
+        """コマンドの終わりに、この入力源の入力をすべて離し、送信方式が定める終了行を送る。
+
+        終了行はDefault形式の"end"のみで、他の形式は送らない(v0.2.0準拠)。
+        停止中のホスト要求を避けるため、形式名はコマンド開始時の値を使う。
+        """
+        end_row = _END_ROWS.get(self.serial_data_format_name)
+        self.ser.release(self, end_row=end_row)
 
 
 class Widget:
@@ -2337,6 +2354,10 @@ class PythonCommand(Command):
         super().__init__()
         self._logger = _make_logger()
         self.keys = KeyPress(Sender())
+        # Snapshot the data format name for local lookups (upstream keeps the
+        # name on the input object; `end()` must not issue a host request while
+        # the command is stopping).
+        self.keys.serial_data_format_name = _api.serial_data_format_name()
         self.postProcess = None
         self._stop_cleanup_done = False
         # Keys held by PressKey; released when the command ends.

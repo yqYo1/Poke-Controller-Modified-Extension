@@ -60,7 +60,7 @@ pub trait ScriptHost: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns a stable host error when neutralization cannot be applied.
-    fn controller_neutral(&self) -> Result<(), ScriptHostError>;
+    fn controller_neutral(&self) -> Result<bool, ScriptHostError>;
 
     /// Writes uninterpreted bytes to the active serial transport.
     ///
@@ -477,7 +477,7 @@ fn dispatch_host_call(
         }
         protocol::HOST_CONTROLLER_NEUTRAL => {
             decode_host::<()>(payload)?;
-            serialize_host(host.controller_neutral())
+            serialize_host_value(host.controller_neutral())
         }
         protocol::HOST_SERIAL_WRITE => {
             let request = decode_host::<HostSerialWriteRequest>(payload)?;

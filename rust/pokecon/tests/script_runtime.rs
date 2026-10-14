@@ -65,9 +65,9 @@ impl ScriptHost for RecordingScriptHost {
         Ok(())
     }
 
-    fn controller_neutral(&self) -> Result<(), ScriptHostError> {
+    fn controller_neutral(&self) -> Result<bool, ScriptHostError> {
         self.neutralizations.fetch_add(1, Ordering::AcqRel);
-        Ok(())
+        Ok(false)
     }
 
     fn serial_write(&self, data: Vec<u8>) -> Result<(), ScriptHostError> {
@@ -1280,6 +1280,7 @@ class Cooperative(PythonCommand):
     std::fs::write(command_root.join("cooperative.py"), SOURCE)
         .expect("cooperative fixture is written");
     let host = Arc::new(RecordingScriptHost::default());
+    *host.data_format.lock().unwrap() = "Default".to_owned();
     let (worker, client) = spawn_client(host.clone()).await;
     initialize(&client, &command_root, &data_root).await;
 
@@ -1328,7 +1329,9 @@ class Cooperative(PythonCommand):
         *host.serial_rows.lock().unwrap(),
         vec!["ready", "end", "post-process"]
     );
-    assert_eq!(host.neutralizations.load(Ordering::Acquire), 1);
+    // `end()` releases the source (one neutralization) and the script-end
+    // cleanup neutralizes again as a safety net.
+    assert_eq!(host.neutralizations.load(Ordering::Acquire), 2);
 
     stop_worker(&worker).await;
 }
@@ -1348,6 +1351,7 @@ class Finisher(PythonCommand):
     let (_temporary, command_root, data_root) = create_profile();
     std::fs::write(command_root.join("finisher.py"), SOURCE).expect("finisher fixture is written");
     let host = Arc::new(RecordingScriptHost::default());
+    *host.data_format.lock().unwrap() = "Default".to_owned();
     let (worker, client) = spawn_client(host.clone()).await;
     initialize(&client, &command_root, &data_root).await;
 
@@ -1364,7 +1368,7 @@ class Finisher(PythonCommand):
         *host.serial_rows.lock().unwrap(),
         vec!["end", "post-process"]
     );
-    assert_eq!(host.neutralizations.load(Ordering::Acquire), 1);
+    assert_eq!(host.neutralizations.load(Ordering::Acquire), 2);
 
     stop_worker(&worker).await;
 }
@@ -1427,10 +1431,14 @@ class Busy(PythonCommand):
         .expect("execution response succeeds");
     assert_eq!(result.outcome, ScriptExecutionOutcome::Stopped);
     assert!(!client.status().await.unwrap().running);
-    assert_eq!(host.neutralizations.load(Ordering::Acquire), 1);
+    // The interrupt race decides whether the command cleanup (`end()`) runs
+    // before the busy loop unwinds; releasing inputs must happen either way
+    // via the script-end safety net.
+    let before_stop = host.neutralizations.load(Ordering::Acquire);
+    assert!(before_stop >= 1);
 
     stop_worker(&worker).await;
-    assert_eq!(host.neutralizations.load(Ordering::Acquire), 2);
+    assert!(host.neutralizations.load(Ordering::Acquire) > before_stop);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -1531,6 +1539,7 @@ class AbortedDialog(PythonCommand):
     std::fs::write(command_root.join("aborted_dialog.py"), SOURCE)
         .expect("script fixture is written");
     let host = Arc::new(RecordingScriptHost::default());
+    *host.data_format.lock().unwrap() = "Default".to_owned();
     host.abort_dialogs.store(true, Ordering::Release);
     let (worker, client) = spawn_client(host.clone()).await;
     initialize(&client, &command_root, &data_root).await;
@@ -1546,7 +1555,7 @@ class AbortedDialog(PythonCommand):
     assert_eq!(result.outcome, ScriptExecutionOutcome::Stopped);
     assert_eq!(host.dialog_cleanups.load(Ordering::Acquire), 1);
     assert!(host.dialogs.lock().unwrap().is_empty());
-    assert_eq!(host.neutralizations.load(Ordering::Acquire), 1);
+    assert_eq!(host.neutralizations.load(Ordering::Acquire), 2);
 
     stop_worker(&worker).await;
 }

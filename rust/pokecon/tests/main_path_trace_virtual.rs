@@ -330,8 +330,8 @@ impl ScriptHost for TraceScriptHost {
         Ok(())
     }
 
-    fn controller_neutral(&self) -> Result<(), ScriptHostError> {
-        Ok(())
+    fn controller_neutral(&self) -> Result<bool, ScriptHostError> {
+        Ok(false)
     }
 
     fn serial_write(&self, _data: Vec<u8>) -> Result<(), ScriptHostError> {

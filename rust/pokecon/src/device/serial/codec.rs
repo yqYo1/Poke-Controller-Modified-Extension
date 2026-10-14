@@ -159,7 +159,7 @@ impl ControllerFormat {
 #[derive(Clone, Debug)]
 pub struct ControllerCodec {
     format: ControllerFormat,
-    previous: ControllerState,
+    previous: Option<ControllerState>,
 }
 
 impl ControllerCodec {
@@ -167,7 +167,7 @@ impl ControllerCodec {
     pub const fn new(format: ControllerFormat) -> Self {
         Self {
             format,
-            previous: ControllerState::NEUTRAL,
+            previous: None,
         }
     }
 
@@ -194,10 +194,12 @@ impl ControllerCodec {
 
     /// Advances the last-sent state after successful delivery.
     pub const fn commit(&mut self, state: ControllerState) {
-        self.previous = state;
+        self.previous = Some(state);
     }
 
-    /// Clears delta state on a new connection so the neutral baseline is known.
+    /// Forgets the last-sent state (upstream `_last_sent = None`): the next
+    /// default-mode frame re-sends both sticks. Called for raw writes and on
+    /// new connections.
     #[cfg_attr(
         not(test),
         allow(
@@ -206,13 +208,16 @@ impl ControllerCodec {
         )
     )]
     pub const fn reset(&mut self) {
-        self.previous = ControllerState::NEUTRAL;
+        self.previous = None;
     }
 }
 
-fn encode_default(previous: ControllerState, state: ControllerState) -> Vec<u8> {
-    let left_changed = previous.left_stick != state.left_stick;
-    let right_changed = previous.right_stick != state.right_stick;
+fn encode_default(previous: Option<ControllerState>, state: ControllerState) -> Vec<u8> {
+    // Upstream `text_serial.encode`: without a last-sent state (`last_sent is
+    // None`) both sticks count as changed, so the first frame after a
+    // connection or raw write re-sends them.
+    let left_changed = previous.is_none_or(|p| p.left_stick != state.left_stick);
+    let right_changed = previous.is_none_or(|p| p.right_stick != state.right_stick);
     let mut flags = state.buttons.switch_bits() << 2;
     if left_changed {
         flags |= 0b10;
@@ -220,7 +225,9 @@ fn encode_default(previous: ControllerState, state: ControllerState) -> Vec<u8> 
     if right_changed {
         flags |= 0b01;
     }
-    let mut frame = format!("0x{flags:06x} {}", state.hat.switch_value());
+    // Upstream `convert2str` formats the mask with `#06x` ("0x" plus four
+    // lowercase hex digits) and stick values with unpadded lowercase hex.
+    let mut frame = format!("0x{flags:04x} {}", state.hat.switch_value());
     if left_changed {
         push_stick_text(&mut frame, state.left_stick);
     }
@@ -234,7 +241,7 @@ fn encode_default(previous: ControllerState, state: ControllerState) -> Vec<u8> 
 fn push_stick_text(frame: &mut String, stick: StickPosition) {
     use std::fmt::Write as _;
 
-    write!(frame, " {:02x} {:02x}", stick.x, stick.y).expect("writing to String cannot fail");
+    write!(frame, " {:x} {:x}", stick.x, stick.y).expect("writing to String cannot fail");
 }
 
 /// Pin assignment (bus, bit) of the DS FT board revisions. Only B, X and Y
@@ -465,7 +472,7 @@ mod tests {
     use crate::device::controller::{Button, ControllerState, Hat, StickPosition, TouchPoint};
 
     #[test]
-    fn default_text_has_six_hex_digits_and_delta_sticks() {
+    fn default_matches_golden_text_protocol() {
         let mut codec = ControllerCodec::new(ControllerFormat::Default);
         assert_eq!(codec.format(), ControllerFormat::Default);
         let mut state = ControllerState::NEUTRAL;
@@ -473,11 +480,201 @@ mod tests {
         state.buttons.set(Button::Capture, true);
         state.hat = Hat::UpRight;
         state.left_stick = StickPosition { x: 0, y: 255 };
-        assert_eq!(codec.encode(state), b"0x008012 1 00 ff\r\n".to_vec());
+        // Fresh connection: both sticks are re-sent (upstream `last_sent` is
+        // None) and stick values use unpadded lowercase hex.
+        assert_eq!(codec.encode(state), b"0x8013 1 0 ff 80 80\r\n".to_vec());
         codec.commit(state);
-        assert_eq!(codec.encode(state), b"0x008010 1\r\n".to_vec());
+        assert_eq!(codec.encode(state), b"0x8010 1\r\n".to_vec());
         codec.reset();
-        assert_eq!(codec.encode(state), b"0x008012 1 00 ff\r\n".to_vec());
+        assert_eq!(codec.encode(state), b"0x8013 1 0 ff 80 80\r\n".to_vec());
+    }
+
+    #[test]
+    fn default_matches_golden_first_frame_and_each_button() {
+        let mut codec = ControllerCodec::new(ControllerFormat::Default);
+        let mut pressed = ControllerState::NEUTRAL;
+        pressed.buttons.set(Button::A, true);
+        // "# press A": first frame of a connection re-sends both sticks.
+        assert_eq!(codec.encode(pressed), b"0x0013 8 80 80 80 80\r\n".to_vec());
+        codec.commit(pressed);
+        assert_eq!(
+            codec.encode(ControllerState::NEUTRAL),
+            b"0x0000 8\r\n".to_vec()
+        );
+        codec.commit(ControllerState::NEUTRAL);
+        let buttons = [
+            (Button::Y, 0x0004),
+            (Button::B, 0x0008),
+            (Button::A, 0x0010),
+            (Button::X, 0x0020),
+            (Button::L, 0x0040),
+            (Button::R, 0x0080),
+            (Button::Zl, 0x0100),
+            (Button::Zr, 0x0200),
+            (Button::Minus, 0x0400),
+            (Button::Plus, 0x0800),
+            (Button::Lclick, 0x1000),
+            (Button::Rclick, 0x2000),
+            (Button::Home, 0x4000),
+            (Button::Capture, 0x8000),
+        ];
+        for (button, expected) in buttons {
+            let mut state = ControllerState::NEUTRAL;
+            state.buttons.set(button, true);
+            let frame = format!("0x{expected:04x} 8\r\n");
+            assert_eq!(codec.encode(state), frame.into_bytes(), "{button:?}");
+            codec.commit(state);
+            assert_eq!(
+                codec.encode(ControllerState::NEUTRAL),
+                b"0x0000 8\r\n".to_vec(),
+                "{button:?} release"
+            );
+            codec.commit(ControllerState::NEUTRAL);
+        }
+    }
+
+    #[test]
+    fn default_matches_golden_hat_vectors() {
+        let mut codec = ControllerCodec::new(ControllerFormat::Default);
+        codec.commit(ControllerState::NEUTRAL);
+        let hats = [
+            (Hat::Up, 0),
+            (Hat::UpRight, 1),
+            (Hat::Right, 2),
+            (Hat::DownRight, 3),
+            (Hat::Down, 4),
+            (Hat::DownLeft, 5),
+            (Hat::Left, 6),
+            (Hat::UpLeft, 7),
+        ];
+        for (hat, expected) in hats {
+            let mut state = ControllerState::NEUTRAL;
+            state.hat = hat;
+            let frame = format!("0x0000 {expected}\r\n");
+            assert_eq!(codec.encode(state), frame.into_bytes(), "{hat:?}");
+            codec.commit(state);
+            assert_eq!(
+                codec.encode(ControllerState::NEUTRAL),
+                b"0x0000 8\r\n".to_vec(),
+                "{hat:?} release"
+            );
+            codec.commit(ControllerState::NEUTRAL);
+        }
+    }
+
+    #[test]
+    fn default_matches_golden_stick_vectors() {
+        let mut codec = ControllerCodec::new(ControllerFormat::Default);
+        codec.commit(ControllerState::NEUTRAL);
+        let left = |x, y| {
+            let mut state = ControllerState::NEUTRAL;
+            state.left_stick = StickPosition { x, y };
+            state
+        };
+        let right = |x, y| {
+            let mut state = ControllerState::NEUTRAL;
+            state.right_stick = StickPosition { x, y };
+            state
+        };
+        let vectors = [
+            (left(0x80, 0x00), "0x0002 8 80 0"),
+            (left(0x80, 0x80), "0x0002 8 80 80"),
+            (left(0xff, 0x80), "0x0002 8 ff 80"),
+            (left(0x80, 0x80), "0x0002 8 80 80"),
+            (left(0x26, 0xda), "0x0002 8 26 da"),
+            (left(0x80, 0x80), "0x0002 8 80 80"),
+            (right(0x80, 0x00), "0x0001 8 80 0"),
+            (right(0x80, 0x80), "0x0001 8 80 80"),
+            (right(0xda, 0xda), "0x0001 8 da da"),
+            (right(0x80, 0x80), "0x0001 8 80 80"),
+            (left(0xb7, 0x60), "0x0002 8 b7 60"),
+            (left(0x80, 0x80), "0x0002 8 80 80"),
+            (right(0x62, 0x8b), "0x0001 8 62 8b"),
+            (right(0x80, 0x80), "0x0001 8 80 80"),
+        ];
+        for (state, expected) in vectors {
+            let frame = format!("{expected}\r\n");
+            assert_eq!(codec.encode(state), frame.into_bytes(), "{expected}");
+            codec.commit(state);
+        }
+    }
+
+    #[test]
+    fn default_matches_golden_combination_vector() {
+        let mut codec = ControllerCodec::new(ControllerFormat::Default);
+        codec.commit(ControllerState::NEUTRAL);
+        let mut combined = ControllerState::NEUTRAL;
+        combined.buttons.set(Button::B, true);
+        combined.buttons.set(Button::Zr, true);
+        combined.hat = Hat::UpRight;
+        combined.left_stick = StickPosition { x: 0x80, y: 0x00 };
+        combined.right_stick = StickPosition { x: 0x00, y: 0x80 };
+        assert_eq!(codec.encode(combined), b"0x020b 1 80 0 0 80\r\n".to_vec());
+        codec.commit(combined);
+        let mut next = ControllerState::NEUTRAL;
+        next.buttons.set(Button::Zr, true);
+        next.left_stick = StickPosition { x: 0x80, y: 0x80 };
+        next.right_stick = StickPosition { x: 0x00, y: 0x80 };
+        assert_eq!(codec.encode(next), b"0x0202 8 80 80\r\n".to_vec());
+        codec.commit(next);
+        let mut last = ControllerState::NEUTRAL;
+        last.left_stick = StickPosition { x: 0x80, y: 0x80 };
+        last.right_stick = StickPosition { x: 0x80, y: 0x80 };
+        assert_eq!(codec.encode(last), b"0x0001 8 80 80\r\n".to_vec());
+    }
+
+    #[test]
+    fn default_raw_write_forgets_last_state() {
+        let mut codec = ControllerCodec::new(ControllerFormat::Default);
+        let mut state = ControllerState::NEUTRAL;
+        state.left_stick = StickPosition { x: 0x80, y: 0x00 };
+        codec.commit(state);
+        codec.reset();
+        // "# after raw write": both sticks are re-sent after a raw write.
+        assert_eq!(codec.encode(state), b"0x0003 8 80 0 80 80\r\n".to_vec());
+    }
+
+    #[test]
+    fn qingpi_matches_golden_touch_and_combination_vectors() {
+        let codec = ControllerCodec::new(ControllerFormat::Qingpi);
+        let mut touch_state = ControllerState::NEUTRAL;
+        touch_state.touch = Some(TouchPoint::new(100, 50).unwrap());
+        assert_eq!(
+            codec.encode(touch_state),
+            vec![
+                0xab, 0x00, 0x00, 0x08, 0x80, 0x80, 0x80, 0x80, 0x64, 0x00, 0x32
+            ]
+        );
+        let mut pressed = ControllerState::NEUTRAL;
+        pressed.buttons.set(Button::A, true);
+        pressed.touch = Some(TouchPoint::new(319, 239).unwrap());
+        assert_eq!(
+            codec.encode(pressed),
+            vec![
+                0xab, 0x04, 0x00, 0x08, 0x80, 0x80, 0x80, 0x80, 0x3f, 0x01, 0xef
+            ]
+        );
+        let mut combined = ControllerState::NEUTRAL;
+        combined.buttons.set(Button::B, true);
+        combined.buttons.set(Button::Zr, true);
+        combined.hat = Hat::UpRight;
+        combined.left_stick = StickPosition { x: 0x80, y: 0x00 };
+        assert_eq!(
+            codec.encode(combined),
+            vec![
+                0xab, 0x82, 0x00, 0x01, 0x80, 0x00, 0x80, 0x80, 0x00, 0x00, 0x00
+            ]
+        );
+        let mut held = ControllerState::NEUTRAL;
+        held.buttons.set(Button::A, true);
+        held.buttons.set(Button::L, true);
+        held.left_stick = StickPosition { x: 0xff, y: 0x80 };
+        assert_eq!(
+            codec.encode(held),
+            vec![
+                0xab, 0x14, 0x00, 0x08, 0xff, 0x80, 0x80, 0x80, 0x00, 0x00, 0x00
+            ]
+        );
     }
 
     #[test]

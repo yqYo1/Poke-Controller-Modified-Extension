@@ -92,7 +92,7 @@ async fn worker_and_websocket_disconnects_reach_neutral_loopback_state() {
     assert!(
         std::str::from_utf8(&written)
             .unwrap()
-            .ends_with("0x000000 8\r\n")
+            .ends_with("0x0000 8\r\n")
     );
 }
 

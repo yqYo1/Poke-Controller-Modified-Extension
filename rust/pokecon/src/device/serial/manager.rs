@@ -341,13 +341,15 @@ impl SerialManager {
             .open(&config.selector, effective_baud)
             .await
             .map_err(|_| SerialError::OpenFailed)?;
-        let mut codec = ControllerCodec::new(config.data_format);
+        let codec = ControllerCodec::new(config.data_format);
         let neutral = codec.encode(ControllerState::NEUTRAL);
         if write_all(&io, &neutral).await.is_err() {
             let _ = io.close().await;
             return Err(SerialError::WriteFailed);
         }
-        codec.commit(ControllerState::NEUTRAL);
+        // The connection frame does not establish the composed baseline
+        // (upstream treats it like a raw write): the first composed frame
+        // re-sends both sticks.
         Ok((io, codec))
     }
 
@@ -431,7 +433,13 @@ impl SerialManager {
             return Err(SerialError::SendCancelled);
         }
         let (io, connection_id) = {
-            let state = self.inner.state.lock().await;
+            let mut state = self.inner.state.lock().await;
+            // Raw writes bypass composition, so the last-sent memory is
+            // dropped (upstream `_last_sent = None`): the next default-mode
+            // frame re-sends both sticks and `skip_unchanged` formats always
+            // re-send.
+            state.codec.reset();
+            state.last_frame = None;
             (
                 state.io.clone().ok_or(SerialError::Disconnected)?,
                 state.connection_id,

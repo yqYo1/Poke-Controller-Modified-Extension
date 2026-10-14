@@ -1720,8 +1720,12 @@ mod tests {
             .await
             .expect("virtual serial must accept the neutral frame");
         let delivered = endpoint.written().await;
-        let expected_neutral =
-            ControllerCodec::new(ControllerFormat::Default).encode(ControllerState::NEUTRAL);
+        // The neutral frame is a delta against the pressed frame that was just
+        // sent (both sticks were already delivered), so only the button mask
+        // changes.
+        let mut expected_codec = ControllerCodec::new(ControllerFormat::Default);
+        expected_codec.commit(pressed);
+        let expected_neutral = expected_codec.encode(ControllerState::NEUTRAL);
         assert_eq!(
             &delivered[pressed_bytes.len()..],
             expected_neutral.as_slice(),

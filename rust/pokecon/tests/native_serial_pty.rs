@@ -75,6 +75,56 @@ async fn native_serial_backend_exchanges_bytes_with_a_real_pty() {
 }
 
 #[tokio::test]
+async fn native_serial_backend_delivers_golden_format_vectors_over_a_real_pty() {
+    let OpenptyResult { master, slave } = openpty(None, None).expect("PTY creation must succeed");
+    let slave_path = ttyname(&slave).expect("PTY slave path must be discoverable");
+    let selector = PortSelector::new(slave_path.to_string_lossy().into_owned())
+        .expect("PTY slave path must be a valid serial selector");
+    let serial = NativeSerialBackend
+        .open(&selector, 115_200)
+        .await
+        .expect("native serial backend must open the PTY slave");
+    let mut peer = File::from(master);
+
+    // One golden vector per format (upstream `tests/data/transport_golden.json`):
+    // Default first frame, NX press A, 3DS Controller (FW:x.4-) press A and
+    // DS FT (Rev1) press A. The native path must deliver them unmodified.
+    let vectors: [&[u8]; 4] = [
+        b"0x0013 8 80 80 80 80\r\n",
+        &[
+            0xab, 0x04, 0x00, 0x08, 0x80, 0x80, 0x80, 0x80, 0x00, 0x00, 0x00,
+        ],
+        &[
+            0xa1, 0x10, 0x00, 0xa2, 0x7f, 0x7f, 0xb2, 0x00, 0x00, 0x00, 0x00,
+        ],
+        &[0x82, 0xef, 0x10, 0x80, 0xff, 0x00],
+    ];
+    let total: usize = vectors.iter().map(|vector| vector.len()).sum();
+    for vector in vectors {
+        let mut written = 0;
+        while written < vector.len() {
+            let count = timeout(TEST_TIMEOUT, serial.write(&vector[written..]))
+                .await
+                .expect("native serial write must not time out")
+                .expect("native serial write must succeed");
+            assert!(count > 0, "native serial write must make progress");
+            written += count;
+        }
+    }
+    let mut observed = vec![0; total];
+    peer.read_exact(&mut observed)
+        .expect("PTY master must receive native serial output");
+    let expected: Vec<u8> = vectors.concat();
+    assert_eq!(observed, expected, "golden vectors must arrive unmodified");
+
+    serial
+        .close()
+        .await
+        .expect("native serial close must succeed");
+    drop(slave);
+}
+
+#[tokio::test]
 async fn native_serial_close_releases_port_while_clones_survive() {
     let OpenptyResult { master, slave } = openpty(None, None).expect("PTY creation must succeed");
     let slave_path = ttyname(&slave).expect("PTY slave path must be discoverable");

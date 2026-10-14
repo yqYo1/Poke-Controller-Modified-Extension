@@ -1,4 +1,17 @@
 {
-  "schema_version": 1,
-  "candidates": []
+  "candidates": [
+    {
+      "baseline_id": "futo030-extension",
+      "commit": "3274e775b3b9725e9280737b5e1fa03a35d48c11",
+      "id": "futo030-extension-3274e775b3b9",
+      "repository": "https://github.com/futo030/Poke-Controller-Modified-Extension.git"
+    },
+    {
+      "baseline_id": "futo030-extension",
+      "commit": "cc49f828b4af82b49ae75480a9e648ef1639d5e1",
+      "id": "futo030-extension-cc49f828b4af",
+      "repository": "https://github.com/futo030/Poke-Controller-Modified-Extension.git"
+    }
+  ],
+  "schema_version": 1
 }

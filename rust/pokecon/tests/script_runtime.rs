@@ -619,6 +619,69 @@ class Exercise(PythonCommand):
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn script_output_page_api_matches_upstream_semantics() {
+    const SOURCE: &str = r#"
+import threading
+import time
+
+from Commands.PythonCommandBase import PythonCommand, format_elapsed_time, precise_sleep
+
+
+class Pages(PythonCommand):
+    def do(self):
+        start = time.perf_counter()
+        precise_sleep(0.05)
+        assert time.perf_counter() - start >= 0.045, "precise_sleep elapsed"
+        assert format_elapsed_time(3661.25) == "1:01:01.250", "elapsed 3661.25"
+        assert format_elapsed_time(0.001) == "0:00:00.001", "elapsed 0.001"
+        # メイン(スクリプト実行)スレッドの出力先ページは常にNone
+        assert self.get_output_page_for_current_thread() is None, "main thread page"
+
+        results = {}
+
+        def worker():
+            results["initial"] = self.get_output_page_for_current_thread()
+            self.register_output_thread(2)
+            results["registered"] = self.get_output_page_for_current_thread()
+            with self.output_to_page(5):
+                results["override"] = self.get_output_page_for_current_thread()
+            results["restored"] = self.get_output_page_for_current_thread()
+            with self.output_to_page(None):
+                results["none_override"] = self.get_output_page_for_current_thread()
+            self.unregister_output_thread()
+            results["unregistered"] = self.get_output_page_for_current_thread()
+
+        thread = threading.Thread(target=worker)
+        thread.start()
+        thread.join()
+        assert results["initial"] is None, f"subthread initial {results}"
+        assert results["registered"] == 2, f"registered page {results}"
+        assert results["override"] == 5, f"override page {results}"
+        assert results["restored"] == 2, f"restored page {results}"
+        assert results["none_override"] == 2, f"none override {results}"
+        assert results["unregistered"] is None, f"unregistered {results}"
+        self.waitWhilePaused()
+        print("pages-ok")
+"#;
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("pages.py"), SOURCE).expect("pages fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    *host.data_format.lock().unwrap() = "Default".to_owned();
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "pages.py".into(),
+            class_name: "Pages".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("pages executes");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn script_worker_keyboard_default_format_sends_rows_and_releases_on_end() {
     const SOURCE: &str = r#"
 from Commands.PythonCommandBase import PythonCommand

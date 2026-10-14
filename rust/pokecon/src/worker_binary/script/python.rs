@@ -1162,6 +1162,7 @@ fn connection_error(error: ConnectionError) -> String {
 
 const PYTHON_BOOTSTRAP: &str = r#"
 import collections as _collections
+import contextlib as _contextlib
 import enum as _enum
 import inspect as _inspect
 import json as _json
@@ -1203,9 +1204,58 @@ class CommandMeta(type):
 
 class Command(metaclass=CommandMeta):
     isRunning = False
+    # スレッドごとの出力先ページ。output_to_page()は一時指定、register_output_thread()は登録
+    _thread_output_pages = {}
+    _thread_output_pages_lock = _threading.Lock()
+    _output_page_override = _types.SimpleNamespace(page=None)
 
     def __init__(self):
         self.isRunning = False
+
+    @classmethod
+    def register_output_thread(cls, page):
+        """現在のスレッドの出力先ページを登録する(pageは0始まり)"""
+        with cls._thread_output_pages_lock:
+            cls._thread_output_pages[_threading.get_ident()] = page
+
+    @classmethod
+    def unregister_output_thread(cls):
+        """現在のスレッドの出力先ページの登録を解除する"""
+        with cls._thread_output_pages_lock:
+            cls._thread_output_pages.pop(_threading.get_ident(), None)
+
+    @classmethod
+    @_contextlib.contextmanager
+    def output_to_page(cls, page):
+        """withブロック内の現在のスレッドからの出力先ページを一時的に指定する
+
+        page: 出力先のページ(0始まり)。Noneは指定なし(元の決め方に従う)
+        """
+        prev = getattr(cls._output_page_override, "page", None)
+        cls._output_page_override.page = page
+        try:
+            yield
+        finally:
+            cls._output_page_override.page = prev
+
+    @classmethod
+    def get_output_page_for_current_thread(cls):
+        """現在のスレッドの出力先ページを返す
+
+        output_to_page()で指定中: 指定されたページ
+        コマンド実行スレッド: 登録されたページ(なければ実行中スレッドの最後の登録)
+        メインスレッドなど: None(アクティブなページに出力)
+        """
+        page = getattr(cls._output_page_override, "page", None)
+        if page is not None:
+            return page
+        if _threading.current_thread() is _threading.main_thread():
+            return None
+        with cls._thread_output_pages_lock:
+            page = cls._thread_output_pages.get(_threading.get_ident())
+            if page is None and cls._thread_output_pages:
+                page = list(cls._thread_output_pages.values())[-1]
+        return page
 
 
 def _monitor_stop(_code, _offset):
@@ -1875,6 +1925,31 @@ class Sender:
 # Default format sends "end" when a command ends.
 _END_ROWS = {"Default": "end"}
 
+# 待機時に、残りがこの時間(秒)になるまではsleepし、残りはビジーループで合わせる
+# (ビジーループ中はGILを取り合い、メインスレッドの処理を遅くするため最小限にする)
+SPIN_MARGIN = 0.002
+# 一時停止の待機中に、再開・停止の要求を確認する間隔(秒)
+PAUSE_POLL_INTERVAL = 0.1
+
+
+def precise_sleep(duration):
+    """指定時間(秒)待機する。大部分をsleepで待ち、終わり際だけビジーループで精度を合わせる"""
+    end_time = _time.perf_counter() + duration
+    remaining = duration - SPIN_MARGIN
+    if remaining > 0:
+        _time.sleep(remaining)
+    while _time.perf_counter() < end_time:
+        pass
+
+
+def format_elapsed_time(seconds):
+    """経過時間(秒)を H:MM:SS.mmm 形式の文字列に変換する"""
+    total_ms = int(round(seconds * 1000))
+    hours, rem = divmod(total_ms, 3600 * 1000)
+    minutes, rem = divmod(rem, 60 * 1000)
+    secs, ms = divmod(rem, 1000)
+    return f"{hours}:{minutes:02d}:{secs:02d}.{ms:03d}"
+
 
 class KeyPress:
     ser = None
@@ -2451,6 +2526,33 @@ class PythonCommand(Command):
 
     def reload_com_port(self):
         _api.serial_reload()
+
+    def do_safe(self, ser):
+        """実行ライフサイクルを開始する(互換API)。
+
+        本実装ではrunner(ワーカー)が開始通知・終了処理・例外ポリシーを所有するため、
+        ここではdo()を呼ぶ。
+        """
+        self.do()
+
+    def do_safe_with_output_page(self, ser, output_page):
+        """出力先ページをスレッドに登録してdo_safeを実行する(互換API)
+
+        output_page: 出力先のページ(0始まり)
+        """
+        self.register_output_thread(output_page)
+        try:
+            self.do_safe(ser)
+        finally:
+            self.unregister_output_thread()
+
+    def waitWhilePaused(self):
+        """一時停止が要求されていれば、再開されるまで待つ。
+
+        待っている間に止める指示が出た場合はStopThreadを送出する。
+        """
+        if not _api.execution_checkpoint():
+            raise StopThread()
 
     def _keyboardStepsRaw(self, kind, value=None):
         format_name = _api.serial_data_format_name()
@@ -4454,6 +4556,8 @@ for value in (
     CaptureArea,
 ):
     setattr(python_module, value.__name__, value)
+python_module.precise_sleep = precise_sleep
+python_module.format_elapsed_time = format_elapsed_time
 mcu_module.McuCommand = McuCommand
 dialogue_module.Widget = Widget
 switch_keyboard_module.KEY = KEY

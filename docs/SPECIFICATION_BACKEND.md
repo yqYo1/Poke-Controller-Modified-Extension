@@ -435,6 +435,17 @@ Command (metaclass=CommandMeta)
 
 **注**: すべてのクラスは `CommandMeta` メタクラスを使用（付録B参照）。`PythonCommand` と `ImageProcPythonCommand` は抽象メソッド `do()` を持つが、Pythonの `ABC` クラスを継承しない（`CommandMeta` で抽象クラスとして扱われる）。ユーザースクリプトでは `PythonCommand` または `ImageProcPythonCommand` を継承して `do()` を実装する。
 
+**`Command` の公開メソッド（出力先ページ）**:
+
+| メソッド | シグネチャ | 説明 |
+|--------|-----------|-------------|
+| `register_output_thread()` | `register_output_thread(page: int) -> None` | 現在のスレッドの出力先ページを登録する（`page`は0始まり） |
+| `unregister_output_thread()` | `unregister_output_thread() -> None` | 現在のスレッドの出力先ページの登録を解除する |
+| `output_to_page()` | `output_to_page(page: int \| None) -> Generator[None]` | withブロック内の現在のスレッドの出力先ページを一時的に指定するコンテキストマネージャ（`None`は指定なし＝元の決め方に従う） |
+| `get_output_page_for_current_thread()` | `get_output_page_for_current_thread() -> int \| None` | 現在のスレッドの出力先ページを返す（`output_to_page()`の指定→スレッド登録→登録済みスレッドの最後の値の順に解決し、メインスレッドは`None`） |
+
+これらはスレッド単位の出力先ページ管理を提供する（上流`CommandBase.py`準拠）。`_load_com_port_settings`は内部利用のみのヘルパーであり公開APIに含めない。
+
 #### 10.4.2 PythonCommand
 
 **インポート**: `from Commands.PythonCommandBase import PythonCommand`
@@ -484,6 +495,11 @@ type GamepadInput = ButtonsList | Buttons
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 | `reload_com_port()` | `reload_com_port() -> None` | COMポート接続を再読み込み |
+| `do_safe()` | `do_safe(ser: Sender) -> None` | 実行ライフサイクルを開始する互換API。本実装ではrunner（ワーカー）が開始通知・終了処理・例外ポリシーを所有するため、`do()`を呼ぶ |
+| `do_safe_with_output_page()` | `do_safe_with_output_page(ser: Sender, output_page: int) -> None` | 出力先ページをスレッドに登録して`do_safe()`を実行し、終了時に登録を解除する |
+| `waitWhilePaused()` | `waitWhilePaused() -> None` | 一時停止が要求されていれば、再開されるまで待つ。待機中に停止指示が出た場合は`StopThread`を送出する |
+
+**モジュール関数**: `precise_sleep(duration: float) -> None`（大部分をsleepで待ち、終わり際だけビジーループで精度を合わせる高精度待機。`SPIN_MARGIN`＝0.002秒）と`format_elapsed_time(seconds: float) -> str`（経過時間を`H:MM:SS.mmm`形式の文字列へ変換）を提供する。
 
 **出力メソッド**:
 > **注（出力メソッド名の覚え方）**: `t` は互換性のためのレガシープレフィックスとして維持されており、それ自体は厳密な命名規則ではない。`print_t` / `print_tb` （裸の `t` のみ）が「stdout以外の出力パネル」を意味する。`s` は stdout割り当てパネル、`t1`/`t2` はそれぞれ出力#1/出力#2、`b` はモード付き（w=上書き, a=追記, d=削除）を表す。例: `print_t1b()` = 出力#1へのモード付き出力。

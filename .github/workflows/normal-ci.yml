@@ -1862,7 +1862,12 @@ jobs:
           sha="$(jq -er '.head_sha' "$run_json")"
           attempt="$(jq -er '.run_attempt' "$run_json")"
           workflow_name="$(jq -er '.name' "$run_json")"
-          run_started_at="$(jq -er '.run_started_at // .created_at' "$run_json")"
+          # The wall anchor must stay monotonic against every completed job timestamp.
+          # On reruns GitHub keeps earlier-attempt completed_at values while
+          # run_started_at moves to the latest attempt, so anchoring on it produced
+          # negative walls (fail-closed exit 2). created_at is the run's earliest
+          # timestamp and is <= every completed_at, including cross-attempt ones.
+          run_started_at="$(jq -er '.created_at // .run_started_at' "$run_json")"
           run_status="$(jq -er '.status' "$run_json")"
           run_conclusion="$(jq -er '.conclusion // ""' "$run_json")"
           # Completion-safe: upstream completed max (max completed_at - run_started_at).

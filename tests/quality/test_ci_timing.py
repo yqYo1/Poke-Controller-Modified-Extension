@@ -888,6 +888,9 @@ def test_p95_history_gate_bootstraps_without_inventing_a_p95() -> None:
     assert 'select((.head_sha // "") != $current_revision)' in workflow
     assert "group_by(.head_sha)" in workflow
     assert "map(max_by(.created_at))" in workflow
+    # The timing wall anchor must be the run's earliest timestamp so reruns
+    # (mixed-attempt completed_at values) cannot produce negative walls.
+    assert ".created_at // .run_started_at" in workflow
     assert "actions/runs/${candidate_id}/jobs?per_page=100" in workflow
     assert 'select(.name == "Normal CI Required")' in workflow
     assert "required_conclusion" in workflow

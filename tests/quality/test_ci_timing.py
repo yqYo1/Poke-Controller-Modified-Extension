@@ -1184,6 +1184,9 @@ def test_nix_evidence_is_job_local_and_fail_closed() -> None:
         in workflow
     )
     assert "ci-nix-evidence-${{ github.run_id }}-${{ github.run_attempt }}-" in workflow
+    # The timing consumer downloads every attempt of the run so that reruns
+    # (which only re-execute failed jobs) still see earlier-attempt evidence.
+    assert "pattern: ci-nix-evidence-${{ github.run_id }}-*-*" in workflow
     assert "pokecon-nix-evidence.json" in workflow
     assert "capture_complete == true" in workflow
     assert "nix-evidence" in workflow

@@ -1794,7 +1794,11 @@ jobs:
         if: always()
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          pattern: ci-nix-evidence-${{ github.run_id }}-${{ github.run_attempt }}-*
+          # Reruns only re-execute failed jobs, so the current attempt may lack
+          # the evidence of jobs that already succeeded in an earlier attempt.
+          # Download every attempt of this run (same commit) and let the
+          # collector process each evidence file.
+          pattern: ci-nix-evidence-${{ github.run_id }}-*-*
           path: ${{ runner.temp }}/pokecon-ci-timing/nix-evidence
           merge-multiple: false
       - name: Collect CI timing evidence

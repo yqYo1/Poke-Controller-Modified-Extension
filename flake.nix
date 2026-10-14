@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "2313afaa883cfff171d29ff9f0abc7b91b8df84d685e787259c6bf2b37e01ea3";
+      canonicalFlakeHash = "a7cb09638bb2cf85e885aa2c53648d0c34d24db3d328e05796aed87e763d02be";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -2314,6 +2314,7 @@
             pkgs.gtk3
             pkgs.harfbuzz
             pkgs.linuxHeaders
+            pkgs.libftdi1
             pkgs.libxkbcommon
             pkgs.libxcb
             pkgs.mesa
@@ -2327,6 +2328,7 @@
           ];
           linuxApplicationRuntimePackages = lib.optionals pkgs.stdenv.isLinux [
             pkgs.libayatana-appindicator
+            pkgs.libftdi1
           ];
           rustTaskInputs = [
             rustToolchain
@@ -2346,7 +2348,7 @@
           linuxBindgenArgs = lib.optionalString pkgs.stdenv.isLinux "-I${pkgs.stdenv.cc.libc.dev}/include -I${pkgs.linuxHeaders}/include";
           desktopEnvironment = lib.optionalString pkgs.stdenv.isLinux ''
             export BINDGEN_EXTRA_CLANG_ARGS="${linuxBindgenArgs}"
-            export PKG_CONFIG_PATH="${pkgs.glib.dev}/lib/pkgconfig:${pkgs.gtk3.dev}/lib/pkgconfig:${pkgs.pango.dev}/lib/pkgconfig:${pkgs.harfbuzz.dev}/lib/pkgconfig:${pkgs.cairo.dev}/lib/pkgconfig:${pkgs.fontconfig.dev}/lib/pkgconfig:${pkgs.freetype.dev}/lib/pkgconfig:${pkgs.libxkbcommon.dev}/lib/pkgconfig:${pkgs.libxcb.dev}/lib/pkgconfig:${pkgs.atk.dev}/lib/pkgconfig:${pkgs.gdk-pixbuf.dev}/lib/pkgconfig:${pkgs.libsoup_3.dev}/lib/pkgconfig:${pkgs.webkitgtk_4_1.dev}/lib/pkgconfig:${pkgs.udev.dev}/lib/pkgconfig:${pkgs.libftdi1}/lib/pkgconfig:${pkgs.zlib.dev}/share/pkgconfig"
+            export PKG_CONFIG_PATH="${pkgs.glib.dev}/lib/pkgconfig:${pkgs.gtk3.dev}/lib/pkgconfig:${pkgs.pango.dev}/lib/pkgconfig:${pkgs.harfbuzz.dev}/lib/pkgconfig:${pkgs.cairo.dev}/lib/pkgconfig:${pkgs.fontconfig.dev}/lib/pkgconfig:${pkgs.freetype.dev}/lib/pkgconfig:${pkgs.libxkbcommon.dev}/lib/pkgconfig:${pkgs.libxcb.dev}/lib/pkgconfig:${pkgs.atk.dev}/lib/pkgconfig:${pkgs.gdk-pixbuf.dev}/lib/pkgconfig:${pkgs.libsoup_3.dev}/lib/pkgconfig:${pkgs.webkitgtk_4_1.dev}/lib/pkgconfig:${pkgs.udev.dev}/lib/pkgconfig:${pkgs.libftdi1}/lib/pkgconfig:${pkgs.libusb1.dev}/lib/pkgconfig:${pkgs.zlib.dev}/share/pkgconfig"
             export NIX_LDFLAGS="-L${pkgs.libxkbcommon}/lib -L${pkgs.libxcb}/lib -L${pkgs.mesa}/lib -L${pkgs.vulkan-loader}/lib -L${pkgs.libftdi1}/lib ''${NIX_LDFLAGS:-}"
             ld_library_path_name=LD_LIBRARY_PATH
             existing_ld_library_path="''${LD_LIBRARY_PATH:-}"

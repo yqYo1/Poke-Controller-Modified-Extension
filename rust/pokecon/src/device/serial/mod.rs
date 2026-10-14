@@ -2,6 +2,7 @@
 //! and a deterministic virtual fixture.
 
 mod codec;
+mod ftdi;
 mod manager;
 mod native;
 mod selector;

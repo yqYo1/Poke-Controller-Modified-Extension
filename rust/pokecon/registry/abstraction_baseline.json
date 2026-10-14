@@ -17,6 +17,7 @@
     "hex",
     "hmac",
     "image",
+    "libftdi1-sys",
     "mime_guess",
     "mlua",
     "nix",

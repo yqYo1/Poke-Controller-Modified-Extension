@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "9bb9320e458fa515b2235255ffa819a2aeb1cb460d223004326ccd011ae79316";
+      canonicalFlakeHash = "2313afaa883cfff171d29ff9f0abc7b91b8df84d685e787259c6bf2b37e01ea3";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -784,7 +784,7 @@
             "rust/pokecon" = "build.rs";
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "83acb589dca1e7f4dd947d8ac77abee557277b75e2451159a00268af291728a7";
+            "rust/pokecon" = "6ec094c481d1ff2f465bf6883438d2a8fbf00026e879b00cbe9760efaf9ee0ba";
           };
           expectedWorkspaceBuildDependencies = {
             "rust/pokecon" = {
@@ -992,7 +992,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.toml" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.toml")
-                == "563d213de4fdbe57f2f09fc6061567ac6987a1959e193b02c3d29f0905cab22a"
+                == "213f814bbccc2ee98e7dd316f5c18d839cf845c5935905d8ae960a05b61d02c7"
             ) "Cargo workspace manifest content changed";
             assert lib.assertMsg workspaceMemberManifestsAreCanonical
               "Cargo workspace member manifest content changed";
@@ -1000,7 +1000,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
-                == "1eb118a63d4460a9bf85ef7bc554b4cd8471206ac683340526f1351ef7a29eb9"
+                == "9492e46e775e3cb93b01867aceb1ce401253797027fe9469becdf38e8fabcc8d"
             ) "Cargo lockfile content changed";
             assert lib.assertMsg (
               actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts
@@ -2339,19 +2339,20 @@
             pkgs.pkg-config
             pkgs.nasm
             pkgs.stdenv.cc
+            pkgs.libftdi1
           ]
           ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.llvmPackages.libclang ]
           ++ linuxDesktopPackages;
           linuxBindgenArgs = lib.optionalString pkgs.stdenv.isLinux "-I${pkgs.stdenv.cc.libc.dev}/include -I${pkgs.linuxHeaders}/include";
           desktopEnvironment = lib.optionalString pkgs.stdenv.isLinux ''
             export BINDGEN_EXTRA_CLANG_ARGS="${linuxBindgenArgs}"
-            export PKG_CONFIG_PATH="${pkgs.glib.dev}/lib/pkgconfig:${pkgs.gtk3.dev}/lib/pkgconfig:${pkgs.pango.dev}/lib/pkgconfig:${pkgs.harfbuzz.dev}/lib/pkgconfig:${pkgs.cairo.dev}/lib/pkgconfig:${pkgs.fontconfig.dev}/lib/pkgconfig:${pkgs.freetype.dev}/lib/pkgconfig:${pkgs.libxkbcommon.dev}/lib/pkgconfig:${pkgs.libxcb.dev}/lib/pkgconfig:${pkgs.atk.dev}/lib/pkgconfig:${pkgs.gdk-pixbuf.dev}/lib/pkgconfig:${pkgs.libsoup_3.dev}/lib/pkgconfig:${pkgs.webkitgtk_4_1.dev}/lib/pkgconfig:${pkgs.udev.dev}/lib/pkgconfig:${pkgs.zlib.dev}/share/pkgconfig"
-            export NIX_LDFLAGS="-L${pkgs.libxkbcommon}/lib -L${pkgs.libxcb}/lib -L${pkgs.mesa}/lib -L${pkgs.vulkan-loader}/lib ''${NIX_LDFLAGS:-}"
+            export PKG_CONFIG_PATH="${pkgs.glib.dev}/lib/pkgconfig:${pkgs.gtk3.dev}/lib/pkgconfig:${pkgs.pango.dev}/lib/pkgconfig:${pkgs.harfbuzz.dev}/lib/pkgconfig:${pkgs.cairo.dev}/lib/pkgconfig:${pkgs.fontconfig.dev}/lib/pkgconfig:${pkgs.freetype.dev}/lib/pkgconfig:${pkgs.libxkbcommon.dev}/lib/pkgconfig:${pkgs.libxcb.dev}/lib/pkgconfig:${pkgs.atk.dev}/lib/pkgconfig:${pkgs.gdk-pixbuf.dev}/lib/pkgconfig:${pkgs.libsoup_3.dev}/lib/pkgconfig:${pkgs.webkitgtk_4_1.dev}/lib/pkgconfig:${pkgs.udev.dev}/lib/pkgconfig:${pkgs.libftdi1}/lib/pkgconfig:${pkgs.zlib.dev}/share/pkgconfig"
+            export NIX_LDFLAGS="-L${pkgs.libxkbcommon}/lib -L${pkgs.libxcb}/lib -L${pkgs.mesa}/lib -L${pkgs.vulkan-loader}/lib -L${pkgs.libftdi1}/lib ''${NIX_LDFLAGS:-}"
             ld_library_path_name=LD_LIBRARY_PATH
             existing_ld_library_path="''${LD_LIBRARY_PATH:-}"
-            export "$ld_library_path_name=${pkgs.libxkbcommon}/lib:${pkgs.libxcb}/lib:${pkgs.mesa}/lib:${pkgs.vulkan-loader}/lib:$existing_ld_library_path"
+            export "$ld_library_path_name=${pkgs.libxkbcommon}/lib:${pkgs.libxcb}/lib:${pkgs.mesa}/lib:${pkgs.vulkan-loader}/lib:${pkgs.libftdi1}/lib:$existing_ld_library_path"
             unset existing_ld_library_path ld_library_path_name
-            export RUSTFLAGS="''${RUSTFLAGS:-} -L native=${pkgs.libxkbcommon}/lib -L native=${pkgs.libxcb}/lib"
+            export RUSTFLAGS="''${RUSTFLAGS:-} -L native=${pkgs.libxkbcommon}/lib -L native=${pkgs.libxcb}/lib -L native=${pkgs.libftdi1}/lib"
             export LIBCLANG_PATH="${pkgs.llvmPackages.libclang.lib}/lib"
           '';
 
@@ -2658,7 +2659,7 @@
             inherit (gateCargoLock) metadata;
           };
           gateCargoVendorIdentity = builtins.hashString "sha256" (builtins.toJSON gateCargoVendorLock);
-          expectedGateCargoVendorIdentity = "f18bc325d91a187bf5b677f9016f4d984ab6afbebeb74ecb9a853fffb82b309e";
+          expectedGateCargoVendorIdentity = "cf5ed257386f182e928d5856fc4b1aa75c7b646747394ce44a87a38b6b8fb0eb";
           # buildRustPackage vendors from the full workspace lock, whose store
           # path changes for local-only graph edits. This source-only lock keeps
           # the immutable gate vendor path stable until external inputs change.

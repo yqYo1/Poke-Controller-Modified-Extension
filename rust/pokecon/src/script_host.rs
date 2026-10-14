@@ -27,10 +27,11 @@ use crate::worker::script::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-    HostTkRequest, HostTkResult, MAX_NOTIFICATION_IMAGE_BYTES, MAX_POPUP_IMAGE_BYTES, ScriptButton,
-    ScriptControl, ScriptDialogState, ScriptDialogValue, ScriptDialogWidget,
-    ScriptDialogWidgetKind, ScriptHat, ScriptInputAction, ScriptOutputMode, ScriptOutputTarget,
-    ScriptPointerButton, ScriptPointerEvent, ScriptPointerPhase, ScriptStick, ScriptTkEvent,
+    HostSerialFormatAttributes, HostTkRequest, HostTkResult, MAX_NOTIFICATION_IMAGE_BYTES,
+    MAX_POPUP_IMAGE_BYTES, ScriptButton, ScriptControl, ScriptDialogState, ScriptDialogValue,
+    ScriptDialogWidget, ScriptDialogWidgetKind, ScriptHat, ScriptInputAction, ScriptOutputMode,
+    ScriptOutputTarget, ScriptPointerButton, ScriptPointerEvent, ScriptPointerPhase, ScriptStick,
+    ScriptTkEvent,
 };
 use crate::worker::script::{ScriptHost, ScriptHostError};
 use base64::Engine as _;
@@ -283,6 +284,7 @@ impl ScriptGenerationHostFactory for ProductionScriptHostFactory {
             generation,
             sequence: AtomicU64::new(0),
             accepting: AtomicBool::new(true),
+            raw_write_warned: AtomicBool::new(false),
             ui: Mutex::new(GenerationUiState::default()),
             script_ui: self.script_ui.clone(),
         });
@@ -316,6 +318,7 @@ struct GenerationResources {
     generation: InputGeneration,
     sequence: AtomicU64,
     accepting: AtomicBool,
+    raw_write_warned: AtomicBool,
     ui: Mutex<GenerationUiState>,
     script_ui: ScriptUiCoordinator,
 }
@@ -330,6 +333,10 @@ impl GenerationResources {
                 "script generation is stopping",
             ))
         }
+    }
+
+    fn data_format(&self) -> ControllerFormat {
+        run_sync(&self.runtime, self.serial.data_format())
     }
 
     fn next_sequence(&self) -> Result<InputSequence, ScriptHostError> {
@@ -471,6 +478,21 @@ impl ScriptHost for ProductionScriptHost {
 
     fn serial_write(&self, data: Vec<u8>) -> Result<(), ScriptHostError> {
         self.shared.ensure_accepting()?;
+        let format = self.shared.data_format();
+        if !format.allows_raw_write() {
+            if !self.shared.raw_write_warned.swap(true, Ordering::AcqRel) {
+                let message = format.raw_write_message();
+                if !message.is_empty() {
+                    tracing::warn!(
+                        target: "pokecon.script.serial",
+                        message,
+                        log = format.raw_write_log(),
+                        "raw serial write is blocked in this data format"
+                    );
+                }
+            }
+            return Ok(());
+        }
         run_sync(&self.shared.runtime, self.shared.serial.send_raw(&data))
             .map_err(serial_host_error)
     }
@@ -484,6 +506,19 @@ impl ScriptHost for ProductionScriptHost {
     fn serial_data_format_name(&self) -> Result<String, ScriptHostError> {
         let format = run_sync(&self.shared.runtime, self.shared.serial.data_format());
         Ok(format.display_name().to_owned())
+    }
+
+    fn serial_format_attributes(&self) -> Result<HostSerialFormatAttributes, ScriptHostError> {
+        let format = self.shared.data_format();
+        Ok(HostSerialFormatAttributes {
+            name: format.display_name().to_owned(),
+            supports_text: format.supports_text(),
+            end_row: format.end_row().map(str::to_owned),
+            has_touchscreen: format.has_touchscreen(),
+            allows_raw_write: format.allows_raw_write(),
+            skip_unchanged: format.skip_unchanged(),
+            default_baud: format.default_baud(),
+        })
     }
 
     fn serial_write_nx_keyboard(&self, mode: u8, key: u8) -> Result<(), ScriptHostError> {

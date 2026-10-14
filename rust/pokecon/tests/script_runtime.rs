@@ -14,10 +14,10 @@ use pokecon_worker::script::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-    HostTkRequest, HostTkResult, ScriptButton, ScriptCommandKind, ScriptControl, ScriptDialogState,
-    ScriptExecuteRequest, ScriptExecutionOutcome, ScriptHat, ScriptInitializeRequest,
-    ScriptInputAction, ScriptPointerButton, ScriptPointerEvent, ScriptPointerPhase, ScriptStick,
-    ScriptTkEvent, ScriptWorkerStatus,
+    HostSerialFormatAttributes, HostTkRequest, HostTkResult, ScriptButton, ScriptCommandKind,
+    ScriptControl, ScriptDialogState, ScriptExecuteRequest, ScriptExecutionOutcome, ScriptHat,
+    ScriptInitializeRequest, ScriptInputAction, ScriptPointerButton, ScriptPointerEvent,
+    ScriptPointerPhase, ScriptStick, ScriptTkEvent, ScriptWorkerStatus,
 };
 use pokecon_worker::script::{ScriptHost, ScriptHostError, ScriptWorkerClient};
 use pokecon_worker::supervisor::{ManagedWorker, StopPurpose, WorkerLaunch, WorkerSupervisor};
@@ -87,6 +87,28 @@ impl ScriptHost for RecordingScriptHost {
     fn serial_write_nx_keyboard(&self, mode: u8, key: u8) -> Result<(), ScriptHostError> {
         self.keyboard_frames.lock().unwrap().push((mode, key));
         Ok(())
+    }
+
+    fn serial_format_attributes(&self) -> Result<HostSerialFormatAttributes, ScriptHostError> {
+        let name = self.data_format.lock().unwrap().clone();
+        let (supports_text, end_row, has_touchscreen, default_baud) = match name.as_str() {
+            "Default" => (true, Some("end"), false, Some(9600)),
+            "NX" => (false, None, false, Some(9600)),
+            "Qingpi" => (false, None, true, Some(9600)),
+            "3DS Controller(FW:x.4-)" | "3DS Controller(FW:-x.3)" => {
+                (false, None, true, Some(115_200))
+            }
+            _ => (false, None, false, None),
+        };
+        Ok(HostSerialFormatAttributes {
+            name,
+            supports_text,
+            end_row: end_row.map(str::to_owned),
+            has_touchscreen,
+            allows_raw_write: true,
+            skip_unchanged: false,
+            default_baud,
+        })
     }
 
     fn serial_reload(&self) -> Result<(), ScriptHostError> {

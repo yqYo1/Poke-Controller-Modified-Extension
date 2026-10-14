@@ -59,6 +59,71 @@ impl ControllerFormat {
             Self::ThreeDsX3 => "3DS Controller(FW:-x.3)",
         }
     }
+
+    /// Default baud rate owned by this format (upstream transport `baud_rate`).
+    #[must_use]
+    pub const fn default_baud(self) -> Option<u32> {
+        match self {
+            Self::Default | Self::Nx | Self::Qingpi => Some(9600),
+            Self::ThreeDsX4 | Self::ThreeDsX3 => Some(115_200),
+        }
+    }
+
+    /// Whether the format sends compatibility text rows.
+    #[must_use]
+    pub const fn supports_text(self) -> bool {
+        matches!(self, Self::Default)
+    }
+
+    /// Row sent by `KeyPress.end()` when no other input source remains.
+    #[must_use]
+    pub const fn end_row(self) -> Option<&'static str> {
+        match self {
+            Self::Default => Some("end"),
+            Self::Nx | Self::Qingpi | Self::ThreeDsX4 | Self::ThreeDsX3 => None,
+        }
+    }
+
+    /// Whether the format carries touchscreen coordinates.
+    #[must_use]
+    pub const fn has_touchscreen(self) -> bool {
+        matches!(self, Self::Qingpi | Self::ThreeDsX4 | Self::ThreeDsX3)
+    }
+
+    /// Whether raw serial writes are allowed (blocked formats warn once and
+    /// skip the write).
+    #[must_use]
+    pub const fn allows_raw_write(self) -> bool {
+        matches!(
+            self,
+            Self::Default | Self::Nx | Self::Qingpi | Self::ThreeDsX4 | Self::ThreeDsX3
+        )
+    }
+
+    /// Whether identical merged payloads are skipped.
+    #[must_use]
+    pub const fn skip_unchanged(self) -> bool {
+        !matches!(
+            self,
+            Self::Default | Self::Nx | Self::Qingpi | Self::ThreeDsX4 | Self::ThreeDsX3
+        )
+    }
+
+    /// User-visible message shown once when raw writes are blocked.
+    #[must_use]
+    pub const fn raw_write_message(self) -> &'static str {
+        match self {
+            Self::Default | Self::Nx | Self::Qingpi | Self::ThreeDsX4 | Self::ThreeDsX3 => "",
+        }
+    }
+
+    /// Log line recorded once when raw writes are blocked.
+    #[must_use]
+    pub const fn raw_write_log(self) -> &'static str {
+        match self {
+            Self::Default | Self::Nx | Self::Qingpi | Self::ThreeDsX4 | Self::ThreeDsX3 => "",
+        }
+    }
 }
 
 /// Stateful encoder used to omit unchanged stick coordinates in default mode.
@@ -541,5 +606,29 @@ mod tests {
             ControllerFormat::ThreeDsX3.display_name(),
             "3DS Controller(FW:-x.3)"
         );
+    }
+
+    #[test]
+    fn controller_formats_expose_transport_attributes() {
+        assert_eq!(ControllerFormat::Default.default_baud(), Some(9600));
+        assert_eq!(ControllerFormat::Nx.default_baud(), Some(9600));
+        assert_eq!(ControllerFormat::Qingpi.default_baud(), Some(9600));
+        assert_eq!(ControllerFormat::ThreeDsX4.default_baud(), Some(115_200));
+        assert_eq!(ControllerFormat::ThreeDsX3.default_baud(), Some(115_200));
+        assert!(ControllerFormat::Default.supports_text());
+        assert!(!ControllerFormat::Nx.supports_text());
+        assert_eq!(ControllerFormat::Default.end_row(), Some("end"));
+        assert_eq!(ControllerFormat::Nx.end_row(), None);
+        assert_eq!(ControllerFormat::ThreeDsX3.end_row(), None);
+        assert!(ControllerFormat::Qingpi.has_touchscreen());
+        assert!(ControllerFormat::ThreeDsX4.has_touchscreen());
+        assert!(!ControllerFormat::Default.has_touchscreen());
+        assert!(!ControllerFormat::Nx.has_touchscreen());
+        assert!(ControllerFormat::Default.allows_raw_write());
+        assert!(ControllerFormat::ThreeDsX3.allows_raw_write());
+        assert!(!ControllerFormat::Default.skip_unchanged());
+        assert!(!ControllerFormat::Qingpi.skip_unchanged());
+        assert_eq!(ControllerFormat::Default.raw_write_message(), "");
+        assert_eq!(ControllerFormat::Nx.raw_write_log(), "");
     }
 }

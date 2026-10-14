@@ -31,6 +31,19 @@
   const dataFormat = $derived(view.settings?.values['serial.data_format'] ?? 'default');
   const connected = $derived(view.state?.serial_connected ?? false);
 
+  // Each data format owns its baud rate (upstream transport `baud_rate`); the
+  // UI mirrors the effective value into the setting on every format change.
+  const FORMAT_DEFAULT_BAUD: Record<
+    NonNullable<SettingsWriteValues['serial.data_format']>,
+    number
+  > = {
+    default: 9600,
+    nx: 9600,
+    qingpi: 9600,
+    '3ds_x4': 115200,
+    '3ds_x3': 115200
+  };
+
   $effect(() => {
     if (effectivePort !== synchronizedPort) {
       synchronizedPort = effectivePort;
@@ -105,13 +118,12 @@
   }
 
   async function writeFormat(event: Event): Promise<void> {
-    const format = (event.currentTarget as HTMLSelectElement).value as SettingsWriteValues['serial.data_format'];
-    const needsBaudSync = format === '3ds_x4' || format === '3ds_x3';
-    await write(
-      needsBaudSync
-        ? { 'serial.baud_rate': 115200, 'serial.data_format': format }
-        : { 'serial.data_format': format }
-    );
+    const format = (event.currentTarget as HTMLSelectElement)
+      .value as NonNullable<SettingsWriteValues['serial.data_format']>;
+    await write({
+      'serial.baud_rate': FORMAT_DEFAULT_BAUD[format],
+      'serial.data_format': format
+    });
   }
 
   async function control(action: SerialControlRequest['action']): Promise<void> {

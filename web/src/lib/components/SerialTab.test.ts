@@ -124,4 +124,29 @@ describe('SerialTab', () => {
       });
     });
   });
+
+  it('selects the format default baud rate for text formats', async () => {
+    const { runtime, view } = runtimeView();
+    const actions = serialActions();
+    const writeSettings = vi.spyOn(runtime, 'writeSettings').mockResolvedValue({
+      recoveredRevisionConflict: false,
+      snapshot: settingsSnapshot('2', {
+        'serial.baud_rate': 9600,
+        'serial.data_format': 'default',
+        'serial.port': 'COM3'
+      })
+    });
+    render(SerialTab, { actions, autoLoad: false, runtime, view });
+
+    await fireEvent.change(screen.getByLabelText('Data format'), {
+      target: { value: 'default' }
+    });
+
+    await waitFor(() => {
+      expect(writeSettings).toHaveBeenCalledWith({
+        'serial.baud_rate': 9600,
+        'serial.data_format': 'default'
+      });
+    });
+  });
 });

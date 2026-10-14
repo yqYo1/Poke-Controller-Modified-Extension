@@ -21,10 +21,10 @@ use self::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-    HostSerialWriteNxKeyboardRequest, HostSerialWriteRequest, HostSerialWriteRowRequest,
-    HostTkRequest, HostTkResult, ScriptDiscoveryResult, ScriptExecuteRequest,
-    ScriptExecutionResult, ScriptInitializeRequest, ScriptInitializeResult, ScriptPauseResult,
-    ScriptPointerEvent, ScriptStopResult, ScriptTkEvent, ScriptWorkerStatus,
+    HostSerialFormatAttributes, HostSerialWriteNxKeyboardRequest, HostSerialWriteRequest,
+    HostSerialWriteRowRequest, HostTkRequest, HostTkResult, ScriptDiscoveryResult,
+    ScriptExecuteRequest, ScriptExecutionResult, ScriptInitializeRequest, ScriptInitializeResult,
+    ScriptPauseResult, ScriptPointerEvent, ScriptStopResult, ScriptTkEvent, ScriptWorkerStatus,
 };
 const LOG_QUEUE_CAPACITY: usize = 128;
 
@@ -83,6 +83,14 @@ pub trait ScriptHost: Send + Sync + 'static {
     ///
     /// Returns a stable host error when the format cannot be read.
     fn serial_data_format_name(&self) -> Result<String, ScriptHostError>;
+
+    /// Reports the active serial data format's transport attributes to the
+    /// compatibility layer.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable host error when the attributes cannot be read.
+    fn serial_format_attributes(&self) -> Result<HostSerialFormatAttributes, ScriptHostError>;
 
     /// Writes one NX keyboard frame composed with the current controller
     /// state.
@@ -482,6 +490,10 @@ fn dispatch_host_call(
         protocol::HOST_SERIAL_DATA_FORMAT => {
             decode_host::<()>(payload)?;
             serialize_host_value(host.serial_data_format_name())
+        }
+        protocol::HOST_SERIAL_FORMAT_ATTRIBUTES => {
+            decode_host::<()>(payload)?;
+            serialize_host_value(host.serial_format_attributes())
         }
         protocol::HOST_SERIAL_WRITE_NX_KEYBOARD => {
             let request = decode_host::<HostSerialWriteNxKeyboardRequest>(payload)?;

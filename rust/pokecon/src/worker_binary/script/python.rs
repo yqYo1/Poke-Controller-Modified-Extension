@@ -26,10 +26,10 @@ use super::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-    HostSerialWriteNxKeyboardRequest, HostSerialWriteRequest, HostSerialWriteRowRequest,
-    HostTkRequest, HostTkResult, ScriptCommandKind, ScriptControl, ScriptDiscoveredCommand,
-    ScriptExecutionOutcome, ScriptExecutionResult, ScriptInputAction, ScriptOutputMode,
-    ScriptOutputTarget, ScriptPointerEvent, ScriptTkEvent, ScriptWorkerStatus,
+    HostSerialFormatAttributes, HostSerialWriteNxKeyboardRequest, HostSerialWriteRequest,
+    HostSerialWriteRowRequest, HostTkRequest, HostTkResult, ScriptCommandKind, ScriptControl,
+    ScriptDiscoveredCommand, ScriptExecutionOutcome, ScriptExecutionResult, ScriptInputAction,
+    ScriptOutputMode, ScriptOutputTarget, ScriptPointerEvent, ScriptTkEvent, ScriptWorkerStatus,
 };
 
 #[derive(Clone, Debug)]
@@ -1003,6 +1003,15 @@ impl PyApi {
         self.request(protocol::HOST_SERIAL_DATA_FORMAT, &())
     }
 
+    fn serial_format_attributes(&self) -> PyResult<String> {
+        let attributes = self.request::<_, HostSerialFormatAttributes>(
+            protocol::HOST_SERIAL_FORMAT_ATTRIBUTES,
+            &(),
+        )?;
+        serde_json::to_string(&attributes)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     fn serial_write_nx_keyboard(&self, mode: u8, key: u8) -> PyResult<()> {
         self.request(
             protocol::HOST_SERIAL_WRITE_NX_KEYBOARD,
@@ -1721,13 +1730,16 @@ def _controls(value):
 
 
 class _CompatTransport:
-    """互換用の送信方式オブジェクト(名前・テキスト行対応・キーボード手順)。"""
+    """互換用の送信方式オブジェクト(名前・形式属性・キーボード手順)。"""
 
-    def __init__(self, name):
-        self.name = name
-        self.supports_text = name == "Default"
-        self.end_row = "end" if name == "Default" else None
-        self.has_touchscreen = name != "NX"
+    def __init__(self, attributes):
+        self.name = attributes["name"]
+        self.supports_text = attributes["supports_text"]
+        self.end_row = attributes["end_row"]
+        self.has_touchscreen = attributes["has_touchscreen"]
+        self.allows_raw_write = attributes["allows_raw_write"]
+        self.skip_unchanged = attributes["skip_unchanged"]
+        self.default_baud = attributes["default_baud"]
         self.button_conversion = _conversion_default_button
 
     def keyboard_steps(self, kind, value=None):
@@ -1855,7 +1867,7 @@ class Sender:
 
     def transport(self):
         """今のData Formatの互換送信方式オブジェクトを返す"""
-        return _CompatTransport(_api.serial_data_format_name())
+        return _CompatTransport(_json.loads(_api.serial_format_attributes()))
 
 
 class KeyPress:

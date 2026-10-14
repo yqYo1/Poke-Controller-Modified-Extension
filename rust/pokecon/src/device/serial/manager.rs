@@ -324,10 +324,17 @@ impl SerialManager {
         &self,
         config: &SerialConfig,
     ) -> Result<(Arc<dyn SerialIo>, ControllerCodec), SerialError> {
+        // The format owns its baud rate (upstream transport `baud_rate`): the
+        // configured value is forced to the format default whenever the format
+        // defines one.
+        let effective_baud = config
+            .data_format
+            .default_baud()
+            .unwrap_or(config.baud_rate);
         let io = self
             .inner
             .backend
-            .open(&config.selector, config.baud_rate)
+            .open(&config.selector, effective_baud)
             .await
             .map_err(|_| SerialError::OpenFailed)?;
         let mut codec = ControllerCodec::new(config.data_format);
@@ -712,6 +719,35 @@ mod tests {
         manager.disconnect().await.unwrap();
         events.changed().await.unwrap();
         assert!(!*events.borrow());
+    }
+
+    #[tokio::test]
+    async fn format_default_baud_overrides_the_configured_value() {
+        let backend = VirtualSerialBackend::default();
+        backend
+            .push_plan(VirtualOpenPlan::Success(VirtualSerialEndpoint::new()))
+            .await;
+        backend
+            .push_plan(VirtualOpenPlan::Success(VirtualSerialEndpoint::new()))
+            .await;
+        let manager = SerialManager::new(Arc::new(backend.clone()));
+
+        manager
+            .apply_config(SerialConfig::new("virtual", 19200, ControllerFormat::ThreeDsX4).unwrap())
+            .await
+            .unwrap();
+        manager
+            .update_config(SerialConfig::new("virtual", 19200, ControllerFormat::Default).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            backend.opened_selectors().await,
+            vec![
+                ("virtual".to_owned(), 115_200),
+                ("virtual".to_owned(), 9600)
+            ]
+        );
     }
 
     #[tokio::test]

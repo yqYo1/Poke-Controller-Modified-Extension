@@ -2479,9 +2479,9 @@ mod tests {
             HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
             HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
             HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-            HostTkRequest, HostTkResult, PYTHON_SITE_PACKAGES_ENV, ScriptDialogState,
-            ScriptExecuteRequest, ScriptExecutionOutcome, ScriptInitializeRequest,
-            ScriptWorkerStatus,
+            HostSerialFormatAttributes, HostTkRequest, HostTkResult, PYTHON_SITE_PACKAGES_ENV,
+            ScriptDialogState, ScriptExecuteRequest, ScriptExecutionOutcome,
+            ScriptInitializeRequest, ScriptWorkerStatus,
         };
         use crate::worker::script::{ScriptHost, ScriptHostError, ScriptWorkerClient};
         use crate::worker::supervisor::{StopPurpose, WorkerLaunch, WorkerSupervisor};
@@ -2520,6 +2520,20 @@ mod tests {
 
             fn serial_write_nx_keyboard(&self, _mode: u8, _key: u8) -> Result<(), ScriptHostError> {
                 Ok(())
+            }
+
+            fn serial_format_attributes(
+                &self,
+            ) -> Result<HostSerialFormatAttributes, ScriptHostError> {
+                Ok(HostSerialFormatAttributes {
+                    name: "Default".to_owned(),
+                    supports_text: true,
+                    end_row: Some("end".to_owned()),
+                    has_touchscreen: false,
+                    allows_raw_write: true,
+                    skip_unchanged: false,
+                    default_baud: Some(9600),
+                })
             }
 
             fn serial_reload(&self) -> Result<(), ScriptHostError> {
@@ -2971,9 +2985,9 @@ mod tests {
             HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
             HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
             HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-            HostTkRequest, HostTkResult, PYTHON_SITE_PACKAGES_ENV, ScriptDialogState,
-            ScriptExecuteRequest, ScriptExecutionOutcome, ScriptInitializeRequest,
-            ScriptWorkerStatus,
+            HostSerialFormatAttributes, HostTkRequest, HostTkResult, PYTHON_SITE_PACKAGES_ENV,
+            ScriptDialogState, ScriptExecuteRequest, ScriptExecutionOutcome,
+            ScriptInitializeRequest, ScriptWorkerStatus,
         };
         use crate::worker::script::{ScriptHost, ScriptHostError, ScriptWorkerClient};
         use crate::worker::supervisor::{StopPurpose, WorkerLaunch, WorkerSupervisor};
@@ -3013,6 +3027,20 @@ mod tests {
 
             fn serial_write_nx_keyboard(&self, _mode: u8, _key: u8) -> Result<(), ScriptHostError> {
                 Ok(())
+            }
+
+            fn serial_format_attributes(
+                &self,
+            ) -> Result<HostSerialFormatAttributes, ScriptHostError> {
+                Ok(HostSerialFormatAttributes {
+                    name: "Default".to_owned(),
+                    supports_text: true,
+                    end_row: Some("end".to_owned()),
+                    has_touchscreen: false,
+                    allows_raw_write: true,
+                    skip_unchanged: false,
+                    default_baud: Some(9600),
+                })
             }
 
             fn serial_reload(&self) -> Result<(), ScriptHostError> {

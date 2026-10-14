@@ -14,8 +14,8 @@ use pokecon_worker::script::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-    HostTkRequest, HostTkResult, PYTHON_SITE_PACKAGES_ENV, ScriptDialogState,
-    ScriptInitializeRequest,
+    HostSerialFormatAttributes, HostTkRequest, HostTkResult, PYTHON_SITE_PACKAGES_ENV,
+    ScriptDialogState, ScriptInitializeRequest,
 };
 use pokecon_worker::script::{ScriptHost, ScriptHostError, ScriptWorkerClient};
 use pokecon_worker::supervisor::{StopPurpose, WorkerLaunch, WorkerSupervisor};
@@ -66,6 +66,18 @@ impl ScriptHost for CompatibilityHost {
 
     fn serial_write_nx_keyboard(&self, _mode: u8, _key: u8) -> Result<(), ScriptHostError> {
         Ok(())
+    }
+
+    fn serial_format_attributes(&self) -> Result<HostSerialFormatAttributes, ScriptHostError> {
+        Ok(HostSerialFormatAttributes {
+            name: "Default".to_owned(),
+            supports_text: true,
+            end_row: Some("end".to_owned()),
+            has_touchscreen: false,
+            allows_raw_write: true,
+            skip_unchanged: false,
+            default_baud: Some(9600),
+        })
     }
 
     fn serial_reload(&self) -> Result<(), ScriptHostError> {

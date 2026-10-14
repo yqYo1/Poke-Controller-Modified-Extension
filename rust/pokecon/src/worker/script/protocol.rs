@@ -25,6 +25,7 @@ pub const HOST_SERIAL_WRITE: &str = "script.host.serial_write";
 pub const HOST_SERIAL_WRITE_ROW: &str = "script.host.serial_write_row";
 pub const HOST_SERIAL_DATA_FORMAT: &str = "script.host.serial_data_format";
 pub const HOST_SERIAL_WRITE_NX_KEYBOARD: &str = "script.host.serial_write_nx_keyboard";
+pub const HOST_SERIAL_FORMAT_ATTRIBUTES: &str = "script.host.serial_format_attributes";
 pub const HOST_SERIAL_RELOAD: &str = "script.host.serial_reload";
 pub const HOST_OUTPUT: &str = "script.host.output";
 pub const HOST_DIALOG_OPEN: &str = "script.host.dialog_open";
@@ -233,6 +234,25 @@ pub struct HostSerialWriteRowRequest {
 pub struct HostSerialWriteNxKeyboardRequest {
     pub mode: u8,
     pub key: u8,
+}
+
+/// Transport attributes of the active serial data format.
+///
+/// The bool-heavy shape mirrors the upstream transport attribute table.
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "mirrors the upstream transport attribute table"
+)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostSerialFormatAttributes {
+    pub name: String,
+    pub supports_text: bool,
+    pub end_row: Option<String>,
+    pub has_touchscreen: bool,
+    pub allows_raw_write: bool,
+    pub skip_unchanged: bool,
+    pub default_baud: Option<u32>,
 }
 
 /// Rust-main camera state observed by the compatibility proxy.

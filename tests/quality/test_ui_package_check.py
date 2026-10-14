@@ -168,7 +168,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon/build.rs": "@pokecon/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "83acb589dca1e7f4dd947d8ac77abee557277b75e2451159a00268af291728a7",
+    "rust/pokecon": "be55ab90fc8b1ea6112c6420b24797de59ad9fad1ee93fe93e7c2be65e87577c",
 }
 
 EXPECTED_WORKSPACE_PROVENANCE = tomllib.loads(
@@ -458,6 +458,7 @@ nix = { workspace = true, features = ["fs", "mman"] }
 nix.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
+libftdi1-sys.workspace = true
 nokhwa = { workspace = true, features = ["input-v4l"] }
 v4l.workspace = true
 
@@ -1373,7 +1374,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     } == EXPECTED_WORKSPACE_MANIFEST_HASHES
     assert (
         hashlib.sha256(sources[WORKSPACE_LOCK_SOURCE].encode()).hexdigest()
-        == "1eb118a63d4460a9bf85ef7bc554b4cd8471206ac683340526f1351ef7a29eb9"
+        == "9492e46e775e3cb93b01867aceb1ce401253797027fe9469becdf38e8fabcc8d"
     )
     assert manifests["rust/pokecon"] == EXPECTED_POKECON_MANIFEST
     assert all(
@@ -2363,7 +2364,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     # this file) and then canonicalFlakeHash again.
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "d66726f13547d5a8a69339e191af35e54801bb415dc53aabd551d3843d8730da"
+        == "d98091e86d07e99b291078688b15197a11d9880eda276b93e6fc2b57392d7eee"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2788,14 +2789,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "3cb71edf06089f10ad44aa2316dd658510170ddd2c58a1dca4148c5b7c17ec0b"
+        == "a62a492f0ef5396ab83420c3990195b61e9cd0ee7223df0cf0755f34c25331ec"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
         "workspaceTargetBuildDependenciesAreEmpty =",
         "workspaceMemberManifestsAreCanonical =",
         "repositoryCargoConfigInventory =",
-        '== "1eb118a63d4460a9bf85ef7bc554b4cd8471206ac683340526f1351ef7a29eb9"',
+        '== "9492e46e775e3cb93b01867aceb1ce401253797027fe9469becdf38e8fabcc8d"',
         'memberEntries."Cargo.toml" == "regular"',
         'memberEntries."build.rs" == "regular"',
         "dependency.dependencyName == expectedWorkspacePackageNames.${resolvedPath}",
@@ -3617,7 +3618,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     gate_cargo_vendor_section = flake[gate_cargo_vendor_start:gate_cargo_vendor_end]
     assert (
         hashlib.sha256(gate_cargo_vendor_section.strip().encode()).hexdigest()
-        == "e11ba3fdd396c3e415122a76324eb93133b2fbbb97c5289a6b8202a35532c75e"
+        == "2c564a7c2db72567cd721152fe0c30de4de6d3dca11814ea7ec5f802bee0d2a3"
     )
     canonical_cargo_lock = tomllib.loads(sources[WORKSPACE_LOCK_SOURCE])
     external_cargo_packages = [
@@ -3630,7 +3631,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     if "metadata" in canonical_cargo_lock:
         gate_cargo_vendor_lock["metadata"] = canonical_cargo_lock["metadata"]
     expected_gate_cargo_vendor_identity = (
-        "f18bc325d91a187bf5b677f9016f4d984ab6afbebeb74ecb9a853fffb82b309e"
+        "cf5ed257386f182e928d5856fc4b1aa75c7b646747394ce44a87a38b6b8fb0eb"
     )
     assert (
         hashlib.sha256(
@@ -5043,6 +5044,7 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
     }
     assert unsafe_sites == {
         "camera/shared_ring.rs": 8,
+        "device/serial/ftdi.rs": 2,
         "settings/hmac_key.rs": 5,
     }
     shared_ring_source = rust_lexical_mask(sources["camera/shared_ring.rs"])

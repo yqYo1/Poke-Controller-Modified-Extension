@@ -28,9 +28,9 @@ PokeConが公開設定として持つserial項目は次の3個です。
 | `serial.baud_rate` | 1以上のbaud rate | `9600` |
 | `serial.data_format` | controller frame形式 | `default` |
 
-`serial.data_format`は`default`、`nx`、`qingpi`、`3ds_x4`、`3ds_x3`から選択します。
+`serial.data_format`は`default`、`nx`、`qingpi`、`3ds_x4`、`3ds_x3`、`ds_ft_rev3`、`ds_ft_rev2`、`ds_ft_rev1`から選択します。
 
-UIで`3ds_x4`または`3ds_x3`を選ぶとbaud rateも便宜上115200へ変更します。
+UIで`3ds_x4`または`3ds_x3`を選ぶとbaud rateも便宜上115200へ変更します。FTDI形式（`ds_ft_rev*`）は実効baud rateを持たないため、baud rateを変更しません。
 
 CLI、TOML、環境変数、動的設定ではformatを変更してもbaud rateを自動変更しません。
 
@@ -277,6 +277,62 @@ button maskのlittle-endian値は`0x2001`です。
 
 touch Xのlittle-endian値は`0x013f`です。
 
+## NX 11-byte frameをparseする
+
+`nx`は固定11-byteのbinary frameです（baud 9600）。
+
+| offset | size | 値 |
+|---:|---:|---|
+| 0 | 1 | header `0xab` |
+| 1 | 1 | button maskの下位byte |
+| 2 | 1 | button maskの上位byte |
+| 3 | 1 | Switch hat値（0〜8） |
+| 4 | 1 | left stick X |
+| 5 | 1 | left stick Y |
+| 6 | 1 | right stick X |
+| 7 | 1 | right stick Y |
+| 8 | 1 | keyboard mode（通常frameは0） |
+| 9 | 1 | keyboard key（通常frameは0） |
+| 10 | 1 | 予約 `0x00` |
+
+button maskはSwitch button maskの16 bitをそのまま使います（`default` frameのような2 bit shiftはありません）。stickは変換せずそのままの値です。
+
+## NXのneutralとtest vectorを使う
+
+neutral frameは次のとおりです。
+
+```text
+ab 00 00 08 80 80 80 80 00 00 00
+```
+
+A押下は`ab 04 00 08 80 80 80 80 00 00 00`、MINUS押下は`ab 00 01 08 80 80 80 80 00 00 00`です。
+
+BとZR、hat UpRight、left stick `(0x80, 0x00)`、right stick `(0x00, 0x80)`の組み合わせは次のとおりです。
+
+```text
+ab 82 00 01 80 00 00 80 00 00 00
+```
+
+## NXのkeyboard手順を合成frameとして送る
+
+`nx`のkeyboard入力は、現在のコントローラー状態と合成した11-byte frameとして送ります（offset 8のkeyboard modeとoffset 9のkeyへ上書き）。押しているボタンは押したままになります。
+
+| 手順 | keyboard mode | key | 待ち時間 |
+|---|---:|---:|---:|
+| `init` | 5（全解放） | 0 | 0.05秒 |
+| `text`の1文字ごと | 1（押下）→2（解放） | `ord(文字)` | 各0.03秒 |
+| `Key` | 押下→解放 | key code | 各0.03秒 |
+| `Press` | 押下のみ | key code | 0.03秒 |
+| `Release` | 解放のみ | key code | 0.03秒 |
+
+特殊キー（SPACE、ENTER、BACKSPACE、DELETE、矢印、JP系）はmode 3（code押下）とmode 4（code解放）を使います。
+
+全解放のframe例（neutral状態で`init`を送った場合）:
+
+```text
+ab 00 00 08 80 80 80 80 05 00 00
+```
+
 ## 3DS 11-byte frameをparseする
 
 `3ds_x4`（FW:x.4-）と`3ds_x3`（FW:-x.3）はどちらも固定11-byteのbinary frameです（baud 115200）。
@@ -402,6 +458,62 @@ a1 11 14 a2 ff 7f b2 00 00 00 00
 offset 1の`0x11`はAの上位nibble`0x10`とLeftのhat bit`0x01`です。
 
 offset 2の`0x14`はHOMEとMINUSです。
+
+## DS FT（FTDI MPSSE）の6-byte payloadを扱う
+
+`ds_ft_rev3`、`ds_ft_rev2`、`ds_ft_rev1`は、FTDIチップのGPIOへ直結した基板向けの形式です。通常のUARTではなくMPSSE（bit-bang）を使うため、baud rateを持ちません（`serial.baud_rate`の値は使いません）。
+
+payloadは6 byteです。
+
+| offset | size | 値 |
+|---:|---:|---|
+| 0 | 1 | set bits high `0x82`（C bus） |
+| 1 | 1 | C busの値 |
+| 2 | 1 | C busの反転値（`~C & 0xff`） |
+| 3 | 1 | set bits low `0x80`（D bus） |
+| 4 | 1 | D busの値 |
+| 5 | 1 | D busの反転値（`~D & 0xff`） |
+
+押下pinは0（low）へ落とし、未押下は1のままにします。
+
+pin割当は共通部分とRev依存部分があります。
+
+| 入力 | pin | 備考 |
+|---|---|---|
+| LEFT | C0 | 共通 |
+| DOWN | C1 | 共通 |
+| RIGHT | C2 | 共通 |
+| UP | C3 | 共通 |
+| A | C4 | 共通 |
+| L | D0 | 共通 |
+| R | D1 | 共通 |
+| SELECT | D2 | 共通 |
+| START | D3 | 共通 |
+| POWER | D4 | 共通 |
+| B | C5／D6／C5 | Rev1／Rev2／Rev3 |
+| X | C6／D7／C6 | Rev1／Rev2／Rev3 |
+| Y | C7／D5／D5 | Rev1／Rev2／Rev3 |
+
+hatはdpad pinへ写像し、斜め方向は隣接2 pinを同時に落とします。ZL、ZR、RCLICK、HOME、CAPTUREはpinを持ちません。stickとtouchは送信しません。
+
+全解放のpayload（接続直後に送ります）は次のとおりです。
+
+```text
+82 ff 00 80 ff 00
+```
+
+test vectorは次のとおりです。
+
+| 内容 | payload |
+|---|---|
+| A押下 | `82 ef 10 80 ff 00` |
+| B押下（Rev2） | `82 ff 00 80 bf 40` |
+| X押下（Rev2） | `82 ff 00 80 7f 80` |
+| Y押下（Rev2） | `82 ff 00 80 df 20` |
+
+MPSSEの初期化はbit mode reset（`0x00`）→MPSSE（`0x02`）、purge、`0xaa`送信後の`fa aa`応答確認（0.5秒以内）、全解放payloadの順で行います。
+
+この形式ではraw書込（Mcuコマンドやシリアルコマンドの直接送信）を行いません。また、直前と同じpayloadは再送しません（`skip_unchanged`）。FTDIデバイスの検出（対応デバイスがある場合のみUIへ提示）は実機gateと合わせて確認します。
 
 ## connection直後のneutralを受理してから操作する
 

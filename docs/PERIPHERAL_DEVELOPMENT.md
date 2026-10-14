@@ -515,6 +515,8 @@ MPSSEの初期化はbit mode reset（`0x00`）→MPSSE（`0x02`）、purge、`0x
 
 この形式ではraw書込（Mcuコマンドやシリアルコマンドの直接送信）を行いません。また、直前と同じpayloadは再送しません（`skip_unchanged`）。FTDIデバイスの検出（対応デバイスがある場合のみUIへ提示）は実機gateと合わせて確認します。
 
+Linuxでは`ftdi_sio`／`usbserial`カーネルドライバがFTDIデバイスを先に確保するため、アプリはデバイスを開く際にカーネルドライバをdetachします（権限はudevルールで付与）。検出はVID `0x0403`のMPSSE対応チップ（FT2232H／FT4232H／FT232H）の列挙で行い、開かずに判定します。
+
 ## connection直後のneutralを受理してから操作する
 
 PokeConはportを開いた直後に、そのformatのneutral frameを完全送信します。

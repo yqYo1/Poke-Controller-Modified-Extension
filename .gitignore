@@ -74,6 +74,8 @@
 /compatibility/*
 !/compatibility/*.json
 !/compatibility/*.jsonl
+!/compatibility/results/
+!/compatibility/results/**
 
 
 !/DirectShowLib/

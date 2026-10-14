@@ -592,7 +592,11 @@ jobs:
       (needs.product_flake.result == 'success' ||
       needs.product_flake.result == 'skipped')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The job intentionally has no checkout and builds from GitHub's pinned
+    # flake reference, so it runs cold against the remote cache; 20 minutes
+    # cancelled mid-build on 2026-10-14 while a 45-minute budget matches the
+    # other cold build jobs.
+    timeout-minutes: 45
     steps:
       # This job intentionally has no checkout. The tested source and the
       # commit identity must both come from GitHub's pinned flake reference.

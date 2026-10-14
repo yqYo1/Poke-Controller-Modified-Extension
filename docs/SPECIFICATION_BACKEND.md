@@ -661,7 +661,7 @@ type ScreenshotFormat = Literal["png", "jpeg"]
 | `show_size` (property) | `show_size -> tuple[int, int]` | UI表示サイズ `(height, width)` |
 | `is_show_var` (property) | `is_show_var -> bool` | 映像表示有効フラグ |
 
-> **注（Tkinter由来のUI操作メソッド）**: `update()`（フレーム更新）、`BindLeftClick()`/`BindRightClick()`/`UnbindLeftClick()`/`UnbindRightClick()`（マウスイベントバインド）、`mouseCtrlLeftPress()`/`mouseLeftPress()`/`mouseLeftPressing()`/`mouseRightPress()`/`mouseRightPressing()` 等（マウス/タッチイベント処理）、`StartRangeSS()`/`MotionRangeSS()`/`ReleaseRangeSS()`（範囲スクリーンショット）は、元実装では `tk.Canvas` のAPIに依存していた。リファクタリング後はWebUIのDOMイベント/Canvas APIで再実装する。ユーザースクリプトから直接呼び出されることは想定されないが、フレームワーク内部で使用されるため互換性を維持する
+> **注（Tkinter由来のUI操作メソッド）**: `update()`（フレーム更新）、`BindLeftClick()`/`BindRightClick()`/`UnbindLeftClick()`/`UnbindRightClick()`（マウスイベントバインド）、`mouseCtrlLeftPress()`/`mouseLeftPress()`/`mouseLeftPressing()`/`mouseLeftRelease()`/`mouseRightPress()`/`mouseRightPressing()`/`mouseRightRelease()`（マウス/タッチイベント処理）、`StartRangeSS()`/`MotionRangeSS()`/`ReleaseRangeSS()`（範囲スクリーンショット）は、元実装では `tk.Canvas` のAPIに依存していた。リファクタリング後はWebUIのDOMイベント/Canvas APIで再実装する。ユーザースクリプトから直接呼び出されることは想定されないが、フレームワーク内部で使用されるため互換性を維持する
 
 **固定Tkinter→Web互換ブリッジ**:
 
@@ -1032,6 +1032,8 @@ def dialogue(self, title: str, message: int | str | list[int | str], desc: str |
 | 固定`tkinter`直接利用 | ✅ Web互換ブリッジで`color_detect_sample.py`を変更なし実行 | ネイティブTk／`$DISPLAY`へ依存しない |
 | 画像処理API | ✅ ワーカー内実装（ユーザースクリプトワーカー） | |
 | Discord通知 | ✅ 実装済み | |
+
+**同期検査（2026-10-14決定: 上流`tests/public_api.py`方式の独立スナップショットは導入せず、既存機構へ限定接続）**: 公開APIの凍結・同期は、正準レジストリ（`rust/pokecon/registry/protocol.json`）を単一の正本とし、四方向で検査する。(1) registry→SPEC: 全登録名が本定義書に記載されていること（contract_sync）。(2) registry→生成typings: `commands_typings.rs`のクラスメンバー／モジュール関数ドリフトピン。(3) typings→worker実装: `runtime_signatures_match_generated_typings`の署名検査。(4) worker実装→registry: 同テスト内の`_assert_registry_coverage`が各クラスの公開自メンバー（`__dict__`、継承分を除く）と`Commands.PythonCommandBase`のモジュール関数をregistryの登録名と比較し、無登録の追加を検出する。上流の`tests/public_api.py`に相当する独立スナップショットはこれらと重複するため導入しない。列挙値（`Button`等の値）の凍結は6.1fのliteral値比較とgolden転写テストが担当する。
 | `self.discord_text()` | ✅ 互換シグネチャを保持 | |
 | LINE通知 | ⚠️ No-opスタブ（サービスEOL） | |
 | Windows通知 | ✅ 実装済み | |

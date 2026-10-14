@@ -1111,21 +1111,35 @@ async fn runtime_signatures_match_generated_typings_and_command_meta_is_enforced
         .join("../../python/pokecon/typings/Commands");
     let typings_root = serde_json::to_string(&typings_root.to_string_lossy())
         .expect("typing root is representable as a Python string");
+    let registry_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("registry/protocol.json");
+    let registry_path = serde_json::to_string(&registry_path.to_string_lossy())
+        .expect("registry path is representable as a Python string");
     let source = format!(
         r#"
 import ast
 import enum as _enum
 import importlib
 import inspect
+import json
 import pathlib
 
 from Commands._meta import CommandMeta
 from Commands.CommandBase import Command
+from Commands.Keys import KeyPress, SendFormat
 from Commands.McuCommandBase import McuCommand
-from Commands.PythonCommandBase import ImageProcPythonCommand, PythonCommand
+from Commands.PythonCommandBase import (
+    Camera,
+    CaptureArea,
+    ImageProcPythonCommand,
+    PythonCommand,
+)
+from Commands.Sender import Sender
+from Commands.dialogue import Widget
 
 
 _TYPINGS_ROOT = pathlib.Path({typings_root})
+_REGISTRY_PATH = pathlib.Path({registry_path})
 
 
 def _ast_default(node):
@@ -1250,6 +1264,49 @@ def _check_stub(filename, module_name):
             )
 
 
+def _assert_registry_coverage():
+    """runtimeの公開名がregistry(class_members/module_functions)に登録されていること。"""
+    document = json.loads(_REGISTRY_PATH.read_text(encoding="utf-8"))
+    surface = document["public_surfaces"][0]
+    class_members = surface["class_members"]
+    classes = {{
+        "CommandMeta": CommandMeta,
+        "Command": Command,
+        "PythonCommand": PythonCommand,
+        "ImageProcPythonCommand": ImageProcPythonCommand,
+        "McuCommand": McuCommand,
+        "KeyPress": KeyPress,
+        "SendFormat": SendFormat,
+        "Sender": Sender,
+        "Camera": Camera,
+        "CaptureArea": CaptureArea,
+        "Widget": Widget,
+    }}
+    for name, runtime_class in classes.items():
+        declared = set(class_members.get(name, []))
+        own = {{
+            member for member in runtime_class.__dict__ if not member.startswith("_")
+        }}
+        unregistered = own - declared
+        assert not unregistered, (
+            f"{{name}} has unregistered public members {{sorted(unregistered)}}"
+        )
+    declared_functions = set(
+        surface["module_functions"].get("Commands.PythonCommandBase", [])
+    )
+    import Commands.PythonCommandBase as _python_command_base_module
+
+    runtime_functions = {{
+        name
+        for name, value in vars(_python_command_base_module).items()
+        if inspect.isfunction(value) and not name.startswith("_")
+    }}
+    unregistered_functions = runtime_functions - declared_functions
+    assert not unregistered_functions, (
+        f"unregistered module functions {{sorted(unregistered_functions)}}"
+    )
+
+
 class Contracts(PythonCommand):
     def do(self):
         for filename, module_name in (
@@ -1264,6 +1321,8 @@ class Contracts(PythonCommand):
             ("McuCommandBase.pyi", "Commands.McuCommandBase"),
         ):
             _check_stub(filename, module_name)
+
+        _assert_registry_coverage()
 
         try:
             importlib.import_module(

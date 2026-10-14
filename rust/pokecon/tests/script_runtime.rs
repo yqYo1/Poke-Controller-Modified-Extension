@@ -1983,6 +1983,29 @@ class Images(ImageProcPythonCommand):
         second = self.camera.readFrame()
         assert np.array_equal(second[50, 60], original)
 
+        def bridge_convert_crop(crop_fmt="", crop=None):
+            # 作者配布の bridge_functions.convert_crop（本体非同梱）の転写。
+            # 座標変換の意味論が一致することを参照実装として検証する。
+            if crop is None or len(crop) != 4:
+                return []
+            c = list(crop)
+            fmt = str(crop_fmt)
+            if fmt == "2":
+                return [c[0], c[1], c[0] + c[2], c[1] + c[3]]
+            if fmt == "3":
+                return [c[0], c[2], c[1], c[3]]
+            if fmt == "4":
+                return [c[0], c[2], c[0] + c[1], c[2] + c[3]]
+            if fmt == "11":
+                return [c[1], c[0], c[3], c[2]]
+            if fmt == "12":
+                return [c[1], c[0], c[1] + c[3], c[0] + c[2]]
+            if fmt == "13":
+                return [c[2], c[0], c[3], c[1]]
+            if fmt == "14":
+                return [c[2], c[0], c[2] + c[3], c[0] + c[1]]
+            return c
+
         crop_cases = [
             ("1", [60, 50, 90, 70]),
             ("2", [60, 50, 30, 20]),
@@ -1995,9 +2018,19 @@ class Images(ImageProcPythonCommand):
         ]
         for crop_fmt, crop in crop_cases:
             cropped = self.getCameraImage(crop_fmt, crop)
-            assert cropped.shape == (20, 30, 3)
+            x1, y1, x2, y2 = bridge_convert_crop(crop_fmt, crop)
+            assert cropped.shape == (y2 - y1, x2 - x1, 3)
             assert cropped.flags["W"]
-            assert np.array_equal(cropped[0, 0], original)
+            assert np.array_equal(cropped, second[y1:y2, x1:x2])
+
+        assert self.getCameraImage("", None).shape == (360, 640, 3)
+        for invalid_fmt, invalid_crop in [("9", [0, 0, 1, 1]), ("2", [1, 2, 3])]:
+            try:
+                self.getCameraImage(invalid_fmt, invalid_crop)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("invalid crop input must be rejected by the core")
 
         os.makedirs(self.template_path_name, exist_ok=True)
         template_path = self.get_filespec("template.png")

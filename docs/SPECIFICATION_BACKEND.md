@@ -599,6 +599,7 @@ type ScreenshotFormat = Literal["png", "jpeg"]
 ```
 
 - `crop: list[int] | None` — トリミング座標のリスト。`crop_fmt` に応じた4要素の整数リスト。`None`または空リストの場合はトリミングなし
+- **座標変換の意味論（6.2h）**: 本体内部の`crop_fmt`／`crop`解釈は、作者配布の`bridge_functions.convert_crop`（本体非同梱。§10.3参照）と同一の座標変換を行う（形式`2`・`4`・`12`・`14`は始点＋サイズを終点へ換算、形式`3`・`11`・`13`は並び替え、形式`1`・未指定はそのまま）。無効な`crop_fmt`（未知の値）や4要素でない`crop`は本体内部で`ValueError`として拒否する（作者配布の互換関数は素通し・空リストを返すが、本体は入力検証を優先する）。等価性は`script_runtime.rs`の参照実装転写テストで固定する
 
 **コンストラクタ**: `ImageProcPythonCommand(cam: Camera, gui: CaptureArea | None = None)`
 

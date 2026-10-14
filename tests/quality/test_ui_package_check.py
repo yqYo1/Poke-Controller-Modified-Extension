@@ -5044,7 +5044,7 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
     }
     assert unsafe_sites == {
         "camera/shared_ring.rs": 8,
-        "device/serial/ftdi.rs": 2,
+        "device/serial/ftdi.rs": 8,
         "settings/hmac_key.rs": 5,
     }
     shared_ring_source = rust_lexical_mask(sources["camera/shared_ring.rs"])

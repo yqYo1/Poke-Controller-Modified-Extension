@@ -19,7 +19,9 @@ use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
 
 use crate::desktop::{CloseBehavior, DesktopError, DesktopRuntimeSettings};
 use crate::desktop::{DesktopLifecycle, DesktopShellConfig, run_tauri_shell};
-use crate::diagnostics::{TracingInitError, init_tracing};
+use crate::diagnostics::{
+    LOG_FILE_TIMESTAMP_FORMAT, TracingInitError, init_tracing, log_file_name,
+};
 use crate::dynamic_runtime::bootstrap_dynamic;
 use crate::runtime::ShutdownCoordinator;
 use crate::runtime::ShutdownReason;
@@ -137,7 +139,13 @@ pub async fn run_cli() -> Result<(), MainError> {
     #[cfg(not(feature = "integration-test-support"))]
     let ephemeral_port = false;
 
-    init_tracing("info")?;
+    let log_file = before_dynamic.roots.data.join("log").join(log_file_name(
+        before_dynamic.active_profile.as_str(),
+        &chrono::Local::now()
+            .format(LOG_FILE_TIMESTAMP_FORMAT)
+            .to_string(),
+    ));
+    init_tracing("info", Some(&log_file))?;
     log_configuration_warnings(&before_dynamic);
     ScaffoldManager::new(before_dynamic.roots.clone())
         .ensure(before_dynamic.active_profile.as_str())?;

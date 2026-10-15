@@ -883,7 +883,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [ ] **開始/停止予約**（2026-10-12利用者承認: フェーズ6に含めて実装）: 時刻指定の開始（実行リストも可）、時刻または「開始から◯分後」の停止。60秒超の遅延時は開始しない・他コマンド実行中は開始しない・対象終了で停止予約を取り消す。予約はメモリ保持（保存しない）でスリープ警告を表示。上流`services/run_schedule.py`準拠。
 - [ ] **スリープ復帰時停止（＋連続送信失敗での停止）**（2026-10-12利用者承認: フェーズ6に含めて実装）: 1秒監視で20秒超の空白（スリープ・休止、時計ジャンプ含む）を検知したら実行中コマンドを理由付きで停止し、再接続案内を表示する。連続5回の送信失敗でも停止（成功でリセット）。閾値・案内文は上流準拠。
 - [ ] **実行履歴**（2026-10-12利用者承認）: 直近10件（設定へ保存・再起動後も保持、同一コマンドは先頭へ移動）、CommandsのHistoryサブタブ（Command／Last Run、並び切替、行クリック実行、選択削除・全削除・Shortcut割当）。
-- [ ] **一覧の並び替え**: 名前／更新日時／使用頻度でのソートUI。（名前ソート実装済み: `a2658f4` — `commandSort`（default／name_asc／name_desc、上流`COMMAND_SORTS`準拠のラベル）、ソート時はseparator除外（検索ビューと同一規則）、CommandsTabのソートセレクタ、テスト2本（昇降順・separatorラベル消滅）、web-check 119。mtime／usageソートはデータ源（ファイルmtime・使用頻度store）実装後に追加。）
+- [ ] **一覧の並び替え**: 名前／更新日時／使用頻度でのソートUI。（名前ソート実装済み: `a2658f4` — `commandSort`（default／name_asc／name_desc、上流`COMMAND_SORTS`準拠のラベル）、ソート時はseparator除外（検索ビューと同一規則）、CommandsTabのソートセレクタ、テスト2本（昇降順・separatorラベル消滅）、web-check 119。mtimeソートはファイルmtimeのバックエンド公開後、usageソートは使用頻度カウントのUI伝達後に追加。）
 - [ ] **タグ編集**: タグの追加/削除、一括rename／delete（AST＋digestガード、書込競合は警告）、タグ欄入力への自動チェック。
 - [x] **右クリックメニュー**: パス表示・コピー（実ファイルopenはTauri限定、Webはパス操作に限定）。実装: `ce8647b`（コマンド行のoncontextmenu→固定位置メニュー（パス表示＋Copy path（navigator.clipboard）＋Close）、Escape／背景クリックで閉じる、a11y 0 warnings、テスト1本、web-check 118）。実ファイルopenはTauri限定のため未実装（Webはパス・コピー操作に限定）。
 - [ ] **Pause情報**: 停止位置（呼び出し順・ファイルリンク）と変数の表示。
@@ -891,7 +891,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [ ] **シリアル送信モニター**: `[時刻][形式名] 値`の送信ログ（Serialタブ、受信表示との分離）。
 - [ ] **依存module再読み込み**: 同フォルダ依存moduleのreload（ワーカー内`sys.modules`スコープ設計）。
 - [ ] **スクリプトひな形作成**: 名前・作者・格納場所・Bridge使用・画像保存先の入力でテンプレ生成（README／License雛形、既存は上書きしない）。
-- [ ] **使用頻度**: 実行回数の記録（プロファイル共通store）と使用頻度ソート。
+- [ ] **使用頻度**: 実行回数の記録（プロファイル共通store）と使用頻度ソート。（記録ストア実装済み: `5c35866`＋`0294d44` — `command_usage.rs`（上流`command_usage`準拠: (種別,クラス名,コマンドルート相対file)キー・`<Config>/profiles/command_usage.json`・原子書込・不正行スキップ・数値文字列許容）、`CommandService::with_usage`＋start時記録（best-effort）、production配線、テスト5本（ストア4＋サービス1）、SPEC §10.2。usageソート（usage_asc／usage_desc）とAPI公開（カウントのUI伝達）は次段。）
 - [x] **検索**: 上流の名前部分一致に相当する機能は現行fuzzy検索で充足（維持、差分は仕様へ記録）。確認: FRONTEND §591に「フロントエンド側の責務（fuse.js部分一致スコアリング、セパレーター除外、空文字で元一覧復元、バックエンド再要求なし）」として記録済み — 上流の名前部分一致はfuzzy検索が上位互換で充足。
 - [ ] **Record→スクリプト生成**: 入力記録→press／hold／wait生成（CSV→`PythonCommands/Record/`）。`InputRecorder`相当。
 - [ ] **press判定タイミング**: press実行中はボタンを離してから再開、画像認識は判定前に一時停止する挙動へ。

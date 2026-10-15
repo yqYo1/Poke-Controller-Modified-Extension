@@ -1573,7 +1573,8 @@ fn command_failure(error: &CommandServiceError) -> ApiFailure {
         ),
         CommandServiceError::CommandBusy
         | CommandServiceError::CommandNotRunning
-        | CommandServiceError::CommandGenerationChanged => ApiFailure::new(
+        | CommandServiceError::CommandGenerationChanged
+        | CommandServiceError::McuPauseUnsupported => ApiFailure::new(
             ApiFailureStatus::Conflict,
             ApiErrorCode::CommandStateConflict,
             error.to_string(),

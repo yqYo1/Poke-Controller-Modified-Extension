@@ -272,7 +272,7 @@ HTTP APIはWeb browserと外部clientの公開契約です。GPUI nativeが既�
   - `start.command`は現在の`command_candidates`にある`module_path`と`class_name`の組へ解決する。未解決の場合は`404 Not Found`とし、名前だけによる曖昧な解決を行わない
   - `start`は`stopped`または`error`からだけ許可する。`running`／`paused`では実行中コマンドを暗黙に停止・置換せず`409 Conflict`を返す
   - `stop`は全状態から許可し、すでに`stopped`の場合は成功するno-opとする
-  - `pause`は`running`から`paused`への遷移とし、すでに`paused`の場合は成功するno-op、その他の状態では`409`とする
+  - `pause`は`running`から`paused`への遷移とし、すでに`paused`の場合は成功するno-op、その他の状態では`409`とする。Mcuコマンドの実行中は`pause`を受理せず`409`を返す（コマンド種別ゲート、上流のMcu実行中Pause禁止相当）
   - `resume`は`paused`から`running`への遷移とし、すでに`running`の場合は成功するno-op、その他の状態では`409`とする
   - `/api/commands/reload`要求本文は空JSONオブジェクト`{}`とする
 - **スクリプトUI操作API**:

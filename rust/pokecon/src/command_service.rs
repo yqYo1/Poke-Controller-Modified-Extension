@@ -358,6 +358,8 @@ pub enum CommandServiceError {
     CommandNotRunning,
     #[error("command identity was not discovered")]
     CommandNotFound,
+    #[error("Mcu commands do not support pause")]
+    McuPauseUnsupported,
     #[error("command generation changed during a lifecycle callback")]
     CommandGenerationChanged,
     #[cfg_attr(
@@ -686,6 +688,21 @@ impl CommandService {
         let (session, epoch, status) = self.active_session().await?;
         if status == CommandStatus::Paused {
             return Ok(CommandActionResult::AlreadyInState);
+        }
+        // Mcu commands are not pausable (upstream gate); reject before
+        // touching the session.
+        {
+            let inner = self.inner.lock().await;
+            let active_kind = inner.current.as_ref().and_then(|identity| {
+                inner
+                    .commands
+                    .iter()
+                    .find(|command| CommandIdentity::from(&command.info) == *identity)
+                    .map(|command| command.kind)
+            });
+            if active_kind == Some(ScriptCommandKind::Mcu) {
+                return Err(CommandServiceError::McuPauseUnsupported);
+            }
         }
         let result = session.pause().await?;
         let mut inner = self.inner.lock().await;
@@ -2121,6 +2138,37 @@ mod tests {
         assert_eq!(state["command_state"], json!("stopped"));
         assert_eq!(state["command_candidates"], json!([]));
         assert_eq!(state["command_display_lists"], json!({"-": []}));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn mcu_commands_reject_pause_on_the_server_side() {
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+        let mcu = CommandInfo {
+            name: "Mcu".to_owned(),
+            module_path: "Commands.PythonCommands.mcu".to_owned(),
+            class_name: "Mcu".to_owned(),
+            tags: Vec::new(),
+        };
+        assert_eq!(
+            fixture
+                .service
+                .start(&CommandIdentity::from(&mcu))
+                .await
+                .unwrap(),
+            CommandActionResult::Applied
+        );
+        fixture.session.started.notified().await;
+        assert_eq!(fixture.service.status().await, CommandStatus::Running);
+        assert!(matches!(
+            fixture.service.pause().await,
+            Err(CommandServiceError::McuPauseUnsupported)
+        ));
+        assert_eq!(fixture.service.status().await, CommandStatus::Running);
+        assert_eq!(
+            fixture.service.stop().await.unwrap(),
+            CommandActionResult::Applied
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

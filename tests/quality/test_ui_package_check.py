@@ -2129,7 +2129,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "a6e82da417412f5507ab97a13deca227491e3a2475304d4fe290ff658bdc7544"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "07e4d0b3dc7cabaf16c0f06fa00612fdbf7c9dffdbef1aadf9d14f110540f9db"
+            "f46364328ae8c8ceeb2e2ad401ed3665a470bc3a7f21e57da0d28ef668dd8262"
         ),
         "@rust/pokecon/src/main.rs": (
             "97133ad5fcf7ea3575f09eab2b6e9c43034d378a68ea92ba883d503f9ecb2574"
@@ -5249,6 +5249,7 @@ mod application_backend;
 pub mod binary_entrypoints;
 mod camera;
 mod command_service;
+mod command_usage;
 #[cfg(feature = "compatibility-tool")]
 mod compatibility_tool;
 #[cfg(feature = "contract-generator")]
@@ -5303,6 +5304,7 @@ pub use entrypoint::{MainError, run_cli};
         "binary_entrypoints",
         "camera",
         "command_service",
+        "command_usage",
         "compatibility_tool",
         "contract_generator",
         "contracts",

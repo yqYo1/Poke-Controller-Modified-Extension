@@ -1006,7 +1006,26 @@ def _build_report_from_github(
         workflow_wall = measured_wall_seconds
     else:
         max_completed = max(completed_ends)
-        delta = (max_completed - run_started_captured).total_seconds()
+        # Anchor to the earliest job of the latest attempt rather than the
+        # run's original start: a rerun keeps run_started_at from the first
+        # attempt, so anchoring there spans every attempt and poisons the
+        # p95 sample with the total retry time. Skipped jobs keep their old
+        # timestamps and are excluded from the anchor.
+        active_starts: list[datetime.datetime] = []
+        for raw_job in jobs_data:
+            if raw_job.get("conclusion") == "skipped":
+                continue
+            started_candidate = raw_job.get("started_at")
+            if not isinstance(started_candidate, str) or not started_candidate.strip():
+                continue
+            try:
+                active_starts.append(
+                    _parse_github_timestamp(started_candidate, "github job started_at")
+                )
+            except InputError:
+                continue
+        anchor = min(active_starts) if active_starts else run_started_captured
+        delta = (max_completed - anchor).total_seconds()
         if not math.isfinite(delta) or delta < 0:
             message = "github run has non-monotonic timing for upstream max"
             raise InputError(message)

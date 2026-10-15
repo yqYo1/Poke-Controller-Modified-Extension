@@ -27,6 +27,8 @@ pub(crate) use notification::{
     NotificationConfig, NotificationOutcome, NotificationService, ReqwestDiscordTransport,
     UnavailableDiscordTransport, WindowsNativeNotificationTransport, WindowsNotificationConfig,
 };
+#[cfg(target_os = "linux")]
+pub(crate) use serial::FtdiBackend;
 pub(crate) use serial::{
     ControllerFormat, NativeSerialBackend, SerialConfig, SerialError, SerialManager,
     enumerate_native_ports,

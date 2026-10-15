@@ -11,6 +11,8 @@ use crate::camera::{
 };
 use crate::desktop::DesktopRuntimeSettings;
 use crate::device::ControllerState;
+#[cfg(target_os = "linux")]
+use crate::device::FtdiBackend;
 use crate::device::serial::SerialBackend;
 use crate::device::{ControllerFormat, NativeSerialBackend, SerialConfig, SerialManager};
 use crate::device::{
@@ -211,6 +213,21 @@ impl ProductionRuntime {
         }
     }
 
+    /// Builds the serial manager with the platform transports: the injected
+    /// native backend always, plus the FTDI MPSSE backend on Linux, where it
+    /// carries the DS FT formats. Other platforms keep the single-backend
+    /// manager (the DS FT formats fall back to the injected backend there).
+    fn build_serial_manager(serial_backend: Arc<dyn SerialBackend>) -> SerialManager {
+        #[cfg(target_os = "linux")]
+        {
+            SerialManager::new_with_ftdi(serial_backend, Arc::new(FtdiBackend))
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            SerialManager::new(serial_backend)
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_lines)]
     async fn build_inner(
@@ -259,7 +276,7 @@ impl ProductionRuntime {
             screenshot_settings.clone(),
         );
 
-        let serial = SerialManager::new(serial_backend);
+        let serial = Self::build_serial_manager(serial_backend);
         cleanup.serial = Some(serial.clone());
         if let Some(serial_config) = serial_config {
             serial

@@ -85,6 +85,9 @@ impl std::fmt::Debug for ConnectionState {
 
 struct ManagerInner {
     backend: Arc<dyn SerialBackend>,
+    /// Transport for formats carried over FTDI MPSSE (the DS FT revisions);
+    /// absent in test and compatibility builds that inject one backend.
+    ftdi_backend: Option<Arc<dyn SerialBackend>>,
     state: Mutex<ConnectionState>,
     write_gate: Mutex<()>,
     control_gate: Mutex<()>,
@@ -121,9 +124,32 @@ impl SerialManager {
         Self::with_reconnect_policy(backend, ReconnectPolicy::PRODUCTION)
     }
 
+    /// Builds the production manager with both transports: the native UART
+    /// backend and the FTDI MPSSE backend that carries the DS FT formats.
+    #[must_use]
+    pub fn new_with_ftdi(
+        backend: Arc<dyn SerialBackend>,
+        ftdi_backend: Arc<dyn SerialBackend>,
+    ) -> Self {
+        Self::with_reconnect_policy_and_ftdi(
+            backend,
+            Some(ftdi_backend),
+            ReconnectPolicy::PRODUCTION,
+        )
+    }
+
     #[must_use]
     pub fn with_reconnect_policy(
         backend: Arc<dyn SerialBackend>,
+        reconnect_policy: ReconnectPolicy,
+    ) -> Self {
+        Self::with_reconnect_policy_and_ftdi(backend, None, reconnect_policy)
+    }
+
+    #[must_use]
+    pub fn with_reconnect_policy_and_ftdi(
+        backend: Arc<dyn SerialBackend>,
+        ftdi_backend: Option<Arc<dyn SerialBackend>>,
         reconnect_policy: ReconnectPolicy,
     ) -> Self {
         let (receive_events, _) = broadcast::channel(64);
@@ -131,6 +157,7 @@ impl SerialManager {
         Self {
             inner: Arc::new(ManagerInner {
                 backend,
+                ftdi_backend,
                 state: Mutex::new(ConnectionState {
                     config: None,
                     io: None,
@@ -335,9 +362,17 @@ impl SerialManager {
             .data_format
             .default_baud()
             .unwrap_or(config.baud_rate);
-        let io = self
-            .inner
-            .backend
+        // DS FT formats ride the FTDI MPSSE transport when one is wired
+        // (production); injected single-backend builds keep handling every
+        // format themselves.
+        let backend = match (
+            config.data_format.uses_ftdi(),
+            self.inner.ftdi_backend.as_ref(),
+        ) {
+            (true, Some(ftdi)) => ftdi,
+            _ => &self.inner.backend,
+        };
+        let io = backend
             .open(&config.selector, effective_baud)
             .await
             .map_err(|_| SerialError::OpenFailed)?;
@@ -723,6 +758,76 @@ mod tests {
 
     fn config(port: &str) -> SerialConfig {
         SerialConfig::new(port, 9600, ControllerFormat::Default).unwrap()
+    }
+
+    /// Records which selectors reached this backend and always fails the open.
+    #[derive(Default)]
+    struct RecordingBackend {
+        opens: std::sync::Mutex<Vec<String>>,
+    }
+
+    impl RecordingBackend {
+        fn opened(&self) -> Vec<String> {
+            self.opens.lock().expect("recording lock").clone()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::device::serial::SerialBackend for RecordingBackend {
+        async fn open(
+            &self,
+            selector: &crate::device::serial::PortSelector,
+            _baud_rate: u32,
+        ) -> io::Result<Arc<dyn crate::device::serial::SerialIo>> {
+            self.opens
+                .lock()
+                .expect("recording lock")
+                .push(selector.as_str().to_owned());
+            Err(io::Error::other("recording backend"))
+        }
+    }
+
+    #[tokio::test]
+    async fn ds_ft_formats_route_to_the_ftdi_transport() {
+        let native = Arc::new(RecordingBackend::default());
+        let ftdi = Arc::new(RecordingBackend::default());
+        let manager = SerialManager::new_with_ftdi(native.clone(), ftdi.clone());
+        manager
+            .update_config(SerialConfig::new("0", 9600, ControllerFormat::DsFtRev1).unwrap())
+            .await
+            .unwrap();
+        let result = manager.connect().await;
+        assert_eq!(result, Err(SerialError::RollbackFailed));
+        assert_eq!(ftdi.opened().first().map(String::as_str), Some("0"));
+        assert!(native.opened().is_empty());
+    }
+
+    #[tokio::test]
+    async fn uart_formats_route_to_the_injected_backend() {
+        let native = Arc::new(RecordingBackend::default());
+        let ftdi = Arc::new(RecordingBackend::default());
+        let manager = SerialManager::new_with_ftdi(native.clone(), ftdi.clone());
+        manager.update_config(config("/dev/ttyUSB0")).await.unwrap();
+        let result = manager.connect().await;
+        assert_eq!(result, Err(SerialError::RollbackFailed));
+        assert_eq!(
+            native.opened().first().map(String::as_str),
+            Some("/dev/ttyUSB0")
+        );
+        assert!(ftdi.opened().is_empty());
+    }
+
+    #[tokio::test]
+    async fn single_backend_managers_handle_ds_ft_formats_themselves() {
+        let backend = Arc::new(RecordingBackend::default());
+        let manager = SerialManager::new(backend.clone());
+        manager
+            .update_config(SerialConfig::new("1", 9600, ControllerFormat::DsFtRev2).unwrap())
+            .await
+            .unwrap();
+        let result = manager.connect().await;
+        assert_eq!(result, Err(SerialError::RollbackFailed));
+        assert_eq!(backend.opened().first().map(String::as_str), Some("1"));
     }
 
     #[tokio::test]

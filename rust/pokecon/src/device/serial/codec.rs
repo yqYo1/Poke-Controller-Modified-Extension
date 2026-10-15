@@ -132,6 +132,13 @@ impl ControllerFormat {
         )
     }
 
+    /// Whether this format is carried by the FTDI MPSSE transport instead of
+    /// a UART serial port (the DS FT revisions).
+    #[must_use]
+    pub const fn uses_ftdi(self) -> bool {
+        matches!(self, Self::DsFtRev3 | Self::DsFtRev2 | Self::DsFtRev1)
+    }
+
     /// User-visible message shown once when raw writes are blocked.
     #[must_use]
     pub const fn raw_write_message(self) -> &'static str {

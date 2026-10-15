@@ -119,4 +119,28 @@ describe('CommandsTab', () => {
     expect(screen.getByRole('button', { name: 'Select First' })).toBeTruthy();
     expect(screen.queryByRole('separator')).toBeNull();
   });
+
+  it('shows the command path in a right-click menu and copies it', async () => {
+    const { runtime, view } = runtimeView();
+    const actions = commandActions();
+    render(CommandsTab, { actions, runtime, view });
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    const row = await screen.findByRole('button', { name: 'Select First' });
+    await fireEvent.contextMenu(row);
+
+    expect(screen.getByRole('menu', { name: 'Actions for First' })).toBeTruthy();
+    expect(screen.getByLabelText('Command path').textContent).toBe(
+      'Commands.PythonCommands.samples.first'
+    );
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy path' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('Commands.PythonCommands.samples.first'));
+    expect(screen.getByText('Copied')).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
 });

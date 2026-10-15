@@ -5749,7 +5749,13 @@ pub use entrypoint::{MainError, run_cli};
         #[cfg(not(feature = "integration-test-support"))]
         let ephemeral_port = false;
 
-        init_tracing("info")?;
+        let log_file = before_dynamic.roots.data.join("log").join(log_file_name(
+            before_dynamic.active_profile.as_str(),
+            &chrono::Local::now()
+                .format(LOG_FILE_TIMESTAMP_FORMAT)
+                .to_string(),
+        ));
+        init_tracing("info", Some(&log_file))?;
         log_configuration_warnings(&before_dynamic);
         ScaffoldManager::new(before_dynamic.roots.clone())
             .ensure(before_dynamic.active_profile.as_str())?;

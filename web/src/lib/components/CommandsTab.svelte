@@ -40,6 +40,8 @@
   let search = $state('');
   let selectedIdentity = $state<string | null>(null);
   let selectedTag = $state('-');
+  let commandMenu = $state<{ x: number; y: number; command: CommandInfo } | null>(null);
+  let commandMenuCopied = $state(false);
 
   const backendState = $derived(view.state);
   const settings = $derived(view.settings?.values);
@@ -217,6 +219,29 @@
     assigningSlot = index;
   }
 
+  // Right-click menu: shows the command's source path and copies it. The
+  // real-file open is Tauri-only (Web stays path/copy operations).
+  function openCommandMenu(event: MouseEvent, command: CommandInfo): void {
+    event.preventDefault();
+    commandMenuCopied = false;
+    commandMenu = { x: event.clientX, y: event.clientY, command };
+  }
+
+  async function copyCommandPath(): Promise<void> {
+    if (commandMenu === null) return;
+    try {
+      await navigator.clipboard.writeText(commandMenu.command.module_path);
+      commandMenuCopied = true;
+    } catch {
+      commandMenuCopied = false;
+    }
+  }
+
+  function closeCommandMenu(): void {
+    commandMenu = null;
+    commandMenuCopied = false;
+  }
+
   function contextShortcut(event: MouseEvent, index: ShortcutIndex): void {
     event.preventDefault();
     void clearShortcut(index);
@@ -373,6 +398,7 @@
                 aria-label={`Select ${command.name}`}
                 onclick={() => selectCommand(command)}
                 ondblclick={() => void start(command)}
+                oncontextmenu={(event) => openCommandMenu(event, command)}
               >
                 <span class="flex items-start justify-between gap-3"><span class="font-medium text-text">{command.name}</span><span class="text-[10px] text-subtext0">{command.class_name}</span></span>
                 <span class="mt-1 block truncate text-xs text-subtext0">{command.module_path}</span>
@@ -393,4 +419,30 @@
     <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-sm text-subtext1 disabled:opacity-40" disabled={busy} onclick={() => void reload()}>Reload</button>
     <span class="ml-auto text-xs text-subtext0">{selectedCommand?.name ?? backendState?.current_command ?? 'No command selected'}</span>
   </div>
+
+  {#if commandMenu !== null}
+    <div
+      class="fixed inset-0 z-40"
+      role="presentation"
+      onclick={(event) => { if (event.target === event.currentTarget) closeCommandMenu(); }}
+      onkeydown={(event) => { if (event.key === 'Escape') closeCommandMenu(); }}
+      oncontextmenu={(event) => { event.preventDefault(); closeCommandMenu(); }}
+    >
+      <div
+        class="absolute z-50 w-72 rounded-lg border border-text/15 bg-surface1 p-3 shadow-lg"
+        style={`left: ${String(Math.min(commandMenu.x, 800))}px; top: ${String(Math.min(commandMenu.y, 500))}px;`}
+        role="menu"
+        tabindex="-1"
+        aria-label={`Actions for ${commandMenu.command.name}`}
+      >
+        <p class="text-xs font-semibold text-text">{commandMenu.command.name}</p>
+        <p class="mt-1 break-all text-[11px] text-subtext0" aria-label="Command path">{commandMenu.command.module_path}</p>
+        <div class="mt-2 flex items-center gap-2">
+          <button type="button" class="rounded-md bg-blue/15 px-2 py-1 text-[11px] font-medium text-blue" onclick={() => void copyCommandPath()}>Copy path</button>
+          {#if commandMenuCopied}<span class="text-[11px] text-green">Copied</span>{/if}
+          <button type="button" class="ml-auto rounded-md bg-text/5 px-2 py-1 text-[11px] text-subtext1" onclick={closeCommandMenu}>Close</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>

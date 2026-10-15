@@ -26,6 +26,7 @@ GLIBC_PATTERN = re.compile(r"GLIBC_(\d+)\.(\d+)")
 ASSET_PATTERN = re.compile(r"[\"'(](/_app/[^\"')]+)")
 REQUIRED_DEPENDENCIES = {
     "libayatana-appindicator3-1",
+    "libftdi1-2",
     "libgl1",
     "libglib2.0-0",
     "libgtk-3-0",

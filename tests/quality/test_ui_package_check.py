@@ -2155,7 +2155,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     tauri_config_source_name = "@rust/pokecon/tauri.conf.json"
     assert (
         hashlib.sha256(sources[tauri_config_source_name].encode()).hexdigest()
-        == "9bb99914819d0931e80a13562f61df2e1584cf671b97fe4b7e671727be243dc3"
+        == "be4d86030b800745bea6eb94e6304f29c2d187c628dc00c5785416e33bcaf6cd"
     )
     tauri_config = validated_json_object(
         json.loads(sources[tauri_config_source_name]), tauri_config_source_name
@@ -2169,6 +2169,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         )
     }
     expected_debian_dependencies = [
+        "libftdi1-2",
         "libgl1",
         "libglib2.0-0",
         "libgtk-3-0",

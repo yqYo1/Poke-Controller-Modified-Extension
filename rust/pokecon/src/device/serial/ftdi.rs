@@ -540,15 +540,66 @@ impl SerialBackend for FtdiBackend {
     }
 }
 
+/// Operations the worker needs from a port: the real implementation drives
+/// libftdi, and tests substitute a fake to exercise the adapter path.
+///
+/// No `Send` bound: the real port holds the libftdi context pointer and
+/// never leaves its owning thread; only the fake crosses into the test
+/// worker thread.
+trait FtdiPortOps {
+    /// Send raw bytes and report how many were accepted.
+    fn write(&mut self, data: &[u8]) -> Result<usize, FtdiError>;
+    /// Read available bytes into the buffer and report the count.
+    fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FtdiError>;
+    /// Release every pin and close the port, reporting failures.
+    fn close(&mut self, released_frame: &[u8]) -> Vec<FtdiError>;
+    /// Apply the worker's read poll timeout (no-op for fakes).
+    fn set_read_poll_timeout(&mut self, _milliseconds: i32) {}
+}
+
+impl FtdiPortOps for FtdiPort {
+    fn write(&mut self, data: &[u8]) -> Result<usize, FtdiError> {
+        FtdiPort::write(self, data)
+    }
+
+    #[allow(unsafe_code)]
+    fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FtdiError> {
+        let Ok(length) = i32::try_from(buffer.len()) else {
+            return Ok(0);
+        };
+        // SAFETY: the port owns a live context; the buffer pointer and
+        // length are consistent.
+        let read = unsafe { ftdi::ftdi_read_data(self.context, buffer.as_mut_ptr(), length) };
+        if read < 0 {
+            return Err(FtdiError::Driver {
+                operation: "read data from",
+                code: read,
+            });
+        }
+        Ok(usize::try_from(read).unwrap_or(0))
+    }
+
+    fn close(&mut self, released_frame: &[u8]) -> Vec<FtdiError> {
+        FtdiPort::close(self, released_frame)
+    }
+
+    #[allow(unsafe_code)]
+    fn set_read_poll_timeout(&mut self, milliseconds: i32) {
+        if self.closed {
+            return;
+        }
+        // SAFETY: the port owns a live context on this thread.
+        unsafe {
+            (*self.context).usb_read_timeout = milliseconds;
+        }
+    }
+}
+
 /// Serve commands until the connection closes or the sender disappears.
-fn ftdi_worker(port: &mut FtdiPort, commands: &std::sync::mpsc::Receiver<FtdiCommand>) {
+fn ftdi_worker(port: &mut impl FtdiPortOps, commands: &std::sync::mpsc::Receiver<FtdiCommand>) {
     // The read poll timeout keeps queued writes bounded; the write timeout
     // stays at the upstream value.
-    // SAFETY: the port is owned by this thread; the context is live.
-    #[allow(unsafe_code)]
-    unsafe {
-        (*port.context).usb_read_timeout = READ_POLL_TIMEOUT_MS;
-    }
+    port.set_read_poll_timeout(READ_POLL_TIMEOUT_MS);
     while let Ok(command) = commands.recv() {
         match command {
             FtdiCommand::Write { data, reply } => {
@@ -556,7 +607,9 @@ fn ftdi_worker(port: &mut FtdiPort, commands: &std::sync::mpsc::Receiver<FtdiCom
             }
             FtdiCommand::Read { max, reply } => {
                 let mut buffer = vec![0u8; max.max(1)];
-                let result = read_once(port, &mut buffer);
+                let result = port
+                    .read(&mut buffer)
+                    .map(|length| buffer[..length.min(buffer.len())].to_vec());
                 let _ = reply.send(result);
             }
             FtdiCommand::Close { reply } => {
@@ -571,25 +624,6 @@ fn ftdi_worker(port: &mut FtdiPort, commands: &std::sync::mpsc::Receiver<FtdiCom
     }
     // Sender dropped without an explicit close: release and close anyway.
     let _ = port.close(&RELEASED_FRAME);
-}
-
-/// One read attempt through libftdi, honoring the context timeout.
-#[allow(unsafe_code)]
-fn read_once(port: &mut FtdiPort, buffer: &mut [u8]) -> Result<Vec<u8>, FtdiError> {
-    let Ok(length) = i32::try_from(buffer.len()) else {
-        return Ok(Vec::new());
-    };
-    // SAFETY: the port owns a live context; the buffer pointer and length
-    // are consistent.
-    let read = unsafe { ftdi::ftdi_read_data(port.context, buffer.as_mut_ptr(), length) };
-    if read < 0 {
-        return Err(FtdiError::Driver {
-            operation: "read data from",
-            code: read,
-        });
-    }
-    let length = usize::try_from(read).unwrap_or(0);
-    Ok(buffer[..length].to_vec())
 }
 
 /// Turn a negative libftdi return code into a typed error.
@@ -704,6 +738,94 @@ mod tests {
     #[test]
     fn released_frame_matches_the_neutral_encoding() {
         assert_eq!(RELEASED_FRAME, [0x82, 0xFF, 0x00, 0x80, 0xFF, 0x00]);
+    }
+
+    /// Scripted port double recording what the worker sends.
+    #[derive(Clone, Default)]
+    struct FakePort {
+        state: std::sync::Arc<std::sync::Mutex<FakeState>>,
+    }
+
+    #[derive(Default)]
+    struct FakeState {
+        writes: Vec<Vec<u8>>,
+        reads: std::collections::VecDeque<Vec<u8>>,
+        released_on_close: Option<Vec<u8>>,
+        closed: bool,
+    }
+
+    impl FakePort {
+        fn script_read(&self, bytes: Vec<u8>) {
+            self.state.lock().expect("fake lock").reads.push_back(bytes);
+        }
+
+        fn snapshot(&self) -> std::sync::MutexGuard<'_, FakeState> {
+            self.state.lock().expect("fake lock")
+        }
+    }
+
+    impl FtdiPortOps for FakePort {
+        fn write(&mut self, data: &[u8]) -> Result<usize, FtdiError> {
+            self.state
+                .lock()
+                .expect("fake lock")
+                .writes
+                .push(data.to_vec());
+            Ok(data.len())
+        }
+
+        fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FtdiError> {
+            match self.state.lock().expect("fake lock").reads.pop_front() {
+                Some(bytes) => {
+                    let length = bytes.len().min(buffer.len());
+                    buffer[..length].copy_from_slice(&bytes[..length]);
+                    Ok(length)
+                }
+                None => Ok(0),
+            }
+        }
+
+        fn close(&mut self, released_frame: &[u8]) -> Vec<FtdiError> {
+            let mut state = self.state.lock().expect("fake lock");
+            state.writes.push(released_frame.to_vec());
+            state.released_on_close = Some(released_frame.to_vec());
+            state.closed = true;
+            Vec::new()
+        }
+    }
+
+    #[tokio::test]
+    async fn adapter_round_trips_golden_frames_through_the_worker() {
+        let fake = FakePort::default();
+        fake.script_read(vec![0xFA, 0xAA]);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let worker_fake = fake.clone();
+        let handle = std::thread::spawn(move || {
+            let mut port = worker_fake;
+            ftdi_worker(&mut port, &receiver);
+        });
+        let io = FtdiIo { sender };
+
+        // The golden DS FT frame for A pressed on Rev1 travels unmodified.
+        let frame = [0x82_u8, 0xEF, 0x10, 0x80, 0xFF, 0x00];
+        assert_eq!(io.write(&frame).await.expect("write"), 6);
+
+        // Scripted input comes back; an empty queue reads zero.
+        let mut buffer = [0_u8; 8];
+        let read = io.read(&mut buffer).await.expect("read");
+        assert_eq!(&buffer[..read], &[0xFA, 0xAA]);
+        assert_eq!(io.read(&mut buffer).await.expect("empty read"), 0);
+
+        io.close().await.expect("close");
+        handle.join().expect("worker thread");
+
+        let state = fake.snapshot();
+        assert_eq!(state.writes, vec![frame.to_vec(), RELEASED_FRAME.to_vec()]);
+        assert_eq!(
+            state.released_on_close.as_deref(),
+            Some(RELEASED_FRAME.as_slice())
+        );
+        assert!(state.closed);
     }
 
     #[test]

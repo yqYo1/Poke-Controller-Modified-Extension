@@ -42,6 +42,11 @@
   let selectedTag = $state('-');
   let commandMenu = $state<{ x: number; y: number; command: CommandInfo } | null>(null);
   let commandMenuCopied = $state(false);
+  // List ordering, mirroring the upstream Command-column sorts. Name sorts
+  // are frontend derivations over the immutable display list; the sorted view
+  // drops separators, like the search view.
+  type CommandSort = 'default' | 'name_asc' | 'name_desc';
+  let commandSort = $state<CommandSort>('default');
 
   const backendState = $derived(view.state);
   const settings = $derived(view.settings?.values);
@@ -70,7 +75,19 @@
   const visibleItems = $derived.by<readonly CommandDisplayItem[]>(() => {
     const filtered = filterForSubtab(baseItems, activeSubtab);
     const query = search.trim();
-    if (query.length === 0) return filtered;
+    if (query.length === 0) {
+      if (commandSort === 'default') return filtered;
+      const commands = filtered.filter(
+        (item): item is Extract<CommandDisplayItem, { kind: 'command' }> =>
+          item.kind === 'command'
+      );
+      const direction = commandSort === 'name_asc' ? 1 : -1;
+      return [...commands].sort(
+        (left, right) =>
+          direction *
+          left.command.name.toLowerCase().localeCompare(right.command.name.toLowerCase())
+      );
+    }
     const commands = filtered.filter(
       (item): item is Extract<CommandDisplayItem, { kind: 'command' }> =>
         item.kind === 'command'
@@ -362,10 +379,18 @@
     </div>
   {:else}
     <div id={`command-panel-${activeSubtab}`} role="tabpanel" aria-labelledby={`command-tab-${activeSubtab}`} class="space-y-3">
-      <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+      <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
         <label>
           <span class="sr-only">Search commands</span>
           <input class="w-full rounded-lg border border-text/10 bg-surface1 px-3 py-2 text-sm text-text" type="search" bind:value={search} placeholder="Search commands" />
+        </label>
+        <label>
+          <span class="sr-only">Command order</span>
+          <select class="w-full rounded-lg border border-text/10 bg-surface1 px-3 py-2 text-sm text-text" bind:value={commandSort} aria-label="Command order">
+            <option value="default">Default order</option>
+            <option value="name_asc">Name (A-Z)</option>
+            <option value="name_desc">Name (Z-A)</option>
+          </select>
         </label>
         <label>
           <span class="sr-only">Command tag</span>

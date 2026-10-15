@@ -20,6 +20,12 @@ const mcu: CommandInfo = {
   name: 'Mcu command',
   tags: ['Device']
 };
+const alpha: CommandInfo = {
+  class_name: 'Alpha',
+  module_path: 'Commands.PythonCommands.samples.alpha',
+  name: 'Alpha',
+  tags: ['Rank']
+};
 
 function runtimeView(): { runtime: ApplicationRuntime; view: RuntimeView } {
   const runtime = new ApplicationRuntime();
@@ -40,6 +46,7 @@ function runtimeView(): { runtime: ApplicationRuntime; view: RuntimeView } {
           '-': [
             { kind: 'separator', label: 'Primary' },
             { command: first, kind: 'command' },
+            { command: alpha, kind: 'command' },
             { command: mcu, kind: 'command' }
           ],
           Rank: [{ command: first, kind: 'command' }]
@@ -142,5 +149,36 @@ describe('CommandsTab', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('sorts commands by name and drops separators in sorted views', async () => {
+    const { runtime, view } = runtimeView();
+    const actions = commandActions();
+    render(CommandsTab, { actions, runtime, view });
+
+    // Default order keeps the backend display list.
+    expect(await screen.findByRole('button', { name: 'Select First' })).toBeTruthy();
+
+    const sort = screen.getByLabelText('Command order');
+    await fireEvent.change(sort, { target: { value: 'name_asc' } });
+
+    await waitFor(() => {
+      const labels = screen
+        .getAllByRole('button')
+        .map((element) => element.getAttribute('aria-label'))
+        .filter((label): label is string => (label?.startsWith('Select ') ?? false));
+      expect(labels).toEqual(['Select Alpha', 'Select First']);
+    });
+    // The sorted view is commands-only: the separator label disappears.
+    expect(screen.queryByText('Primary')).toBeNull();
+
+    await fireEvent.change(sort, { target: { value: 'name_desc' } });
+    await waitFor(() => {
+      const descending = screen
+        .getAllByRole('button')
+        .map((element) => element.getAttribute('aria-label'))
+        .filter((label): label is string => (label?.startsWith('Select ') ?? false));
+      expect(descending).toEqual(['Select First', 'Select Alpha']);
+    });
   });
 });

@@ -505,6 +505,16 @@ pub struct SerialPort {
     pub selector: String,
     pub label: String,
     pub available: bool,
+    pub transport: SerialPortTransport,
+}
+
+/// Which transport carries a serial port: a UART serial device or an FTDI
+/// MPSSE device (the DS FT formats; only offered while one is detected).
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SerialPortTransport {
+    Uart,
+    Ftdi,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, ToSchema)]

@@ -254,9 +254,9 @@ mod tests {
         DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
         GenerateLauncherRequest, GenerateLauncherResult, ImageFormat, NotificationTestRequest,
         NotificationTestResult, OperationResult, SavedScreenshot, ScreenshotRequest,
-        SerialControlRequest, SerialPort, SettingsChange, SettingsPatchRequest,
-        SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause,
-        StatePatch, StateSnapshot, UpdateCheckResult,
+        SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange,
+        SettingsPatchRequest, SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot,
+        StateChangeCause, StatePatch, StateSnapshot, UpdateCheckResult,
     };
     use crate::server::backend::{
         ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload,
@@ -367,6 +367,7 @@ mod tests {
                 selector: "COM1".to_owned(),
                 label: "COM1".to_owned(),
                 available: true,
+                transport: SerialPortTransport::Uart,
             }])
         }
 

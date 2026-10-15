@@ -4127,7 +4127,8 @@
         "required": [
           "selector",
           "label",
-          "available"
+          "available",
+          "transport"
         ],
         "properties": {
           "selector": {
@@ -4138,9 +4139,20 @@
           },
           "available": {
             "type": "boolean"
+          },
+          "transport": {
+            "$ref": "#/components/schemas/SerialPortTransport"
           }
         },
         "additionalProperties": false
+      },
+      "SerialPortTransport": {
+        "type": "string",
+        "description": "Which transport carries a serial port: a UART serial device or an FTDI\nMPSSE device (the DS FT formats; only offered while one is detected).",
+        "enum": [
+          "uart",
+          "ftdi"
+        ]
       },
       "ServerMessage": {
         "oneOf": [
@@ -6625,7 +6637,8 @@
               "required": [
                 "selector",
                 "label",
-                "available"
+                "available",
+                "transport"
               ],
               "properties": {
                 "selector": {
@@ -6636,6 +6649,9 @@
                 },
                 "available": {
                   "type": "boolean"
+                },
+                "transport": {
+                  "$ref": "#/components/schemas/SerialPortTransport"
                 }
               },
               "additionalProperties": false

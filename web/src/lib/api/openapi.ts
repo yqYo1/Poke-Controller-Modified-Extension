@@ -946,7 +946,14 @@ export interface components {
             selector: string;
             label: string;
             available: boolean;
+            transport: components["schemas"]["SerialPortTransport"];
         };
+        /**
+         * @description Which transport carries a serial port: a UART serial device or an FTDI
+         *     MPSSE device (the DS FT formats; only offered while one is detected).
+         * @enum {string}
+         */
+        SerialPortTransport: "uart" | "ftdi";
         /**
          * @description Server-to-client WebSocket union. Every JSON variant is closed and only
          *     state changes carry a revision.
@@ -1585,6 +1592,7 @@ export interface components {
                 selector: string;
                 label: string;
                 available: boolean;
+                transport: components["schemas"]["SerialPortTransport"];
             }[];
         };
         TouchPoint: {

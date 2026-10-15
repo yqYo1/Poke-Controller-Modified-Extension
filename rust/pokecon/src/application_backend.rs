@@ -26,7 +26,7 @@ use crate::server::api::{
     GamepadButton, GamepadHat, GamepadInput, GenerateLauncherRequest, GenerateLauncherResult,
     ImageFormat, InputApplied, InputGeneration, LauncherDestination, NotificationTestRequest,
     NotificationTestResult, OperationResult, ScriptUiAction, ScriptUiActionResult,
-    SerialControlRequest, SerialPort, SettingsChange, SettingsPatchRequest,
+    SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange, SettingsPatchRequest,
     SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch,
     StateSnapshot, UpdateCheckResult,
 };
@@ -622,8 +622,30 @@ impl RestBackend for ApplicationBackend {
                 selector: candidate.selector.as_str().to_owned(),
                 label: candidate.selector.as_str().to_owned(),
                 available: true,
+                transport: SerialPortTransport::Uart,
             })
             .collect::<Vec<_>>();
+        // Detected FTDI MPSSE devices appear as selectable ports; the DS FT
+        // formats are offered only while at least one is present.
+        #[cfg(target_os = "linux")]
+        {
+            let ftdi_devices =
+                tokio::task::spawn_blocking(crate::device::serial::enumerate_mpsse_devices)
+                    .await
+                    .map_err(|_error| internal_failure("FTDI enumeration task failed"))?;
+            for (index, device) in ftdi_devices.into_iter().enumerate() {
+                let selector = device.serial.clone().unwrap_or_else(|| index.to_string());
+                ports.push(SerialPort {
+                    label: device
+                        .description
+                        .clone()
+                        .unwrap_or_else(|| selector.clone()),
+                    selector,
+                    available: true,
+                    transport: SerialPortTransport::Ftdi,
+                });
+            }
+        }
         let configured = self
             .serial
             .current_config()
@@ -636,6 +658,7 @@ impl RestBackend for ApplicationBackend {
                 label: configured.clone(),
                 selector: configured,
                 available: false,
+                transport: SerialPortTransport::Uart,
             });
         }
         Ok(ports)

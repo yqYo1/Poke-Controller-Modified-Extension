@@ -11,7 +11,7 @@ mod virtual_port;
 
 pub use codec::{ControllerCodec, ControllerFormat, encode_nx_frame};
 #[cfg(target_os = "linux")]
-pub use ftdi::FtdiBackend;
+pub use ftdi::{FtdiBackend, enumerate_mpsse_devices};
 pub use manager::{SerialConfig, SerialError, SerialManager};
 pub use native::NativeSerialBackend;
 pub use selector::{PortSelector, enumerate_native_ports};

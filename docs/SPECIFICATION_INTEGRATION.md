@@ -89,6 +89,8 @@ Web browser / Tauri WebView / GPUI native window
 
 **UI連動**: UIでデータ形式を変更した場合は、その形式が定義する既定ボーレート（デフォルト／NX／Qingpi = `9600`、3DS Controller両mode = `115200`）を、同一の設定書き込みトランザクションで`serial.baud_rate`へ反映する。実効ボーレートは常に形式の既定値であり（[バックエンド定義書](SPECIFICATION_BACKEND.md) §11.4.1.1の`serial.baud_rate`参照）、TOML、CLI、環境変数、動的設定、OpenAPIで設定された値は保存・表示用として保持されるが、デバイスを開く際は形式の既定値で強制される。この反映はUI操作の補助動作であり、形式の検証制約ではない。
 
+**DS FT形式の提示条件**: DS FT形式（Rev1／Rev2／Rev3）はFTDI MPSSEデバイスを検出している間だけデータ形式の選択肢へ提示する（上流のFTDI利用可否ゲート相当）。ポート列挙APIは各ポートの`transport`（`uart`／`ftdi`）を返し、UIは`ftdi`ポートの存在でDS FT選択肢の表示を切り替える。保存済みのDS FT選択はデバイス未検出時も表示と値を維持し、暗黙変更しない。DS FT形式の接続はFTDIトランスポート（MPSSE）で行い、UARTポートにはルーティングしない。
+
 **シリアル設定の即時適用トランザクション**:
 
 1. `serial.port`、`serial.baud_rate`、`serial.data_format`はグローバル専用の`runtime_immediate`設定として同じ直列化ロックで更新する。

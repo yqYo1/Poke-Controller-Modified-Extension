@@ -30,6 +30,10 @@
   const baudRate = $derived(view.settings?.values['serial.baud_rate'] ?? 9600);
   const dataFormat = $derived(view.settings?.values['serial.data_format'] ?? 'default');
   const connected = $derived(view.state?.serial_connected ?? false);
+  // DS FT formats ride FTDI MPSSE hardware and are offered only while a
+  // detected FTDI port is present (upstream availability gate); a saved DS FT
+  // selection stays visible so the setting never silently changes.
+  const ftdiDetected = $derived(ports.some((port) => port.transport === 'ftdi'));
 
   // Each data format owns its baud rate (upstream transport `baud_rate`); the
   // UI mirrors the effective value into the setting on every format change.
@@ -193,6 +197,11 @@
         <option value="qingpi">Qingpi</option>
         <option value="3ds_x4">3DS Controller (FW:x.4-)</option>
         <option value="3ds_x3">3DS Controller (FW:-x.3)</option>
+        {#if ftdiDetected || dataFormat.startsWith('ds_ft_')}
+          <option value="ds_ft_rev3">DS FT (Rev3)</option>
+          <option value="ds_ft_rev2">DS FT (Rev2)</option>
+          <option value="ds_ft_rev1">DS FT (Rev1)</option>
+        {/if}
       </select>
     </label>
 

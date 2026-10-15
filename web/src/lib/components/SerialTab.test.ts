@@ -27,8 +27,8 @@ function serialActions() {
   return {
     controlSerial: vi.fn().mockResolvedValue({ changed: true, revision: '2' }),
     serialPorts: vi.fn().mockResolvedValue([
-      { available: true, label: 'Controller COM3', selector: 'COM3' },
-      { available: true, label: 'Controller COM4', selector: 'COM4' }
+      { available: true, label: 'Controller COM3', selector: 'COM3', transport: 'uart' },
+      { available: true, label: 'Controller COM4', selector: 'COM4', transport: 'uart' }
     ])
   };
 }
@@ -155,6 +155,45 @@ describe('SerialTab', () => {
     const actions = serialActions();
     render(SerialTab, { actions, autoLoad: false, runtime, view });
 
+    const select = screen.getByLabelText('Data format');
+    expect([...select.querySelectorAll('option')].map((option) => option.value)).toEqual([
+      'default',
+      'nx',
+      'qingpi',
+      '3ds_x4',
+      '3ds_x3'
+    ]);
+  });
+
+  it('offers the DS FT formats only while an FTDI port is detected', async () => {
+    const { runtime, view } = runtimeView();
+    const actions = serialActions();
+    actions.serialPorts.mockResolvedValue([
+      { available: true, label: 'FT2232H', selector: 'A50285BI', transport: 'ftdi' }
+    ]);
+    render(SerialTab, { actions, autoLoad: true, runtime, view });
+
+    await waitFor(() => {
+      const select = screen.getByLabelText('Data format');
+      expect([...select.querySelectorAll('option')].map((option) => option.value)).toEqual([
+        'default',
+        'nx',
+        'qingpi',
+        '3ds_x4',
+        '3ds_x3',
+        'ds_ft_rev3',
+        'ds_ft_rev2',
+        'ds_ft_rev1'
+      ]);
+    });
+  });
+
+  it('hides the DS FT formats without a detected FTDI port', async () => {
+    const { runtime, view } = runtimeView();
+    const actions = serialActions();
+    render(SerialTab, { actions, autoLoad: true, runtime, view });
+
+    await waitFor(() => expect(actions.serialPorts).toHaveBeenCalled());
     const select = screen.getByLabelText('Data format');
     expect([...select.querySelectorAll('option')].map((option) => option.value)).toEqual([
       'default',

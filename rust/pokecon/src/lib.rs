@@ -5,6 +5,7 @@ mod application_backend;
 pub mod binary_entrypoints;
 mod camera;
 mod command_service;
+mod command_usage;
 #[cfg(feature = "compatibility-tool")]
 mod compatibility_tool;
 #[cfg(feature = "contract-generator")]

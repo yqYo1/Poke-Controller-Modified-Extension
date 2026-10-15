@@ -446,6 +446,8 @@ pub struct CommandService {
     profile_stage: AtomicU8,
     degraded: AtomicBool,
     last_profile_error: std::sync::Mutex<Option<ProfileSwitchErrorDetail>>,
+    /// Profile-independent command usage counts; absent in test fixtures.
+    usage: Option<Arc<crate::command_usage::CommandUsageStore>>,
     #[cfg(test)]
     fault_validate: AtomicBool,
     #[cfg(test)]
@@ -489,6 +491,7 @@ impl CommandService {
             profile_stage: AtomicU8::new(ProfileSwitchStage::Idle.encode()),
             degraded: AtomicBool::new(false),
             last_profile_error: std::sync::Mutex::new(None),
+            usage: None,
             #[cfg(test)]
             fault_validate: AtomicBool::new(false),
             #[cfg(test)]
@@ -496,6 +499,14 @@ impl CommandService {
             #[cfg(test)]
             fault_restore: AtomicBool::new(false),
         }
+    }
+
+    /// Attaches the command usage store; recordings stay best-effort and
+    /// never block or fail a command start.
+    #[must_use]
+    pub fn with_usage(mut self, usage: Arc<crate::command_usage::CommandUsageStore>) -> Self {
+        self.usage = Some(usage);
+        self
     }
 
     /// Discovers commands, runs the `ScriptLoad` events, merges all tag layers,
@@ -641,6 +652,17 @@ impl CommandService {
             }
         }
 
+        if let Some(usage) = &self.usage {
+            let command_type = match command.kind {
+                ScriptCommandKind::Python => "Python",
+                ScriptCommandKind::Mcu => "Mcu",
+            };
+            let _ = usage.record(&crate::command_usage::UsageKey {
+                command_type: command_type.to_owned(),
+                name: command.info.class_name.clone(),
+                file: command.relative_path.to_string_lossy().replace('\\', "/"),
+            });
+        }
         let service = Arc::clone(self);
         tokio::spawn(async move {
             let result = session
@@ -2138,6 +2160,52 @@ mod tests {
         assert_eq!(state["command_state"], json!("stopped"));
         assert_eq!(state["command_candidates"], json!([]));
         assert_eq!(state["command_display_lists"], json!({"-": []}));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn command_starts_record_usage_counts() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let store = Arc::new(crate::command_usage::CommandUsageStore::load(
+            directory.path().join("profiles/command_usage.json"),
+        ));
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+        // Rebuild the service with the usage store attached.
+        let factory: Arc<dyn UserScriptFactory> = fixture.factory.clone();
+        let dynamic: Arc<dyn DynamicCommandBridge> = fixture.dynamic.clone();
+        let fixture = Fixture {
+            service: Arc::new(
+                CommandService::new(Arc::clone(&fixture.host), factory, dynamic)
+                    .with_usage(Arc::clone(&store)),
+            ),
+            ..fixture
+        };
+        fixture.service.reload().await.unwrap();
+        let first = CommandInfo {
+            name: "First".to_owned(),
+            module_path: "Commands.PythonCommands.samples.first".to_owned(),
+            class_name: "First".to_owned(),
+            tags: Vec::new(),
+        };
+        assert_eq!(
+            fixture
+                .service
+                .start(&CommandIdentity::from(&first))
+                .await
+                .unwrap(),
+            CommandActionResult::Applied
+        );
+        fixture.session.started.notified().await;
+        let key = crate::command_usage::UsageKey {
+            command_type: "Python".to_owned(),
+            name: "First".to_owned(),
+            file: "samples/first.py".to_owned(),
+        };
+        assert_eq!(store.count_of(&key), 1);
+        assert_eq!(
+            fixture.service.stop().await.unwrap(),
+            CommandActionResult::Applied
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

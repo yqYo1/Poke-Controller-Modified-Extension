@@ -401,11 +401,12 @@ impl ProductionRuntime {
             || Arc::new(StaticCommandBridge::new(Arc::clone(&host))) as Arc<_>,
             |client| client as Arc<_>,
         );
-        let commands = Arc::new(CommandService::new(
-            Arc::clone(&host),
-            factory,
-            Arc::clone(&bridge),
+        let usage = Arc::new(crate::command_usage::CommandUsageStore::load(
+            loaded.roots.config.join("profiles/command_usage.json"),
         ));
+        let commands = Arc::new(
+            CommandService::new(Arc::clone(&host), factory, Arc::clone(&bridge)).with_usage(usage),
+        );
         let profiles = Arc::new(ProfileService::new(
             Arc::clone(&host),
             Arc::clone(&commands),

@@ -19,10 +19,14 @@
 #![allow(dead_code)]
 
 use std::ffi::CString;
+use std::io;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use libftdi1_sys as ftdi;
 use thiserror::Error;
+
+use super::{PortSelector, SerialBackend, SerialIo};
 
 /// FTDI vendor ID shared by all FTDI chips.
 pub const FTDI_VENDOR_ID: u16 = 0x0403;
@@ -417,6 +421,177 @@ impl FtdiSelector {
     }
 }
 
+/// Format-independent released frame: every pin input, no button pressed
+/// (upstream `RELEASED_DATA` for the neutral state; identical across the
+/// three board revisions).
+pub const RELEASED_FRAME: [u8; 6] = [0x82, 0xFF, 0x00, 0x80, 0xFF, 0x00];
+
+/// Read poll timeout for the worker thread: short enough that queued writes
+/// wait at most this long behind an idle read (the upstream port is
+/// write-only and never faces this serialization).
+const READ_POLL_TIMEOUT_MS: i32 = 100;
+
+/// Commands handled by the dedicated FTDI worker thread.
+enum FtdiCommand {
+    /// Write raw bytes; the reply carries the accepted length.
+    Write {
+        data: Vec<u8>,
+        reply: tokio::sync::oneshot::Sender<Result<usize, FtdiError>>,
+    },
+    /// Read up to `max` available bytes; zero means nothing arrived.
+    Read {
+        max: usize,
+        reply: tokio::sync::oneshot::Sender<Result<Vec<u8>, FtdiError>>,
+    },
+    /// Release every pin and close; the reply carries the first failure.
+    Close {
+        reply: tokio::sync::oneshot::Sender<Result<(), FtdiError>>,
+    },
+}
+
+/// Async serial connection backed by one dedicated FTDI worker thread.
+///
+/// The libftdi context pointer is not `Send`, so it never leaves the worker
+/// thread; the async side talks to it exclusively through channels.
+pub struct FtdiIo {
+    sender: std::sync::mpsc::Sender<FtdiCommand>,
+}
+
+impl FtdiIo {
+    /// Run `command` on the worker and await its (flattened) reply.
+    async fn request<T, F>(&self, build: F) -> Result<T, FtdiError>
+    where
+        F: FnOnce(tokio::sync::oneshot::Sender<Result<T, FtdiError>>) -> FtdiCommand,
+    {
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        self.sender
+            .send(build(reply_tx))
+            .map_err(|_| FtdiError::NotOpen)?;
+        reply_rx.await.map_err(|_| FtdiError::NotOpen)?
+    }
+}
+
+#[async_trait::async_trait]
+impl SerialIo for FtdiIo {
+    async fn write(&self, bytes: &[u8]) -> io::Result<usize> {
+        self.request(|reply| FtdiCommand::Write {
+            data: bytes.to_vec(),
+            reply,
+        })
+        .await
+        .map_err(io::Error::other)
+    }
+
+    async fn read(&self, bytes: &mut [u8]) -> io::Result<usize> {
+        let data = self
+            .request(|reply| FtdiCommand::Read {
+                max: bytes.len(),
+                reply,
+            })
+            .await
+            .map_err(io::Error::other)?;
+        let length = data.len().min(bytes.len());
+        bytes[..length].copy_from_slice(&data[..length]);
+        Ok(length)
+    }
+
+    async fn close(&self) -> io::Result<()> {
+        self.request(|reply| FtdiCommand::Close { reply })
+            .await
+            .map_err(io::Error::other)
+    }
+}
+
+/// Opens FTDI MPSSE devices as async serial connections.
+pub struct FtdiBackend;
+
+#[async_trait::async_trait]
+impl SerialBackend for FtdiBackend {
+    async fn open(
+        &self,
+        selector: &PortSelector,
+        _baud_rate: u32,
+    ) -> io::Result<Arc<dyn SerialIo>> {
+        let ftdi_selector = FtdiSelector::parse(selector.as_str());
+        let (command_tx, command_rx) = std::sync::mpsc::channel();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        std::thread::Builder::new()
+            .name("pokecon-ftdi".to_owned())
+            .spawn(move || {
+                let port = FtdiPort::open(&ftdi_selector, &RELEASED_FRAME);
+                match port {
+                    Ok(mut port) => {
+                        if ready_tx.send(Ok(())).is_err() {
+                            return;
+                        }
+                        ftdi_worker(&mut port, &command_rx);
+                    }
+                    Err(error) => {
+                        let _ = ready_tx.send(Err(error));
+                    }
+                }
+            })
+            .map_err(io::Error::other)?;
+        match ready_rx.await {
+            Ok(Ok(())) => Ok(Arc::new(FtdiIo { sender: command_tx })),
+            Ok(Err(error)) => Err(io::Error::other(error)),
+            Err(_) => Err(io::Error::other("FTDI worker thread exited during setup")),
+        }
+    }
+}
+
+/// Serve commands until the connection closes or the sender disappears.
+fn ftdi_worker(port: &mut FtdiPort, commands: &std::sync::mpsc::Receiver<FtdiCommand>) {
+    // The read poll timeout keeps queued writes bounded; the write timeout
+    // stays at the upstream value.
+    // SAFETY: the port is owned by this thread; the context is live.
+    #[allow(unsafe_code)]
+    unsafe {
+        (*port.context).usb_read_timeout = READ_POLL_TIMEOUT_MS;
+    }
+    while let Ok(command) = commands.recv() {
+        match command {
+            FtdiCommand::Write { data, reply } => {
+                let _ = reply.send(port.write(&data));
+            }
+            FtdiCommand::Read { max, reply } => {
+                let mut buffer = vec![0u8; max.max(1)];
+                let result = read_once(port, &mut buffer);
+                let _ = reply.send(result);
+            }
+            FtdiCommand::Close { reply } => {
+                let failures = port.close(&RELEASED_FRAME);
+                let _ = reply.send(match failures.into_iter().next() {
+                    Some(error) => Err(error),
+                    None => Ok(()),
+                });
+                return;
+            }
+        }
+    }
+    // Sender dropped without an explicit close: release and close anyway.
+    let _ = port.close(&RELEASED_FRAME);
+}
+
+/// One read attempt through libftdi, honoring the context timeout.
+#[allow(unsafe_code)]
+fn read_once(port: &mut FtdiPort, buffer: &mut [u8]) -> Result<Vec<u8>, FtdiError> {
+    let Ok(length) = i32::try_from(buffer.len()) else {
+        return Ok(Vec::new());
+    };
+    // SAFETY: the port owns a live context; the buffer pointer and length
+    // are consistent.
+    let read = unsafe { ftdi::ftdi_read_data(port.context, buffer.as_mut_ptr(), length) };
+    if read < 0 {
+        return Err(FtdiError::Driver {
+            operation: "read data from",
+            code: read,
+        });
+    }
+    let length = usize::try_from(read).unwrap_or(0);
+    Ok(buffer[..length].to_vec())
+}
+
 /// Turn a negative libftdi return code into a typed error.
 fn check_ftdi(code: i32, operation: &'static str) -> Result<(), FtdiError> {
     if code < 0 {
@@ -524,6 +699,11 @@ mod tests {
             error.to_string(),
             "failed to reset the FTDI device (libftdi error -5)"
         );
+    }
+
+    #[test]
+    fn released_frame_matches_the_neutral_encoding() {
+        assert_eq!(RELEASED_FRAME, [0x82, 0xFF, 0x00, 0x80, 0xFF, 0x00]);
     }
 
     #[test]

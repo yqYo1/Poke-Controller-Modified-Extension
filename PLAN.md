@@ -887,7 +887,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [ ] **タグ編集**: タグの追加/削除、一括rename／delete（AST＋digestガード、書込競合は警告）、タグ欄入力への自動チェック。
 - [x] **右クリックメニュー**: パス表示・コピー（実ファイルopenはTauri限定、Webはパス操作に限定）。実装: `ce8647b`（コマンド行のoncontextmenu→固定位置メニュー（パス表示＋Copy path（navigator.clipboard）＋Close）、Escape／背景クリックで閉じる、a11y 0 warnings、テスト1本、web-check 118）。実ファイルopenはTauri限定のため未実装（Webはパス・コピー操作に限定）。
 - [ ] **Pause情報**: 停止位置（呼び出し順・ファイルリンク）と変数の表示。
-- [ ] **Mcu実行中のPause禁止**: Pause受付のコマンド種別ゲート（サーバ側拒否を含む）。
+- [x] **Mcu実行中のPause禁止**: Pause受付のコマンド種別ゲート（サーバ側拒否を含む）。実装: `ba90580959d85ed82274f26d8603f4248fc57dea`（`CommandServiceError::McuPauseUnsupported`＋`pause()`のコマンド種別ゲート（session操作前に拒否・status不変）、RESTは409 Conflict＋CommandStateConflictへマッピング、サービステスト1本（Mcu実行中pause→拒否・Running維持）、SPEC INTEGRATION §6.2.2へ追記）。検証: command_service 17・lib・全pytest・clippy・ci-fast・rust-ci-core・flake。CI: `ba90580959d85ed82274f26d8603f4248fc57dea` required 4/4 success（Normal 2・Package 2 — プローブflake／cold p95はrerun収束）。
 - [ ] **シリアル送信モニター**: `[時刻][形式名] 値`の送信ログ（Serialタブ、受信表示との分離）。
 - [ ] **依存module再読み込み**: 同フォルダ依存moduleのreload（ワーカー内`sys.modules`スコープ設計）。
 - [ ] **スクリプトひな形作成**: 名前・作者・格納場所・Bridge使用・画像保存先の入力でテンプレ生成（README／License雛形、既存は上書きしない）。

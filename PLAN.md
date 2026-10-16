@@ -891,7 +891,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [ ] **シリアル送信モニター**: `[時刻][形式名] 値`の送信ログ（Serialタブ、受信表示との分離）。
 - [ ] **依存module再読み込み**: 同フォルダ依存moduleのreload（ワーカー内`sys.modules`スコープ設計）。
 - [ ] **スクリプトひな形作成**: 名前・作者・格納場所・Bridge使用・画像保存先の入力でテンプレ生成（README／License雛形、既存は上書きしない）。
-- [ ] **使用頻度**: 実行回数の記録（プロファイル共通store）と使用頻度ソート。（記録ストア実装済み: `5c35866`＋`0294d44` — `command_usage.rs`（上流`command_usage`準拠: (種別,クラス名,コマンドルート相対file)キー・`<Config>/profiles/command_usage.json`・原子書込・不正行スキップ・数値文字列許容）、`CommandService::with_usage`＋start時記録（best-effort）、production配線、テスト5本（ストア4＋サービス1）、SPEC §10.2。usageソート（usage_asc／usage_desc）とAPI公開（カウントのUI伝達）は次段。）
+- [ ] **使用頻度**: 実行回数の記録（プロファイル共通store）と使用頻度ソート。（記録ストア実装済み: `5c35866`＋`0294d44` — `command_usage.rs`（上流`command_usage`準拠: (種別,クラス名,コマンドルート相対file)キー・`<Config>/profiles/command_usage.json`・原子書込・不正行スキップ・数値文字列許容）、`CommandService::with_usage`＋start時記録（best-effort）、production配線、テスト5本（ストア4＋サービス1）、SPEC §10.2。usageソート（usage_asc／usage_desc）とAPI公開も実装: `55820fd`（`CommandInfo.usage_count`（内部型＋API型、serde default）・リロード時のストア充填・OpenAPI/TS再生成・usage_desc/usage_ascソート（同数は名前順）・ソートセレクタ2 option・webテスト120）。）
 - [x] **検索**: 上流の名前部分一致に相当する機能は現行fuzzy検索で充足（維持、差分は仕様へ記録）。確認: FRONTEND §591に「フロントエンド側の責務（fuse.js部分一致スコアリング、セパレーター除外、空文字で元一覧復元、バックエンド再要求なし）」として記録済み — 上流の名前部分一致はfuzzy検索が上位互換で充足。
 - [ ] **Record→スクリプト生成**: 入力記録→press／hold／wait生成（CSV→`PythonCommands/Record/`）。`InputRecorder`相当。
 - [ ] **press判定タイミング**: press実行中はボタンを離してから再開、画像認識は判定前に一時停止する挙動へ。

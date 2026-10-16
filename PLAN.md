@@ -883,7 +883,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [ ] **開始/停止予約**（2026-10-12利用者承認: フェーズ6に含めて実装）: 時刻指定の開始（実行リストも可）、時刻または「開始から◯分後」の停止。60秒超の遅延時は開始しない・他コマンド実行中は開始しない・対象終了で停止予約を取り消す。予約はメモリ保持（保存しない）でスリープ警告を表示。上流`services/run_schedule.py`準拠。
 - [ ] **スリープ復帰時停止（＋連続送信失敗での停止）**（2026-10-12利用者承認: フェーズ6に含めて実装）: 1秒監視で20秒超の空白（スリープ・休止、時計ジャンプ含む）を検知したら実行中コマンドを理由付きで停止し、再接続案内を表示する。連続5回の送信失敗でも停止（成功でリセット）。閾値・案内文は上流準拠。
 - [ ] **実行履歴**（2026-10-12利用者承認）: 直近10件（設定へ保存・再起動後も保持、同一コマンドは先頭へ移動）、CommandsのHistoryサブタブ（Command／Last Run、並び切替、行クリック実行、選択削除・全削除・Shortcut割当）。
-- [ ] **一覧の並び替え**: 名前／更新日時／使用頻度でのソートUI。（名前ソート実装済み: `a2658f4` — `commandSort`（default／name_asc／name_desc、上流`COMMAND_SORTS`準拠のラベル）、ソート時はseparator除外（検索ビューと同一規則）、CommandsTabのソートセレクタ、テスト2本（昇降順・separatorラベル消滅）、web-check 119。mtimeソートはファイルmtimeのバックエンド公開後、usageソートは使用頻度カウントのUI伝達後に追加。）
+- [x] **一覧の並び替え**: 名前／更新日時／使用頻度でのソートUI。実装: `a2658f4`（名前ソート: `commandSort`・separator除外・テスト2本）＋`55820fd`（usageソート: `usage_desc`／`usage_asc`、同数は名前順）＋`9754a9a`（mtimeソート: `modified_at`（unix millis、protocol／内部型／API型＋discover_commandsでファイルmtime計算）・`mtime_desc`／`mtime_asc`）。全7順序（default／name±／mtime±／usage±、上流`COMMAND_SORTS`準拠のラベル）、CommandsTabのソートセレクタ、webテスト121。CI: `9754a9a` required 4/4 success。
 - [ ] **タグ編集**: タグの追加/削除、一括rename／delete（AST＋digestガード、書込競合は警告）、タグ欄入力への自動チェック。
 - [x] **右クリックメニュー**: パス表示・コピー（実ファイルopenはTauri限定、Webはパス操作に限定）。実装: `ce8647b`（コマンド行のoncontextmenu→固定位置メニュー（パス表示＋Copy path（navigator.clipboard）＋Close）、Escape／背景クリックで閉じる、a11y 0 warnings、テスト1本、web-check 118）。実ファイルopenはTauri限定のため未実装（Webはパス・コピー操作に限定）。
 - [ ] **Pause情報**: 停止位置（呼び出し順・ファイルリンク）と変数の表示。

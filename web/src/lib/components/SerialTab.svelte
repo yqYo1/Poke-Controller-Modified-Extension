@@ -22,6 +22,8 @@
   let busy = $state<'connect' | 'disconnect' | 'ports' | 'settings' | null>(null);
   let error = $state<string | null>(null);
   let monitor: HTMLDivElement | undefined;
+  let sendAutoScroll = $state(true);
+  let sendLog: HTMLDivElement | undefined;
   let ports = $state<readonly SerialPort[]>([]);
   let portInput = $state('');
   let synchronizedPort = $state<string | null>(null);
@@ -68,9 +70,18 @@
     });
   });
 
+  $effect(() => {
+    if (!sendAutoScroll || sendLog === undefined || view.serialSend.length === 0) return;
+    const element = sendLog;
+    queueMicrotask(() => {
+      element.scrollTop = element.scrollHeight;
+    });
+  });
+
   onMount(() => {
     try {
       autoScroll = localStorage.getItem('pokecon.serial.auto-scroll') !== 'false';
+      sendAutoScroll = localStorage.getItem('pokecon.serial.send-auto-scroll') !== 'false';
     } catch {
       // Client-only monitor preference is optional.
     }
@@ -80,6 +91,7 @@
   $effect(() => {
     try {
       localStorage.setItem('pokecon.serial.auto-scroll', String(autoScroll));
+      localStorage.setItem('pokecon.serial.send-auto-scroll', String(sendAutoScroll));
     } catch {
       // Private browsing modes may make storage unavailable.
     }
@@ -225,6 +237,25 @@
       {:else}
         {#each view.serial as line (line.id)}
           <div><span class="mr-2 select-none text-subtext0">{String(line.byteLength)} B</span>{line.text}</div>
+        {/each}
+      {/if}
+    </div>
+  </section>
+
+  <section class="overflow-hidden rounded-lg border border-text/10 bg-crust/25" aria-label="Serial send log">
+    <div class="flex items-center justify-between border-b border-text/10 px-3 py-2">
+      <h3 class="text-xs font-semibold tracking-[0.14em] text-subtext1 uppercase">Send log</h3>
+      <div class="flex gap-1">
+        <button type="button" class={`rounded-md px-2 py-1 text-[11px] ${sendAutoScroll ? 'bg-blue/15 text-blue' : 'bg-text/5 text-subtext1'}`} aria-pressed={sendAutoScroll} onclick={() => (sendAutoScroll = !sendAutoScroll)}>Auto</button>
+        <button type="button" class="rounded-md bg-text/5 px-2 py-1 text-[11px] text-subtext1" onclick={() => runtime.clearSerialSend()}>Clear</button>
+      </div>
+    </div>
+    <div bind:this={sendLog} class="h-64 overflow-auto p-3 font-mono text-xs leading-5 text-subtext1" aria-live="polite">
+      {#if view.serialSend.length === 0}
+        <p class="text-subtext0">No sent data</p>
+      {:else}
+        {#each view.serialSend as line, index (index)}
+          <div>{line}</div>
         {/each}
       {/if}
     </div>

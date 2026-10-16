@@ -265,6 +265,34 @@ describe('ApplicationRuntime', () => {
     expect(view.serial.at(-2)?.text).toBe('');
     expect(view.serial.at(-1)?.text).toBe('€');
   });
+
+  it('appends drained serial send batches to the send log', () => {
+    const fake = fakeBundle();
+    const runtime = new ApplicationRuntime(fake.bundle);
+    let view!: RuntimeView;
+    runtime.subscribe((next) => {
+      view = next;
+    });
+    runtime.start();
+
+    fake.emitMessage('websocket', {
+      data: { data: '[12:00:00.000][Default] ab cd\n' },
+      type: 'serial.send'
+    });
+    fake.emitMessage('websocket', {
+      data: { data: '[12:00:00.100][NX] ef\n[12:00:00.101][NX] 00\n' },
+      type: 'serial.send'
+    });
+
+    expect(view.serialSend).toEqual([
+      '[12:00:00.000][Default] ab cd',
+      '[12:00:00.100][NX] ef',
+      '[12:00:00.101][NX] 00'
+    ]);
+
+    runtime.clearSerialSend();
+    expect(view.serialSend).toEqual([]);
+  });
   it('surfaces conflict recovery and runtime apply failures from settings writes', async () => {
     const fake = fakeBundle();
     const runtime = new ApplicationRuntime(fake.bundle);

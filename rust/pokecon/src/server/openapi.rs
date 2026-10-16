@@ -23,10 +23,10 @@ use crate::server::api::{
     ScriptPointerBindings, ScriptPointerButton, ScriptPointerPhase, ScriptPopupImage,
     ScriptTkButton, ScriptTkLabel, ScriptTkScale, ScriptTkWidget, ScriptTkWindow, ScriptUiAction,
     ScriptUiActionResult, ScriptUiSnapshot, SerialControlRequest, SerialData, SerialEncoding,
-    SerialPort, ServerMessage, SessionDescription, SettingsChange, SettingsPatchRequest,
-    SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, SettingsWriteValues,
-    StateChangeCause, StatePatch, StateSnapshot, StickName, StickPosition, Success, TouchPoint,
-    UiStateChange, UpdateCheckResult,
+    SerialPort, SerialSend, ServerMessage, SessionDescription, SettingsChange,
+    SettingsPatchRequest, SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot,
+    SettingsWriteValues, StateChangeCause, StatePatch, StateSnapshot, StickName, StickPosition,
+    Success, TouchPoint, UiStateChange, UpdateCheckResult,
 };
 
 #[derive(OpenApi)]
@@ -108,6 +108,7 @@ use crate::server::api::{
         ScriptUiSnapshot,
         SerialControlRequest,
         SerialData,
+        SerialSend,
         SerialEncoding,
         SerialPort,
         ServerMessage,

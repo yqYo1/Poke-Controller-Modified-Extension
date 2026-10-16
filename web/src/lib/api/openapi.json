@@ -2713,6 +2713,28 @@
         },
         "additionalProperties": false
       },
+      "MessageData_SerialSend": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "One drained batch of the Serial tab's send log (upstream serial monitor\nlines joined in order).",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
       "MessageData_SessionDescription": {
         "type": "object",
         "required": [
@@ -4166,6 +4188,19 @@
           "ftdi"
         ]
       },
+      "SerialSend": {
+        "type": "object",
+        "description": "One drained batch of the Serial tab's send log (upstream serial monitor\nlines joined in order).",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "ServerMessage": {
         "oneOf": [
           {
@@ -4205,6 +4240,28 @@
                     "type": "string",
                     "enum": [
                       "serial.data"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_SerialSend"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "serial.send"
                     ]
                   }
                 },

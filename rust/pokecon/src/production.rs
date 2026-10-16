@@ -19,7 +19,7 @@ use crate::device::{
     DiscordTransport, NotificationService, ReqwestDiscordTransport, UnavailableDiscordTransport,
     WindowsNativeNotificationTransport,
 };
-use crate::server::api::{SerialData, SerialEncoding, StateChangeCause};
+use crate::server::api::{SerialData, SerialEncoding, SerialSend, StateChangeCause};
 use crate::server::backend::RestBackend;
 use crate::server::realtime::RealtimeTransportConfig;
 use crate::server::realtime_connection::RealtimeConnectionConfig;
@@ -427,7 +427,12 @@ impl ProductionRuntime {
             &camera,
             &serial,
         ));
-        cleanup.tasks.push(spawn_serial_events(&serial, broker));
+        cleanup
+            .tasks
+            .push(spawn_serial_events(&serial, broker.clone()));
+        cleanup
+            .tasks
+            .push(spawn_serial_send_events(&serial, broker));
         cleanup.tasks.push(spawn_runtime_reconciler(
             Arc::clone(&backend),
             host.subscribe_runtime_changes(),
@@ -862,6 +867,26 @@ fn spawn_serial_events(
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
             }
+        }
+    })
+}
+
+/// Polls the send monitor every 50 ms (upstream `OUTPUT_FLUSH_INTERVAL_MS`)
+/// and publishes each drained batch to the Serial tab's send log.
+fn spawn_serial_send_events(
+    serial: &SerialManager,
+    broker: crate::server::websocket::WebSocketBroker,
+) -> JoinHandle<()> {
+    let monitor = serial.send_monitor();
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_millis(50));
+        loop {
+            ticker.tick().await;
+            let drained = monitor.drain();
+            if drained.is_empty() {
+                continue;
+            }
+            broker.publish_serial_send(SerialSend { data: drained });
         }
     })
 }

@@ -25,7 +25,7 @@ use tokio_util::sync::CancellationToken;
 use crate::server::api::{
     ApiError, ApiErrorCode, ClientMessage, ErrorEnvelope, IceCandidate, InputApplied,
     InputGeneration, LogData, MessageData, Nonce, RevisionedStateChange, ScriptUiSnapshot,
-    SerialData, ServerMessage, SessionDescription, StateChangeCause,
+    SerialData, SerialSend, ServerMessage, SessionDescription, StateChangeCause,
 };
 use crate::server::backend::{ApiFailure, ApiResult};
 use crate::server::realtime_connection::{
@@ -274,6 +274,7 @@ pub enum WebSocketBuildError {
 #[derive(Clone, Debug)]
 enum BroadcastEvent {
     SerialData(SerialData),
+    SerialSend(SerialSend),
     Log(LogData),
 }
 
@@ -288,6 +289,10 @@ pub struct WebSocketBroker {
 impl WebSocketBroker {
     pub fn publish_serial(&self, data: SerialData) -> usize {
         self.publish(BroadcastEvent::SerialData(data))
+    }
+
+    pub fn publish_serial_send(&self, data: SerialSend) -> usize {
+        self.publish(BroadcastEvent::SerialSend(data))
     }
 
     pub fn publish_log(&self, data: LogData) -> usize {
@@ -1119,6 +1124,11 @@ async fn forward_broadcasts(
         match event {
             Ok(event) => {
                 let message = match event.as_ref() {
+                    BroadcastEvent::SerialSend(data) => {
+                        Some(ServerMessage::SerialSend(MessageData {
+                            data: data.clone(),
+                        }))
+                    }
                     BroadcastEvent::SerialData(data) => {
                         Some(ServerMessage::SerialData(MessageData {
                             data: data.clone(),
@@ -2009,6 +2019,18 @@ mod tests {
             panic!("first message must assign an input generation");
         };
         data.generation
+    }
+
+    #[test]
+    fn serial_send_messages_serialize_with_the_upstream_tag() {
+        let message = ServerMessage::SerialSend(MessageData {
+            data: SerialSend {
+                data: "[12:00:00.000][Default] ab cd\n".to_owned(),
+            },
+        });
+        let encoded = serde_json::to_value(&message).expect("encode");
+        assert_eq!(encoded["type"], "serial.send");
+        assert_eq!(encoded["data"]["data"], "[12:00:00.000][Default] ab cd\n");
     }
 
     #[test]

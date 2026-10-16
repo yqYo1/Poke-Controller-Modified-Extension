@@ -22,6 +22,7 @@ type TouchPoint = components['schemas']['TouchPoint'];
 
 const MAX_OUTPUT_LINES = 2_000;
 const MAX_SERIAL_LINES = 1_000;
+const MAX_SERIAL_SEND_LINES = 10_000;
 
 export interface OutputLine {
   readonly id: number;
@@ -47,6 +48,7 @@ export interface RuntimeView {
   readonly output2: readonly OutputLine[];
   readonly realtime: RealtimeView;
   readonly serial: readonly SerialLine[];
+  readonly serialSend: readonly string[];
   readonly settings: SettingsSnapshot | null;
   readonly scriptUi: ScriptUiSnapshot;
   readonly state: StateSnapshot | null;
@@ -212,6 +214,7 @@ export class ApplicationRuntime {
     output2: [],
     realtime: idleRealtimeView,
     serial: [],
+    serialSend: [],
     settings: null,
     scriptUi: idleScriptUi,
     state: null
@@ -317,6 +320,10 @@ export class ApplicationRuntime {
     this.updateView({ serial: [] });
   }
 
+  clearSerialSend(): void {
+    this.updateView({ serialSend: [] });
+  }
+
   reconnectWebSocket(): void {
     this.bundle.realtime.reconnectNow();
   }
@@ -374,6 +381,15 @@ export class ApplicationRuntime {
       this.appendOutput(route, message.data);
     } else if (message.type === 'script.ui') {
       this.updateView({ scriptUi: message.data });
+    } else if (message.type === 'serial.send') {
+      const lines = message.data.data.split('\n').filter((line) => line.length > 0);
+      const appended = [...this.view.serialSend, ...lines];
+      this.updateView({
+        serialSend:
+          appended.length > MAX_SERIAL_SEND_LINES
+            ? appended.slice(appended.length - MAX_SERIAL_SEND_LINES)
+            : appended
+      });
     } else if (message.type === 'serial.data') {
       try {
         const serial: SerialLine = {

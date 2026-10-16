@@ -551,6 +551,14 @@ impl<'de> Deserialize<'de> for SerialControlRequest {
     }
 }
 
+/// One drained batch of the Serial tab's send log (upstream serial monitor
+/// lines joined in order).
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SerialSend {
+    pub data: String,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ImageFormat {
@@ -1413,6 +1421,8 @@ pub enum ServerMessage {
     UiStateChanged(Box<RevisionedStateChange>),
     #[serde(rename = "serial.data")]
     SerialData(MessageData<SerialData>),
+    #[serde(rename = "serial.send")]
+    SerialSend(MessageData<SerialSend>),
     #[serde(rename = "log")]
     Log(MessageData<LogData>),
     #[serde(rename = "script.ui")]

@@ -188,6 +188,25 @@ describe('SerialTab', () => {
     });
   });
 
+  it('renders the send log and clears it through the runtime', async () => {
+    const { runtime, view } = runtimeView();
+    const actions = serialActions();
+    render(SerialTab, {
+      actions,
+      autoLoad: false,
+      runtime,
+      view: { ...view, serialSend: ['[12:00:00.000][Default] ab cd'] }
+    });
+
+    expect(screen.getByText('[12:00:00.000][Default] ab cd')).toBeTruthy();
+    const clears = screen.getAllByRole('button', { name: 'Clear' });
+    const sendClear = clears.at(-1);
+    expect(sendClear).toBeDefined();
+    const clearSend = vi.spyOn(runtime, 'clearSerialSend');
+    if (sendClear !== undefined) await fireEvent.click(sendClear);
+    expect(clearSend).toHaveBeenCalledTimes(1);
+  });
+
   it('hides the DS FT formats without a detected FTDI port', async () => {
     const { runtime, view } = runtimeView();
     const actions = serialActions();

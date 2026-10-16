@@ -634,6 +634,15 @@ export interface components {
                 byte_length: number;
             };
         };
+        MessageData_SerialSend: {
+            /**
+             * @description One drained batch of the Serial tab's send log (upstream serial monitor
+             *     lines joined in order).
+             */
+            data: {
+                data: string;
+            };
+        };
         MessageData_SessionDescription: {
             data: {
                 sdp: string;
@@ -967,6 +976,13 @@ export interface components {
          */
         SerialPortTransport: "uart" | "ftdi";
         /**
+         * @description One drained batch of the Serial tab's send log (upstream serial monitor
+         *     lines joined in order).
+         */
+        SerialSend: {
+            data: string;
+        };
+        /**
          * @description Server-to-client WebSocket union. Every JSON variant is closed and only
          *     state changes carry a revision.
          */
@@ -976,6 +992,9 @@ export interface components {
         }) | (components["schemas"]["MessageData_SerialData"] & {
             /** @enum {string} */
             type: "serial.data";
+        }) | (components["schemas"]["MessageData_SerialSend"] & {
+            /** @enum {string} */
+            type: "serial.send";
         }) | (components["schemas"]["MessageData_LogData"] & {
             /** @enum {string} */
             type: "log";

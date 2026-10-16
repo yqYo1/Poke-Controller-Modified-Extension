@@ -5,6 +5,7 @@ mod codec;
 #[cfg(target_os = "linux")]
 mod ftdi;
 mod manager;
+mod monitor;
 mod native;
 mod selector;
 mod virtual_port;
@@ -13,6 +14,7 @@ pub use codec::{ControllerCodec, ControllerFormat, encode_nx_frame};
 #[cfg(target_os = "linux")]
 pub use ftdi::{FtdiBackend, enumerate_mpsse_devices};
 pub use manager::{SerialConfig, SerialError, SerialManager};
+pub use monitor::SerialMonitor;
 pub use native::NativeSerialBackend;
 pub use selector::{PortSelector, enumerate_native_ports};
 pub use virtual_port::{VirtualOpenPlan, VirtualSerialBackend, VirtualSerialEndpoint};

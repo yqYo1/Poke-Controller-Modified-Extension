@@ -9,7 +9,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::device::controller::ControllerState;
 
-use super::{ControllerCodec, ControllerFormat, PortSelector, SerialBackend, SerialIo};
+use super::{
+    ControllerCodec, ControllerFormat, PortSelector, SerialBackend, SerialIo, SerialMonitor,
+};
 
 /// Validated connection settings applied as one runtime transaction.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -96,6 +98,7 @@ struct ManagerInner {
     reconnecting: AtomicBool,
     next_connection_id: AtomicU64,
     receive_events: broadcast::Sender<Vec<u8>>,
+    send_monitor: Arc<SerialMonitor>,
     connection_events: watch::Sender<bool>,
     reconnect_policy: ReconnectPolicy,
 }
@@ -153,6 +156,7 @@ impl SerialManager {
         reconnect_policy: ReconnectPolicy,
     ) -> Self {
         let (receive_events, _) = broadcast::channel(64);
+        let send_monitor = Arc::new(SerialMonitor::default());
         let (connection_events, _) = watch::channel(false);
         Self {
             inner: Arc::new(ManagerInner {
@@ -172,6 +176,7 @@ impl SerialManager {
                 reconnecting: AtomicBool::new(false),
                 next_connection_id: AtomicU64::new(1),
                 receive_events,
+                send_monitor,
                 connection_events,
                 reconnect_policy,
             }),
@@ -447,6 +452,8 @@ impl SerialManager {
             self.handle_io_failure(io, connection_id).await;
             return Err(SerialError::WriteFailed);
         }
+        let format = self.data_format().await;
+        record_send(&self.inner.send_monitor, format, &frame);
         let mut state = self.inner.state.lock().await;
         state.codec.commit(controller);
         state.last_frame = Some(frame);
@@ -485,6 +492,8 @@ impl SerialManager {
             self.handle_io_failure(io, connection_id).await;
             return Err(SerialError::WriteFailed);
         }
+        let format = self.data_format().await;
+        record_raw_send(&self.inner.send_monitor, format, frame);
         Ok(())
     }
 
@@ -600,7 +609,13 @@ impl SerialManager {
         self.inner.connection_events.subscribe()
     }
 
+    /// Returns the shared send monitor that records every successful write
+    /// for the Serial tab's send log.
     #[must_use]
+    pub fn send_monitor(&self) -> Arc<SerialMonitor> {
+        Arc::clone(&self.inner.send_monitor)
+    }
+
     pub async fn current_config(&self) -> Option<SerialConfig> {
         self.inner.state.lock().await.config.clone()
     }
@@ -693,6 +708,23 @@ impl SerialManager {
             .lock()
             .expect("serial write epoch mutex poisoned") = CancellationToken::new();
     }
+}
+
+/// Records one successful state send in the send monitor. Text formats print
+/// the payload as text (upstream `format_value` for strings); binary formats
+/// print space-separated hexadecimal (upstream `format_value` for bytes).
+fn record_send(monitor: &SerialMonitor, format: ControllerFormat, frame: &[u8]) {
+    if format.supports_text() {
+        monitor.add_text(format.display_name(), &String::from_utf8_lossy(frame));
+    } else {
+        monitor.add_bytes(format.display_name(), frame);
+    }
+}
+
+/// Records one successful raw write: raw payloads always print as
+/// space-separated hexadecimal (the upstream raw path passes bytes).
+fn record_raw_send(monitor: &SerialMonitor, format: ControllerFormat, frame: &[u8]) {
+    monitor.add_bytes(format.display_name(), frame);
 }
 
 async fn write_all(io: &Arc<dyn SerialIo>, mut bytes: &[u8]) -> io::Result<()> {
@@ -906,6 +938,33 @@ mod tests {
         changed.buttons.set(Button::B, true);
         manager.send_controller_state(changed).await.unwrap();
         assert!(endpoint.written().await.len() > after_second);
+    }
+
+    #[tokio::test]
+    async fn sends_are_recorded_in_the_send_monitor() {
+        let backend = VirtualSerialBackend::default();
+        let endpoint = VirtualSerialEndpoint::new();
+        backend
+            .push_plan(VirtualOpenPlan::Success(endpoint.clone()))
+            .await;
+        let manager = SerialManager::new(Arc::new(backend.clone()));
+        manager
+            .apply_config(SerialConfig::new("virtual", 9600, ControllerFormat::Default).unwrap())
+            .await
+            .unwrap();
+
+        let mut state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::A, true);
+        manager.send_controller_state(state).await.unwrap();
+        manager.send_raw(&[0xAB, 0xCD]).await.unwrap();
+
+        let drained = manager.send_monitor().drain();
+        assert!(
+            drained.contains("[Default] 0x0013 8 80 80 80 80"),
+            "{drained}"
+        );
+        assert!(drained.contains("[Default] ab cd"), "{drained}");
+        assert_eq!(manager.send_monitor().drain(), "");
     }
 
     #[tokio::test]

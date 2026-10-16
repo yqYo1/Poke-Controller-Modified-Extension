@@ -1418,6 +1418,12 @@
             "format": "int64",
             "description": "Recorded run count from the profile-independent usage store (0 when\nnever recorded).",
             "minimum": 0
+          },
+          "modified_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Command file modification time in milliseconds since the Unix epoch\n(0 when unknown).",
+            "minimum": 0
           }
         },
         "additionalProperties": false

@@ -1333,6 +1333,7 @@ mod tests {
             class_name: name.to_owned(),
             tags: tags.iter().map(|tag| (*tag).to_owned()).collect(),
             usage_count: 0,
+            modified_at: 0,
         }
     }
 
@@ -1533,6 +1534,7 @@ raise RuntimeError("reload sentinel")
             class_name: "Empty".to_owned(),
             tags: Vec::new(),
             usage_count: 0,
+            modified_at: 0,
         };
         assert!(engine.sort_commands(vec![empty]).await.unwrap().is_empty());
         let example = CommandInfo {
@@ -1541,6 +1543,7 @@ raise RuntimeError("reload sentinel")
             class_name: "Example".to_owned(),
             tags: Vec::new(),
             usage_count: 0,
+            modified_at: 0,
         };
         assert_eq!(
             engine.sort_commands(vec![example.clone()]).await.unwrap(),

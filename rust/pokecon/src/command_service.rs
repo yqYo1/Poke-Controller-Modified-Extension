@@ -1733,6 +1733,7 @@ fn reconcile_discovery(
                     class_name: discovered.command.class_name.clone(),
                     tags,
                     usage_count: 0,
+                    modified_at: 0,
                 },
                 relative_path: discovered.relative_path.clone(),
                 kind: discovered.kind,
@@ -2091,10 +2092,12 @@ mod tests {
                         class_name: "First".to_owned(),
                         tags: vec!["@Samples".to_owned()],
                         usage_count: 0,
+                        modified_at: 0,
                     },
                     relative_path: "samples/first.py".into(),
                     manual_tags: vec!["Rank".to_owned()],
                     kind: ScriptCommandKind::Python,
+                    modified_at: 0,
                 },
                 ScriptDiscoveredCommand {
                     command: CommandInfo {
@@ -2103,10 +2106,12 @@ mod tests {
                         class_name: "Mcu".to_owned(),
                         tags: Vec::new(),
                         usage_count: 0,
+                        modified_at: 0,
                     },
                     relative_path: "mcu.py".into(),
                     manual_tags: vec!["Device".to_owned()],
                     kind: ScriptCommandKind::Mcu,
+                    modified_at: 0,
                 },
             ],
         }
@@ -2204,6 +2209,7 @@ mod tests {
             class_name: "First".to_owned(),
             tags: Vec::new(),
             usage_count: 0,
+            modified_at: 0,
         };
         assert_eq!(
             fixture
@@ -2236,6 +2242,7 @@ mod tests {
             class_name: "Mcu".to_owned(),
             tags: Vec::new(),
             usage_count: 0,
+            modified_at: 0,
         };
         assert_eq!(
             fixture

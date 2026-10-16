@@ -354,6 +354,12 @@ export interface components {
              *     never recorded).
              */
             usage_count?: number;
+            /**
+             * Format: int64
+             * @description Command file modification time in milliseconds since the Unix epoch
+             *     (0 when unknown).
+             */
+            modified_at?: number;
         };
         CommandStartFields: {
             command: components["schemas"]["CommandIdentity"];

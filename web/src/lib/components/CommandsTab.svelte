@@ -45,7 +45,14 @@
   // List ordering, mirroring the upstream Command-column sorts. Name sorts
   // are frontend derivations over the immutable display list; the sorted view
   // drops separators, like the search view.
-  type CommandSort = 'default' | 'name_asc' | 'name_desc' | 'usage_desc' | 'usage_asc';
+  type CommandSort =
+    | 'default'
+    | 'name_asc'
+    | 'name_desc'
+    | 'mtime_asc'
+    | 'mtime_desc'
+    | 'usage_desc'
+    | 'usage_asc';
   let commandSort = $state<CommandSort>('default');
 
   const backendState = $derived(view.state);
@@ -87,6 +94,16 @@
           const byUsage =
             direction * ((left.command.usage_count ?? 0) - (right.command.usage_count ?? 0));
           if (byUsage !== 0) return byUsage;
+          return left.command.name
+            .toLowerCase()
+            .localeCompare(right.command.name.toLowerCase());
+        });
+      }
+      if (commandSort === 'mtime_asc' || commandSort === 'mtime_desc') {
+        const direction = commandSort === 'mtime_desc' ? -1 : 1;
+        return [...commands].sort((left, right) => {
+          const byTime = direction * ((left.command.modified_at ?? 0) - (right.command.modified_at ?? 0));
+          if (byTime !== 0) return byTime;
           return left.command.name
             .toLowerCase()
             .localeCompare(right.command.name.toLowerCase());
@@ -401,6 +418,8 @@
             <option value="default">Default order</option>
             <option value="name_asc">Name (A-Z)</option>
             <option value="name_desc">Name (Z-A)</option>
+            <option value="mtime_desc">Updated (newest first)</option>
+            <option value="mtime_asc">Updated (oldest first)</option>
             <option value="usage_desc">Usage (most first)</option>
             <option value="usage_asc">Usage (least first)</option>
           </select>

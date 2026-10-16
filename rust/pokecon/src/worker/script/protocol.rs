@@ -105,6 +105,10 @@ pub struct ScriptDiscoveredCommand {
     /// Class-level `TAGS` in declaration order.
     pub manual_tags: Vec<String>,
     pub kind: ScriptCommandKind,
+    /// Command file modification time in milliseconds since the Unix epoch
+    /// (0 when unknown); the UI derives the updated-time orderings from it.
+    #[serde(default)]
+    pub modified_at: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

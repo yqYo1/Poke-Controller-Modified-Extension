@@ -29,6 +29,10 @@ pub struct CommandInfo {
     /// fills it during reload.
     #[serde(default)]
     pub usage_count: u64,
+    /// Command file modification time in milliseconds since the Unix epoch
+    /// (0 when unknown).
+    #[serde(default)]
+    pub modified_at: u64,
 }
 
 /// Closed UI wire shape produced by command precomputation.
@@ -784,6 +788,7 @@ mod tests {
             class_name: class_name.to_owned(),
             tags: vec!["sample-fast".to_owned()],
             usage_count: 0,
+            modified_at: 0,
         }
     }
 

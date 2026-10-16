@@ -295,6 +295,7 @@ async fn verify_lua_runtime(
         class_name: "Example".to_owned(),
         tags: vec!["sample".to_owned()],
         usage_count: 0,
+        modified_at: 0,
     };
     assert_eq!(
         client
@@ -318,6 +319,7 @@ async fn verify_lua_runtime(
                     class_name: "Tagged".to_owned(),
                     tags: vec!["sample".to_owned()],
                     usage_count: 0,
+                    modified_at: 0,
                 },
             )
             .await

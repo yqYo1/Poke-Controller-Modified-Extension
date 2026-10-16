@@ -13,7 +13,8 @@ const first: CommandInfo = {
   module_path: 'Commands.PythonCommands.samples.first',
   name: 'First',
   tags: ['Rank'],
-  usage_count: 5
+  usage_count: 5,
+  modified_at: 100
 };
 const mcu: CommandInfo = {
   class_name: 'Mcu',
@@ -26,7 +27,8 @@ const alpha: CommandInfo = {
   module_path: 'Commands.PythonCommands.samples.alpha',
   name: 'Alpha',
   tags: ['Rank'],
-  usage_count: 9
+  usage_count: 9,
+  modified_at: 200
 };
 
 function runtimeView(): { runtime: ApplicationRuntime; view: RuntimeView } {
@@ -201,6 +203,32 @@ describe('CommandsTab', () => {
     });
 
     await fireEvent.change(sort, { target: { value: 'usage_asc' } });
+    await waitFor(() => {
+      const labels = screen
+        .getAllByRole('button')
+        .map((element) => element.getAttribute('aria-label'))
+        .filter((label): label is string => (label?.startsWith('Select ') ?? false));
+      expect(labels).toEqual(['Select First', 'Select Alpha']);
+    });
+  });
+
+  it('sorts commands by modification time', async () => {
+    const { runtime, view } = runtimeView();
+    const actions = commandActions();
+    render(CommandsTab, { actions, runtime, view });
+
+    await screen.findByRole('button', { name: 'Select First' });
+    const sort = screen.getByLabelText('Command order');
+    await fireEvent.change(sort, { target: { value: 'mtime_desc' } });
+    await waitFor(() => {
+      const labels = screen
+        .getAllByRole('button')
+        .map((element) => element.getAttribute('aria-label'))
+        .filter((label): label is string => (label?.startsWith('Select ') ?? false));
+      expect(labels).toEqual(['Select Alpha', 'Select First']);
+    });
+
+    await fireEvent.change(sort, { target: { value: 'mtime_asc' } });
     await waitFor(() => {
       const labels = screen
         .getAllByRole('button')

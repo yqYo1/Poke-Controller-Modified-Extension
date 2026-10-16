@@ -1810,6 +1810,7 @@ mod tests {
             class_name: "Initial".to_owned(),
             tags: vec!["@Samples".to_owned()],
             usage_count: 0,
+            modified_at: 0,
         };
         host.begin_script_load(vec![initial.clone()])
             .expect("initial load must begin");
@@ -1875,6 +1876,7 @@ mod tests {
             class_name: "Replacement".to_owned(),
             tags: Vec::new(),
             usage_count: 0,
+            modified_at: 0,
         };
         host.begin_script_load(vec![replacement.clone()])
             .expect("recomputation must stage");

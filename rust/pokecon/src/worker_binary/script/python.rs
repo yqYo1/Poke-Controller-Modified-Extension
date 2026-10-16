@@ -691,6 +691,13 @@ fn discover_commands(
     for source in sources {
         let content = std::fs::read_to_string(&source.path)
             .map_err(|error| PythonActorError::new("ScriptReadError", error.to_string()))?;
+        let modified_at = std::fs::metadata(&source.path)
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |elapsed| {
+                u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)
+            });
         let encoded = Python::attach(|py| -> PyResult<String> {
             py.import("_pokecon_script")?
                 .getattr("_discover_source")?
@@ -719,10 +726,12 @@ fn discover_commands(
                         class_name: discovered.class_name,
                         tags: source.automatic_tags.clone(),
                         usage_count: 0,
+                        modified_at,
                     },
                     relative_path: source.relative_path.clone(),
                     manual_tags: discovered.manual_tags,
                     kind: discovered.kind,
+                    modified_at,
                 }),
         );
     }

@@ -293,6 +293,10 @@ pub struct CommandInfo {
     /// never recorded).
     #[serde(default)]
     pub usage_count: u64,
+    /// Command file modification time in milliseconds since the Unix epoch
+    /// (0 when unknown).
+    #[serde(default)]
+    pub modified_at: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]

@@ -1412,6 +1412,12 @@
             "items": {
               "type": "string"
             }
+          },
+          "usage_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recorded run count from the profile-independent usage store (0 when\nnever recorded).",
+            "minimum": 0
           }
         },
         "additionalProperties": false

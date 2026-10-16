@@ -289,6 +289,10 @@ pub struct CommandInfo {
     pub module_path: String,
     pub class_name: String,
     pub tags: Vec<String>,
+    /// Recorded run count from the profile-independent usage store (0 when
+    /// never recorded).
+    #[serde(default)]
+    pub usage_count: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]

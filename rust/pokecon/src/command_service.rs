@@ -526,7 +526,21 @@ impl CommandService {
         let automatic = canonical_discovery(&discovered);
         let initial = automatic
             .iter()
-            .map(|command| command.command.clone())
+            .map(|command| {
+                let mut info = command.command.clone();
+                if let Some(usage) = &self.usage {
+                    let command_type = match command.kind {
+                        ScriptCommandKind::Python => "Python",
+                        ScriptCommandKind::Mcu => "Mcu",
+                    };
+                    info.usage_count = usage.count_of(&crate::command_usage::UsageKey {
+                        command_type: command_type.to_owned(),
+                        name: info.class_name.clone(),
+                        file: command.relative_path.to_string_lossy().replace('\\', "/"),
+                    });
+                }
+                info
+            })
             .collect::<Vec<_>>();
         self.host.begin_script_load(initial)?;
         let mut rollback = ScriptLoadRollback::new(&self.host);
@@ -1718,6 +1732,7 @@ fn reconcile_discovery(
                     module_path: discovered.command.module_path.clone(),
                     class_name: discovered.command.class_name.clone(),
                     tags,
+                    usage_count: 0,
                 },
                 relative_path: discovered.relative_path.clone(),
                 kind: discovered.kind,
@@ -2075,6 +2090,7 @@ mod tests {
                         module_path: "Commands.PythonCommands.samples.first".to_owned(),
                         class_name: "First".to_owned(),
                         tags: vec!["@Samples".to_owned()],
+                        usage_count: 0,
                     },
                     relative_path: "samples/first.py".into(),
                     manual_tags: vec!["Rank".to_owned()],
@@ -2086,6 +2102,7 @@ mod tests {
                         module_path: "Commands.PythonCommands.mcu".to_owned(),
                         class_name: "Mcu".to_owned(),
                         tags: Vec::new(),
+                        usage_count: 0,
                     },
                     relative_path: "mcu.py".into(),
                     manual_tags: vec!["Device".to_owned()],
@@ -2186,6 +2203,7 @@ mod tests {
             module_path: "Commands.PythonCommands.samples.first".to_owned(),
             class_name: "First".to_owned(),
             tags: Vec::new(),
+            usage_count: 0,
         };
         assert_eq!(
             fixture
@@ -2217,6 +2235,7 @@ mod tests {
             module_path: "Commands.PythonCommands.mcu".to_owned(),
             class_name: "Mcu".to_owned(),
             tags: Vec::new(),
+            usage_count: 0,
         };
         assert_eq!(
             fixture

@@ -348,6 +348,12 @@ export interface components {
             module_path: string;
             class_name: string;
             tags: string[];
+            /**
+             * Format: int64
+             * @description Recorded run count from the profile-independent usage store (0 when
+             *     never recorded).
+             */
+            usage_count?: number;
         };
         CommandStartFields: {
             command: components["schemas"]["CommandIdentity"];

@@ -718,6 +718,7 @@ fn discover_commands(
                         module_path: source.module_path.clone(),
                         class_name: discovered.class_name,
                         tags: source.automatic_tags.clone(),
+                        usage_count: 0,
                     },
                     relative_path: source.relative_path.clone(),
                     manual_tags: discovered.manual_tags,

@@ -1809,6 +1809,7 @@ mod tests {
             module_path: "Commands.PythonCommands.initial".to_owned(),
             class_name: "Initial".to_owned(),
             tags: vec!["@Samples".to_owned()],
+            usage_count: 0,
         };
         host.begin_script_load(vec![initial.clone()])
             .expect("initial load must begin");
@@ -1873,6 +1874,7 @@ mod tests {
             module_path: "Commands.PythonCommands.replacement".to_owned(),
             class_name: "Replacement".to_owned(),
             tags: Vec::new(),
+            usage_count: 0,
         };
         host.begin_script_load(vec![replacement.clone()])
             .expect("recomputation must stage");

@@ -25,6 +25,10 @@ pub struct CommandInfo {
     pub module_path: String,
     pub class_name: String,
     pub tags: Vec<String>,
+    /// Recorded run count from the usage store; zero until the service
+    /// fills it during reload.
+    #[serde(default)]
+    pub usage_count: u64,
 }
 
 /// Closed UI wire shape produced by command precomputation.
@@ -779,6 +783,7 @@ mod tests {
             module_path: module_path.to_owned(),
             class_name: class_name.to_owned(),
             tags: vec!["sample-fast".to_owned()],
+            usage_count: 0,
         }
     }
 

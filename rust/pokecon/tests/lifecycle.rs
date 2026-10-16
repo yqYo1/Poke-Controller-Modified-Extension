@@ -294,6 +294,7 @@ async fn verify_lua_runtime(
         module_path: "Commands.Example".to_owned(),
         class_name: "Example".to_owned(),
         tags: vec!["sample".to_owned()],
+        usage_count: 0,
     };
     assert_eq!(
         client
@@ -316,6 +317,7 @@ async fn verify_lua_runtime(
                     module_path: "Commands.Tagged".to_owned(),
                     class_name: "Tagged".to_owned(),
                     tags: vec!["sample".to_owned()],
+                    usage_count: 0,
                 },
             )
             .await

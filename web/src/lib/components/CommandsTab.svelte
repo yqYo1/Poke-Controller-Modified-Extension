@@ -45,7 +45,7 @@
   // List ordering, mirroring the upstream Command-column sorts. Name sorts
   // are frontend derivations over the immutable display list; the sorted view
   // drops separators, like the search view.
-  type CommandSort = 'default' | 'name_asc' | 'name_desc';
+  type CommandSort = 'default' | 'name_asc' | 'name_desc' | 'usage_desc' | 'usage_asc';
   let commandSort = $state<CommandSort>('default');
 
   const backendState = $derived(view.state);
@@ -81,6 +81,17 @@
         (item): item is Extract<CommandDisplayItem, { kind: 'command' }> =>
           item.kind === 'command'
       );
+      if (commandSort === 'usage_desc' || commandSort === 'usage_asc') {
+        const direction = commandSort === 'usage_desc' ? -1 : 1;
+        return [...commands].sort((left, right) => {
+          const byUsage =
+            direction * ((left.command.usage_count ?? 0) - (right.command.usage_count ?? 0));
+          if (byUsage !== 0) return byUsage;
+          return left.command.name
+            .toLowerCase()
+            .localeCompare(right.command.name.toLowerCase());
+        });
+      }
       const direction = commandSort === 'name_asc' ? 1 : -1;
       return [...commands].sort(
         (left, right) =>
@@ -390,6 +401,8 @@
             <option value="default">Default order</option>
             <option value="name_asc">Name (A-Z)</option>
             <option value="name_desc">Name (Z-A)</option>
+            <option value="usage_desc">Usage (most first)</option>
+            <option value="usage_asc">Usage (least first)</option>
           </select>
         </label>
         <label>

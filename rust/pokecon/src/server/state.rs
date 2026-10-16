@@ -574,6 +574,7 @@ mod tests {
             module_path: "sample".to_owned(),
             class_name: "Sample".to_owned(),
             tags: vec!["utility".to_owned()],
+            usage_count: 0,
         };
         let mut complete = StateTransaction::new(StateChangeCause::Commands);
         complete.state.command_candidates = Some(vec![command]);

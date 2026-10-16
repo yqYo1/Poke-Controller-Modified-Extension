@@ -52,3 +52,24 @@ nix run .#hooks-install
 nix run .#ci-watch --
 
 ```
+
+## Storage Hygiene
+
+The worktree Cargo target is the largest local consumer and grows without bound. Keep the shared `deps` cache for fast rebuilds; prune the regenerable and stale parts periodically (or whenever the disk tightens).
+
+```bash
+# Regenerable incremental state (~5 GB); rebuilds only recompile the final crates
+rm -rf .worktree/<branch>/target/nix-tasks/debug/incremental
+
+# Plain-cargo leftovers from before the nix-task convention (target/nix-tasks is canonical)
+rm -rf .worktree/<branch>/target/debug .worktree/<branch>/target/release
+
+# Store GC
+nh clean all
+```
+
+Rules:
+
+- The repository root's `target/` must stay absent; builds happen in worktrees only. A stale root target (for example from before the worktree split) is removable without ceremony.
+- Detached worktrees created for clean gates or probes must be removed after use (`git worktree remove --force` then `git worktree prune`); leftovers under `~/.hermes/cache/` are cleanup targets, never evidence.
+- Keep `target/nix-tasks/debug/deps` and `target/nix-tasks/release`: they carry the expensive dependency builds, and removing them costs tens of minutes on the next gate run.

@@ -20,12 +20,14 @@ use crate::device::{Button, ControllerState, Hat, StickPosition, TouchPoint};
 use crate::device::{NotificationChannel, NotificationOutcome, NotificationService};
 use crate::device::{SerialError, SerialManager, enumerate_native_ports};
 use crate::dynamic::{DynamicConfigControl, DynamicConfigLanguage};
+use crate::script_creator::ScriptSpec as CreatorSpec;
 use crate::server::api::{
     ApiErrorCode, CameraDevice, CameraSelector, ClientMessage, CommandControlRequest,
     DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
     GamepadButton, GamepadHat, GamepadInput, GenerateLauncherRequest, GenerateLauncherResult,
     ImageFormat, InputApplied, InputGeneration, LauncherDestination, NotificationTestRequest,
-    NotificationTestResult, OperationResult, ScriptUiAction, ScriptUiActionResult,
+    NotificationTestResult, OperationResult, ScriptCreatorPreview, ScriptCreatorResult,
+    ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult,
     SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange, SettingsPatchRequest,
     SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch,
     StateSnapshot, UpdateCheckResult,
@@ -89,6 +91,8 @@ fn watcher_init_file(settings: &ResolvedSettings) -> Option<&'static str> {
 
 /// All already-created services needed by the transport adapter.
 pub(crate) struct ApplicationBackendParts {
+    pub data_root: std::path::PathBuf,
+    pub config_root: std::path::PathBuf,
     pub hub: StateHub,
     pub settings: SettingsService,
     pub host: Arc<StartupDynamicHost>,
@@ -105,6 +109,8 @@ pub(crate) struct ApplicationBackendParts {
 
 /// Concrete backend shared by the REST and WebSocket transports.
 pub(crate) struct ApplicationBackend {
+    data_root: std::path::PathBuf,
+    config_root: std::path::PathBuf,
     hub: StateHub,
     settings: Mutex<SettingsService>,
     host: Arc<StartupDynamicHost>,
@@ -142,6 +148,8 @@ impl ApplicationBackend {
     pub(crate) fn new(parts: ApplicationBackendParts) -> Self {
         let arbiter = parts.host.controller_safety().arbiter();
         Self {
+            data_root: parts.data_root,
+            config_root: parts.config_root,
             hub: parts.hub,
             settings: Mutex::new(parts.settings),
             host: parts.host,
@@ -450,10 +458,117 @@ impl ApplicationBackend {
 // This implementation intentionally keeps the complete HTTP surface together
 // so endpoint-to-runtime mappings remain auditable against the specification.
 #[allow(clippy::too_many_lines)]
+fn to_creator_spec(spec: &ScriptCreatorSpec) -> CreatorSpec {
+    CreatorSpec {
+        name: spec.name.clone(),
+        file_name: spec.file_name.clone(),
+        folder: spec.folder.clone(),
+        use_bridge: spec.use_bridge,
+        template_folder: spec.template_folder.clone(),
+        template_location: spec.template_location.clone(),
+        author: spec.author.clone(),
+    }
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the REST surface mirrors the upstream control endpoints"
+)]
 #[async_trait]
 impl RestBackend for ApplicationBackend {
     fn state_hub(&self) -> &StateHub {
         &self.hub
+    }
+
+    async fn script_creator_snapshot(&self) -> ApiResult<ScriptCreatorSnapshot> {
+        let data_root = self.data_root.clone();
+        let config_root = self.config_root.clone();
+        tokio::task::spawn_blocking(move || ScriptCreatorSnapshot {
+            script_folders: crate::script_creator::script_folders(&data_root),
+            template_folders: crate::script_creator::template_folders(&data_root),
+            author: crate::script_creator::load_author(&config_root),
+            bridge_available: crate::script_creator::bridge_available(&data_root),
+        })
+        .await
+        .map_err(|_error| {
+            ApiFailure::new(
+                ApiFailureStatus::InternalServerError,
+                ApiErrorCode::InternalError,
+                "script creator snapshot failed",
+            )
+        })
+    }
+
+    async fn preview_script_creation(
+        &self,
+        spec: ScriptCreatorSpec,
+    ) -> ApiResult<ScriptCreatorPreview> {
+        let data_root = self.data_root.clone();
+        tokio::task::spawn_blocking(move || {
+            let spec = to_creator_spec(&spec);
+            let normalized = spec.normalized();
+            let error = crate::script_creator::check_spec(&normalized, &data_root);
+            ScriptCreatorPreview {
+                lines: crate::script_creator::preview_lines(&normalized, &data_root),
+                error,
+            }
+        })
+        .await
+        .map_err(|_error| {
+            ApiFailure::new(
+                ApiFailureStatus::InternalServerError,
+                ApiErrorCode::InternalError,
+                "script preview failed",
+            )
+        })
+    }
+
+    async fn create_script(&self, spec: ScriptCreatorSpec) -> ApiResult<ScriptCreatorResult> {
+        let data_root = self.data_root.clone();
+        let config_root = self.config_root.clone();
+        let app_version = env!("CARGO_PKG_VERSION").to_owned();
+        let year = chrono::Datelike::year(&chrono::Local::now());
+        tokio::task::spawn_blocking(move || {
+            let creator_spec = to_creator_spec(&spec);
+            let result =
+                crate::script_creator::create_script(&creator_spec, &data_root, &app_version, year)
+                    .map_err(|error| {
+                        ApiFailure::new(
+                            ApiFailureStatus::UnprocessableEntity,
+                            ApiErrorCode::InvalidRequest,
+                            error.0,
+                        )
+                    })?;
+            crate::script_creator::save_author(&config_root, &spec.author);
+            Ok(ScriptCreatorResult {
+                path: result.path.to_string_lossy().into_owned(),
+                command_name: result.command_name,
+                class_name: result.class_name,
+                created_folders: result
+                    .created_folders
+                    .iter()
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .collect(),
+                created_files: result
+                    .created_files
+                    .iter()
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .collect(),
+                skipped_files: result
+                    .skipped_files
+                    .iter()
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .collect(),
+            })
+        })
+        .await
+        .map_err(|_error| {
+            ApiFailure::new(
+                ApiFailureStatus::InternalServerError,
+                ApiErrorCode::InternalError,
+                "script creation failed",
+            )
+        })?
     }
 
     async fn patch_settings(&self, request: SettingsPatchRequest) -> ApiResult<SettingsSnapshot> {

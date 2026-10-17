@@ -159,6 +159,43 @@ pub fn screenshot() {}
 pub fn test_notification() {}
 
 #[utoipa::path(
+    get,
+    path = "/api/script-creator",
+    tag = "script_creator",
+    responses(
+        (status = 200, description = "Script creator folder choices and remembered author", body = Success<crate::server::api::ScriptCreatorSnapshot>),
+        (status = 500, description = "Script creator snapshot failure", body = ErrorEnvelope)
+    )
+)]
+pub fn script_creator_snapshot() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/script-creator/preview",
+    tag = "script_creator",
+    request_body(content = crate::server::api::ScriptCreatorSpec, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Preview of the files the creation would write", body = Success<crate::server::api::ScriptCreatorPreview>),
+        (status = 422, description = "Script fields are invalid", body = ErrorEnvelope),
+        (status = 500, description = "Script preview failure", body = ErrorEnvelope)
+    )
+)]
+pub fn preview_script_creation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/script-creator/create",
+    tag = "script_creator",
+    request_body(content = crate::server::api::ScriptCreatorSpec, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Script template created", body = Success<crate::server::api::ScriptCreatorResult>),
+        (status = 422, description = "Script fields are invalid or the file already exists", body = ErrorEnvelope),
+        (status = 500, description = "Script creation failure", body = ErrorEnvelope)
+    )
+)]
+pub fn create_script() {}
+
+#[utoipa::path(
     post,
     path = "/api/script-ui/action",
     tag = "script_ui",

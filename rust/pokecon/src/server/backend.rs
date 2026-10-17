@@ -8,7 +8,8 @@ use crate::server::api::{
     ApiError, ApiErrorCode, CameraDevice, CommandControlRequest, DynamicConfigControlRequest,
     DynamicConfigResult, GenerateLauncherRequest, GenerateLauncherResult, ImageFormat,
     NotificationTestRequest, NotificationTestResult, OperationResult, SavedScreenshot,
-    ScreenshotRequest, ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort,
+    ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot,
+    ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort,
     SettingsPatchRequest, SettingsSnapshot, UpdateCheckResult,
 };
 use crate::server::state::StateHub;
@@ -174,6 +175,36 @@ pub trait RestBackend: Send + Sync + 'static {
         &self,
         request: NotificationTestRequest,
     ) -> ApiResult<NotificationTestResult>;
+
+    /// Folder choices and remembered author for the script-creator dialog.
+    async fn script_creator_snapshot(&self) -> ApiResult<ScriptCreatorSnapshot> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "script creator is not available",
+        ))
+    }
+
+    /// Preview lines for the entered fields (upstream `preview_lines`).
+    async fn preview_script_creation(
+        &self,
+        _spec: ScriptCreatorSpec,
+    ) -> ApiResult<ScriptCreatorPreview> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "script creator is not available",
+        ))
+    }
+
+    /// Creates the script template (upstream `create_script`).
+    async fn create_script(&self, _spec: ScriptCreatorSpec) -> ApiResult<ScriptCreatorResult> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "script creator is not available",
+        ))
+    }
 
     async fn script_ui_action(&self, _request: ScriptUiAction) -> ApiResult<ScriptUiActionResult> {
         Err(ApiFailure::new(

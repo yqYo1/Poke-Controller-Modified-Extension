@@ -17,7 +17,8 @@ use crate::server::api::{
     InputSnapshot, KeyboardInput, LauncherDestination, LogData, LogLevel, LogOperation, LogTarget,
     MessageData, MouseButton, MouseButtons, MouseInput, MouseStickInput, Nonce, NormalizedRegion,
     NotificationTestRequest, NotificationTestResult, OperationResult, PressState,
-    RevisionedStateChange, SavedScreenshot, ScreenshotRequest, ScriptDialog,
+    RevisionedStateChange, SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview,
+    ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptDialog,
     ScriptDialogAbortReason, ScriptDialogValue, ScriptDialogWidget, ScriptDialogWidgetKind,
     ScriptOverlayRectangle, ScriptOverlayShape, ScriptOverlaySnapshot, ScriptOverlayText,
     ScriptPointerBindings, ScriptPointerButton, ScriptPointerPhase, ScriptPopupImage,
@@ -104,6 +105,10 @@ use crate::server::api::{
         ScriptTkWidget,
         ScriptTkWindow,
         ScriptUiAction,
+        ScriptCreatorPreview,
+        ScriptCreatorResult,
+        ScriptCreatorSnapshot,
+        ScriptCreatorSpec,
         ScriptUiActionResult,
         ScriptUiSnapshot,
         SerialControlRequest,
@@ -143,6 +148,9 @@ use crate::server::api::{
         crate::server::paths::retry_camera,
         crate::server::paths::screenshot,
         crate::server::paths::test_notification,
+        crate::server::paths::script_creator_snapshot,
+        crate::server::paths::preview_script_creation,
+        crate::server::paths::create_script,
         crate::server::paths::script_ui_action,
         crate::server::paths::control_dynamic_config,
         crate::server::paths::generate_launcher,
@@ -155,6 +163,7 @@ use crate::server::api::{
         (name = "commands", description = "User command lifecycle"),
         (name = "devices", description = "Camera and serial devices")
         ,(name = "script_ui", description = "Profile-scoped script dialogs and compatibility UI")
+        ,(name = "script_creator", description = "Script template creation from the web interface")
     )
 )]
 struct ApiDocument;

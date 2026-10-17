@@ -31,6 +31,10 @@
     ],
     [
       "application_backend",
+      "script_creator"
+    ],
+    [
+      "application_backend",
       "script_host"
     ],
     [

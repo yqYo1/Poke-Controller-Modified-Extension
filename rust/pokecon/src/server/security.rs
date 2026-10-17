@@ -184,9 +184,11 @@ fn validate_preflight(path: &str, headers: &HeaderMap) -> Result<(), SecurityErr
         .map_err(|_error| SecurityError::Forbidden)?;
     let advertised = match path {
         "/api/settings" => requested_method == Method::GET || requested_method == Method::PATCH,
-        "/api/devices/cameras" | "/api/devices/serial-ports" | "/api/state" | "/ws" => {
-            requested_method == Method::GET
-        }
+        "/api/devices/cameras"
+        | "/api/devices/serial-ports"
+        | "/api/script-creator"
+        | "/api/state"
+        | "/ws" => requested_method == Method::GET,
         "/api/camera/retry"
         | "/api/camera/screenshot"
         | "/api/commands/control"
@@ -194,6 +196,8 @@ fn validate_preflight(path: &str, headers: &HeaderMap) -> Result<(), SecurityErr
         | "/api/dynamic-config/control"
         | "/api/notifications/test"
         | "/api/profiles/generate-launcher"
+        | "/api/script-creator/create"
+        | "/api/script-creator/preview"
         | "/api/script-ui/action"
         | "/api/serial/control"
         | "/api/update/check" => requested_method == Method::POST,

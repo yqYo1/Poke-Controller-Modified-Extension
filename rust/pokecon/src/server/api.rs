@@ -1102,6 +1102,55 @@ pub enum ScriptUiAction {
     },
 }
 
+/// Snapshot for the script-creator dialog: folder choices and remembered
+/// author (upstream `script_folders` / `template_folders` / `load_author`).
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptCreatorSnapshot {
+    pub script_folders: Vec<String>,
+    pub template_folders: Vec<String>,
+    pub author: String,
+    pub bridge_available: bool,
+}
+
+/// Entered script fields (upstream `ScriptSpec`).
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptCreatorSpec {
+    pub name: String,
+    pub file_name: String,
+    #[serde(default)]
+    pub folder: String,
+    #[serde(default)]
+    pub use_bridge: bool,
+    #[serde(default)]
+    pub template_folder: String,
+    #[serde(default)]
+    pub template_location: String,
+    #[serde(default)]
+    pub author: String,
+}
+
+/// Preview of what the creation would produce (upstream `preview_lines`).
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptCreatorPreview {
+    pub lines: Vec<String>,
+    pub error: String,
+}
+
+/// Result of a successful creation (upstream `ScriptResult`).
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptCreatorResult {
+    pub path: String,
+    pub command_name: String,
+    pub class_name: String,
+    pub created_folders: Vec<String>,
+    pub created_files: Vec<String>,
+    pub skipped_files: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ScriptUiActionResult {

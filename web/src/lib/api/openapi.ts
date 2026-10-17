@@ -148,6 +148,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/script-creator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["script_creator_snapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/script-creator/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["create_script"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/script-creator/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["preview_script_creation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/script-ui/action": {
         parameters: {
             query?: never;
@@ -739,6 +787,40 @@ export interface components {
             /** @enum {string} */
             destination: "download";
         });
+        /** @description Preview of what the creation would produce (upstream `preview_lines`). */
+        ScriptCreatorPreview: {
+            lines: string[];
+            error: string;
+        };
+        /** @description Result of a successful creation (upstream `ScriptResult`). */
+        ScriptCreatorResult: {
+            path: string;
+            command_name: string;
+            class_name: string;
+            created_folders: string[];
+            created_files: string[];
+            skipped_files: string[];
+        };
+        /**
+         * @description Snapshot for the script-creator dialog: folder choices and remembered
+         *     author (upstream `script_folders` / `template_folders` / `load_author`).
+         */
+        ScriptCreatorSnapshot: {
+            script_folders: string[];
+            template_folders: string[];
+            author: string;
+            bridge_available: boolean;
+        };
+        /** @description Entered script fields (upstream `ScriptSpec`). */
+        ScriptCreatorSpec: {
+            name: string;
+            file_name: string;
+            folder?: string;
+            use_bridge?: boolean;
+            template_folder?: string;
+            template_location?: string;
+            author?: string;
+        };
         ScriptDialog: {
             id: components["schemas"]["DecimalString"];
             title: string;
@@ -1550,6 +1632,39 @@ export interface components {
             };
         };
         /** @description Common successful JSON envelope. */
+        Success_ScriptCreatorPreview: {
+            /** @description Preview of what the creation would produce (upstream `preview_lines`). */
+            data: {
+                lines: string[];
+                error: string;
+            };
+        };
+        /** @description Common successful JSON envelope. */
+        Success_ScriptCreatorResult: {
+            /** @description Result of a successful creation (upstream `ScriptResult`). */
+            data: {
+                path: string;
+                command_name: string;
+                class_name: string;
+                created_folders: string[];
+                created_files: string[];
+                skipped_files: string[];
+            };
+        };
+        /** @description Common successful JSON envelope. */
+        Success_ScriptCreatorSnapshot: {
+            /**
+             * @description Snapshot for the script-creator dialog: folder choices and remembered
+             *     author (upstream `script_folders` / `template_folders` / `load_author`).
+             */
+            data: {
+                script_folders: string[];
+                template_folders: string[];
+                author: string;
+                bridge_available: boolean;
+            };
+        };
+        /** @description Common successful JSON envelope. */
         Success_ScriptUiActionResult: {
             data: {
                 accepted: boolean;
@@ -2057,6 +2172,119 @@ export interface operations {
                 };
             };
             /** @description Profile or launcher write failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    script_creator_snapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Script creator folder choices and remembered author */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_ScriptCreatorSnapshot"];
+                };
+            };
+            /** @description Script creator snapshot failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    create_script: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScriptCreatorSpec"];
+            };
+        };
+        responses: {
+            /** @description Script template created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_ScriptCreatorResult"];
+                };
+            };
+            /** @description Script fields are invalid or the file already exists */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Script creation failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    preview_script_creation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScriptCreatorSpec"];
+            };
+        };
+        responses: {
+            /** @description Preview of the files the creation would write */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_ScriptCreatorPreview"];
+                };
+            };
+            /** @description Script fields are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Script preview failure */
             500: {
                 headers: {
                     [name: string]: unknown;

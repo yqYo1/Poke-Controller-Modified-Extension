@@ -526,6 +526,136 @@
         }
       }
     },
+    "/api/script-creator": {
+      "get": {
+        "tags": [
+          "script_creator"
+        ],
+        "operationId": "script_creator_snapshot",
+        "responses": {
+          "200": {
+            "description": "Script creator folder choices and remembered author",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_ScriptCreatorSnapshot"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Script creator snapshot failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/script-creator/create": {
+      "post": {
+        "tags": [
+          "script_creator"
+        ],
+        "operationId": "create_script",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScriptCreatorSpec"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Script template created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_ScriptCreatorResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Script fields are invalid or the file already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Script creation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/script-creator/preview": {
+      "post": {
+        "tags": [
+          "script_creator"
+        ],
+        "operationId": "preview_script_creation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScriptCreatorSpec"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Preview of the files the creation would write",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_ScriptCreatorPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Script fields are invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Script preview failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/script-ui/action": {
       "post": {
         "tags": [
@@ -3180,6 +3310,131 @@
         "discriminator": {
           "propertyName": "destination"
         }
+      },
+      "ScriptCreatorPreview": {
+        "type": "object",
+        "description": "Preview of what the creation would produce (upstream `preview_lines`).",
+        "required": [
+          "lines",
+          "error"
+        ],
+        "properties": {
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptCreatorResult": {
+        "type": "object",
+        "description": "Result of a successful creation (upstream `ScriptResult`).",
+        "required": [
+          "path",
+          "command_name",
+          "class_name",
+          "created_folders",
+          "created_files",
+          "skipped_files"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "command_name": {
+            "type": "string"
+          },
+          "class_name": {
+            "type": "string"
+          },
+          "created_folders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skipped_files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptCreatorSnapshot": {
+        "type": "object",
+        "description": "Snapshot for the script-creator dialog: folder choices and remembered\nauthor (upstream `script_folders` / `template_folders` / `load_author`).",
+        "required": [
+          "script_folders",
+          "template_folders",
+          "author",
+          "bridge_available"
+        ],
+        "properties": {
+          "script_folders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "template_folders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "author": {
+            "type": "string"
+          },
+          "bridge_available": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptCreatorSpec": {
+        "type": "object",
+        "description": "Entered script fields (upstream `ScriptSpec`).",
+        "required": [
+          "name",
+          "file_name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "use_bridge": {
+            "type": "boolean"
+          },
+          "template_folder": {
+            "type": "string"
+          },
+          "template_location": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       },
       "ScriptDialog": {
         "type": "object",
@@ -6411,6 +6666,129 @@
         },
         "additionalProperties": false
       },
+      "Success_ScriptCreatorPreview": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Preview of what the creation would produce (upstream `preview_lines`).",
+            "required": [
+              "lines",
+              "error"
+            ],
+            "properties": {
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_ScriptCreatorResult": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Result of a successful creation (upstream `ScriptResult`).",
+            "required": [
+              "path",
+              "command_name",
+              "class_name",
+              "created_folders",
+              "created_files",
+              "skipped_files"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "command_name": {
+                "type": "string"
+              },
+              "class_name": {
+                "type": "string"
+              },
+              "created_folders": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "created_files": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "skipped_files": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_ScriptCreatorSnapshot": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Snapshot for the script-creator dialog: folder choices and remembered\nauthor (upstream `script_folders` / `template_folders` / `load_author`).",
+            "required": [
+              "script_folders",
+              "template_folders",
+              "author",
+              "bridge_available"
+            ],
+            "properties": {
+              "script_folders": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "template_folders": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "author": {
+                "type": "string"
+              },
+              "bridge_available": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
       "Success_ScriptUiActionResult": {
         "type": "object",
         "description": "Common successful JSON envelope.",
@@ -6831,6 +7209,10 @@
     {
       "name": "script_ui",
       "description": "Profile-scoped script dialogs and compatibility UI"
+    },
+    {
+      "name": "script_creator",
+      "description": "Script template creation from the web interface"
     }
   ]
 }

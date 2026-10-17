@@ -359,6 +359,8 @@ impl ProductionRuntime {
 
         let script_ui = ScriptUiCoordinator::new();
         let backend = Arc::new(ApplicationBackend::new(ApplicationBackendParts {
+            data_root: loaded.roots.data.clone(),
+            config_root: loaded.roots.config.clone(),
             hub,
             settings,
             host: Arc::clone(&host),

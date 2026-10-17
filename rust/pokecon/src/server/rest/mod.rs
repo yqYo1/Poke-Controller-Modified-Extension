@@ -5,6 +5,7 @@ mod devices;
 mod dynamic_config;
 mod notifications;
 mod profiles;
+mod script_creator;
 mod script_ui;
 mod settings;
 mod state;
@@ -41,6 +42,7 @@ pub fn router(backend: Arc<dyn RestBackend>) -> Router {
         .merge(notifications::router())
         .merge(dynamic_config::router())
         .merge(profiles::router())
+        .merge(script_creator::router())
         .merge(script_ui::router())
         .merge(state::router())
         .merge(update::router())
@@ -205,7 +207,10 @@ async fn not_found() -> RestError {
 async fn method_not_allowed(uri: Uri) -> Response {
     let allow = match uri.path() {
         "/api/settings" => "GET, PATCH",
-        "/api/devices/cameras" | "/api/devices/serial-ports" | "/api/state" => "GET",
+        "/api/devices/cameras"
+        | "/api/devices/serial-ports"
+        | "/api/script-creator"
+        | "/api/state" => "GET",
         "/api/camera/retry"
         | "/api/camera/screenshot"
         | "/api/commands/control"
@@ -213,6 +218,8 @@ async fn method_not_allowed(uri: Uri) -> Response {
         | "/api/dynamic-config/control"
         | "/api/notifications/test"
         | "/api/profiles/generate-launcher"
+        | "/api/script-creator/create"
+        | "/api/script-creator/preview"
         | "/api/script-ui/action"
         | "/api/serial/control"
         | "/api/update/check" => "POST",
@@ -254,6 +261,7 @@ mod tests {
         DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
         GenerateLauncherRequest, GenerateLauncherResult, ImageFormat, NotificationTestRequest,
         NotificationTestResult, OperationResult, SavedScreenshot, ScreenshotRequest,
+        ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec,
         SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange,
         SettingsPatchRequest, SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot,
         StateChangeCause, StatePatch, StateSnapshot, UpdateCheckResult,
@@ -387,6 +395,36 @@ mod tests {
             Ok(OperationResult {
                 changed: false,
                 revision,
+            })
+        }
+
+        async fn script_creator_snapshot(&self) -> ApiResult<ScriptCreatorSnapshot> {
+            Ok(ScriptCreatorSnapshot {
+                script_folders: Vec::new(),
+                template_folders: Vec::new(),
+                author: String::new(),
+                bridge_available: false,
+            })
+        }
+
+        async fn preview_script_creation(
+            &self,
+            _spec: ScriptCreatorSpec,
+        ) -> ApiResult<ScriptCreatorPreview> {
+            Ok(ScriptCreatorPreview {
+                lines: Vec::new(),
+                error: String::new(),
+            })
+        }
+
+        async fn create_script(&self, _spec: ScriptCreatorSpec) -> ApiResult<ScriptCreatorResult> {
+            Ok(ScriptCreatorResult {
+                path: String::new(),
+                command_name: String::new(),
+                class_name: String::new(),
+                created_folders: Vec::new(),
+                created_files: Vec::new(),
+                skipped_files: Vec::new(),
             })
         }
 
@@ -526,7 +564,7 @@ mod tests {
     const STANDARD_METHODS: [&str; 9] = [
         "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT",
     ];
-    const REST_METHOD_MATRIX: [(&str, &[&str]); 14] = [
+    const REST_METHOD_MATRIX: [(&str, &[&str]); 17] = [
         ("/api/camera/retry", &["POST"]),
         ("/api/camera/screenshot", &["POST"]),
         ("/api/commands/control", &["POST"]),
@@ -536,6 +574,9 @@ mod tests {
         ("/api/dynamic-config/control", &["POST"]),
         ("/api/notifications/test", &["POST"]),
         ("/api/profiles/generate-launcher", &["POST"]),
+        ("/api/script-creator", &["GET"]),
+        ("/api/script-creator/create", &["POST"]),
+        ("/api/script-creator/preview", &["POST"]),
         ("/api/script-ui/action", &["POST"]),
         ("/api/serial/control", &["POST"]),
         ("/api/settings", &["GET", "PATCH"]),
@@ -622,8 +663,8 @@ mod tests {
             }
         }
 
-        assert_eq!(advertised_count, 15);
-        assert_eq!(rejected_count, 111);
+        assert_eq!(advertised_count, 18);
+        assert_eq!(rejected_count, 135);
     }
 
     #[tokio::test]

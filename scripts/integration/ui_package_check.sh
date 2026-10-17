@@ -4900,11 +4900,11 @@ jq -n \
       and .api_inventory.cors_preflight_policy.advertised_pair_count == 19
       and .api_inventory.cors_preflight_policy.known_path_wrong_method_count == 6
       and .api_inventory.cors_preflight_policy.unknown_path_count == 1
-      and .api_inventory.cors_preflight_policy.probe_count_per_mode == 23
+      and .api_inventory.cors_preflight_policy.probe_count_per_mode == 26
       and .api_inventory.cors_preflight_policy.mode_results_byte_identical == true
       and (.api_inventory.cors_preflight_policy.results_sha256
         | test("^[0-9a-f]{64}$"))
-      and (.api_inventory.cors_preflight_policy.results | length) == 23
+      and (.api_inventory.cors_preflight_policy.results | length) == 26
       and ([.api_inventory.cors_preflight_policy.results[]
         | select(.classification == "advertised_pair")] | length) == 19
       and ([.api_inventory.cors_preflight_policy.results[]

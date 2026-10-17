@@ -523,7 +523,8 @@ impl CommandService {
         let session = self.ensure_session().await?;
         let empty_placeholder = session.is_empty_placeholder();
         let discovered = session.discover().await?.commands;
-        let automatic = canonical_discovery(&discovered);
+        let mut automatic = canonical_discovery(&discovered);
+        automatic.extend(self.run_list_candidates());
         let initial = automatic
             .iter()
             .map(|command| {
@@ -1019,6 +1020,40 @@ impl CommandService {
     }
 
     /// Returns a typed snapshot of the current profile-switch lifecycle for UI/log.
+    /// Saved run lists appear in the command list as `name (実行リスト)`
+    /// with the `@実行リスト` tag (upstream `RunListLoader.load`).
+    fn run_list_candidates(&self) -> Vec<ScriptDiscoveredCommand> {
+        let settings = self.host.loaded_settings();
+        let Some(directory) = settings.profile_settings_path.parent() else {
+            return Vec::new();
+        };
+        let path = crate::run_list::lists_path(directory);
+        let (lists, skipped) = crate::run_list::load_lists(&path);
+        for reason in skipped {
+            tracing::warn!(reason, "a run list is skipped");
+        }
+        lists
+            .iter()
+            .map(|run_list| {
+                let display_name = run_list.display_name();
+                ScriptDiscoveredCommand {
+                    command: CommandInfo {
+                        name: display_name.clone(),
+                        module_path: String::new(),
+                        class_name: display_name,
+                        tags: vec![crate::run_list::LIST_TAG.to_owned()],
+                        usage_count: 0,
+                        modified_at: 0,
+                    },
+                    relative_path: path.clone(),
+                    manual_tags: Vec::new(),
+                    kind: crate::worker::script::protocol::ScriptCommandKind::Python,
+                    modified_at: 0,
+                }
+            })
+            .collect()
+    }
+
     #[allow(
         dead_code,
         reason = "profile switch status exposed for UI/log; exercised in tests"
@@ -2013,7 +2048,7 @@ mod tests {
     }
 
     struct Fixture {
-        _temporary: TempDir,
+        temporary: TempDir,
         host: Arc<StartupDynamicHost>,
         session: Arc<FakeSession>,
         factory: Arc<FakeFactory>,
@@ -2073,7 +2108,7 @@ mod tests {
         ));
         host.bind_command_service(&service);
         Fixture {
-            _temporary: temporary,
+            temporary,
             host,
             session,
             factory,
@@ -2159,6 +2194,44 @@ mod tests {
 
         fixture.service.reload().await.unwrap();
         assert_eq!(fixture.factory.spawns.load(Ordering::Acquire), 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn reload_includes_saved_run_lists_from_the_profile_directory() {
+        let fixture = fixture();
+        let profile_dir = fixture
+            .temporary
+            .path()
+            .join("config/pokecon/profiles/default");
+        let lists = vec![crate::run_list::RunList {
+            name: "テスト".to_owned(),
+            items: vec![crate::run_list::RunItem {
+                command_type: crate::run_list::PYTHON.to_owned(),
+                name: "first".to_owned(),
+                repeat: 1,
+                limit_minutes: None,
+            }],
+            interval_seconds: 1.0,
+            on_error: crate::run_list::ON_ERROR_STOP.to_owned(),
+            loops: 1,
+        }];
+        crate::run_list::save_lists(&lists, &crate::run_list::lists_path(&profile_dir)).unwrap();
+
+        let result = fixture.service.reload().await.unwrap();
+        assert_eq!(
+            result,
+            CommandReloadResult::Published {
+                generation: 2,
+                command_count: 3,
+            }
+        );
+        let state = fixture.host.state_snapshot().unwrap();
+        let candidates = state["command_candidates"].as_array().unwrap();
+        let list_entry = candidates
+            .iter()
+            .find(|entry| entry["name"] == "テスト (実行リスト)")
+            .expect("run list candidate must be present");
+        assert_eq!(list_entry["tags"], json!(["@実行リスト"]));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

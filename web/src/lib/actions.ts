@@ -12,6 +12,10 @@ export type NotificationTestResult = components['schemas']['NotificationTestResu
 export type OperationResult = components['schemas']['OperationResult'];
 export type SavedScreenshot = components['schemas']['SavedScreenshot'];
 export type ScreenshotRequest = components['schemas']['ScreenshotRequest'];
+export type ScriptCreatorPreview = components['schemas']['ScriptCreatorPreview'];
+export type ScriptCreatorResult = components['schemas']['ScriptCreatorResult'];
+export type ScriptCreatorSnapshot = components['schemas']['ScriptCreatorSnapshot'];
+export type ScriptCreatorSpec = components['schemas']['ScriptCreatorSpec'];
 export type ScriptUiAction = components['schemas']['ScriptUiAction'];
 export type ScriptUiActionResult = components['schemas']['ScriptUiActionResult'];
 export type SerialControlRequest = components['schemas']['SerialControlRequest'];
@@ -120,6 +124,24 @@ export class BackendActions {
     return unwrap(
       await this.client.POST('/api/notifications/test', { body: request }),
       'notification test failed'
+    );
+  }
+
+  async scriptCreatorSnapshot(): Promise<ScriptCreatorSnapshot> {
+    return unwrap(await this.client.GET('/api/script-creator'), 'script creator snapshot failed');
+  }
+
+  async previewScriptCreation(request: ScriptCreatorSpec): Promise<ScriptCreatorPreview> {
+    return unwrap(
+      await this.client.POST('/api/script-creator/preview', { body: request }),
+      'script preview failed'
+    );
+  }
+
+  async createScript(request: ScriptCreatorSpec): Promise<ScriptCreatorResult> {
+    return unwrap(
+      await this.client.POST('/api/script-creator/create', { body: request }),
+      'script creation failed'
     );
   }
 

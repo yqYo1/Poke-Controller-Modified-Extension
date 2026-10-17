@@ -64,7 +64,15 @@ function runtimeView(): { runtime: ApplicationRuntime; view: RuntimeView } {
 function commandActions() {
   return {
     controlCommand: vi.fn().mockResolvedValue({ changed: true, revision: '2' }),
-    reloadCommands: vi.fn().mockResolvedValue({ changed: true, revision: '2' })
+    createScript: vi.fn(),
+    previewScriptCreation: vi.fn(),
+    reloadCommands: vi.fn().mockResolvedValue({ changed: true, revision: '2' }),
+    scriptCreatorSnapshot: vi.fn().mockResolvedValue({
+      author: '',
+      bridge_available: false,
+      script_folders: [],
+      template_folders: []
+    })
   };
 }
 

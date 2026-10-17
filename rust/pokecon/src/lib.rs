@@ -34,6 +34,8 @@ mod openapi_generator;
 mod platform;
 mod production;
 mod profile_service;
+#[allow(dead_code, reason = "used by the run-list command integration")]
+mod run_list;
 mod runtime;
 #[allow(
     dead_code,

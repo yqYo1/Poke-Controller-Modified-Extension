@@ -2149,7 +2149,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "a6e82da417412f5507ab97a13deca227491e3a2475304d4fe290ff658bdc7544"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "d94c261c6cbf5ef9e02420462e3a230a22dcdf0b13ecee43e7a9a198ef976dc1"
+            "d4590e5ca3727853d6e0a482bb0db8bc136022ee24caead50818a1d0880a2654"
         ),
         "@rust/pokecon/src/main.rs": (
             "97133ad5fcf7ea3575f09eab2b6e9c43034d378a68ea92ba883d503f9ecb2574"
@@ -5298,6 +5298,8 @@ mod openapi_generator;
 mod platform;
 mod production;
 mod profile_service;
+#[allow(dead_code, reason = "used by the run-list command integration")]
+mod run_list;
 mod runtime;
 #[allow(
     dead_code,
@@ -5347,6 +5349,7 @@ pub use entrypoint::{MainError, run_cli};
         "platform",
         "production",
         "profile_service",
+        "run_list",
         "runtime",
         "script_creator",
         "script_host",

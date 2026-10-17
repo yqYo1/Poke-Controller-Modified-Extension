@@ -265,6 +265,73 @@ pub fn parse_number(text: &str, allow_empty: bool) -> Result<Option<f64>, &'stat
     Ok(Some(value))
 }
 
+/// One expanded execution step: the row and which repetition it is
+/// (upstream expands `item.repeat` into consecutive steps).
+#[derive(Clone, Debug, PartialEq)]
+pub struct RunStep {
+    pub item: RunItem,
+    pub count: u32,
+}
+
+/// Expands the rows into execution steps (upstream `steps`).
+#[must_use]
+pub fn expand_steps(run_list: &RunList) -> Vec<RunStep> {
+    let mut steps = Vec::new();
+    for item in &run_list.items {
+        for count in 1..=item.repeat {
+            steps.push(RunStep {
+                item: item.clone(),
+                count,
+            });
+        }
+    }
+    steps
+}
+
+/// Whether another whole-list pass should run (upstream loop condition).
+#[must_use]
+pub fn should_continue_loops(completed_loops: u32, loops: u32) -> bool {
+    loops == LOOP_FOREVER || completed_loops < loops
+}
+
+/// Whether a failed step aborts the list (upstream `on_error`).
+#[must_use]
+pub fn aborts_on_error(on_error: &str) -> bool {
+    on_error == ON_ERROR_STOP
+}
+
+/// The progress line for one step (upstream print format).
+#[must_use]
+pub fn step_line(steps: &[RunStep], index: usize) -> String {
+    let step = &steps[index - 1];
+    let repeat = if step.item.repeat > 1 {
+        format!("({}/{} 回目)", step.count, step.item.repeat)
+    } else {
+        String::new()
+    };
+    let limit = if step.item.limit_minutes.is_some() {
+        format!(" 制限時間 {}", describe_limit(step.item.limit_minutes))
+    } else {
+        String::new()
+    };
+    format!(
+        "[実行リスト] {index}/{}: {}{repeat}{limit}",
+        steps.len(),
+        step.item.name
+    )
+}
+
+/// The loop heading line (upstream prints it when `loops != 1`).
+#[must_use]
+pub fn loop_line(loop_index: u32, loops: u32) -> String {
+    let total = if loops == LOOP_FOREVER {
+        "Stop を押すまで".to_owned()
+    } else {
+        format!("{loops} 周")
+    };
+    format!("[実行リスト] {loop_index} 周目({total})")
+}
+
 /// Names of the run lists for duplicate checking.
 #[must_use]
 pub fn list_names(run_lists: &[RunList]) -> Vec<String> {
@@ -391,6 +458,42 @@ mod tests {
         assert_eq!(describe_limit(None), "");
         assert_eq!(describe_limit(Some(1.5)), "1.5 分");
         assert_eq!(describe_limit(Some(2.0)), "2 分");
+    }
+
+    #[test]
+    fn steps_expand_repeats_in_order() {
+        let mut list = sample_list();
+        list.items[0].repeat = 2;
+        let steps = expand_steps(&list);
+        assert_eq!(steps.len(), 3);
+        assert_eq!(steps[0].count, 1);
+        assert_eq!(steps[1].count, 2);
+        assert_eq!(steps[2].item.name, "second");
+        assert!(should_continue_loops(0, 1));
+        assert!(!should_continue_loops(1, 1));
+        assert!(should_continue_loops(99, LOOP_FOREVER));
+        assert!(aborts_on_error(ON_ERROR_STOP));
+        assert!(!aborts_on_error(ON_ERROR_NEXT));
+    }
+
+    #[test]
+    fn progress_lines_follow_the_upstream_format() {
+        let mut list = sample_list();
+        list.items[0].repeat = 2;
+        list.items[1].limit_minutes = Some(1.5);
+        let steps = expand_steps(&list);
+        let first = step_line(&steps, 1);
+        assert!(
+            first.starts_with("[実行リスト] 1/3: first(1/2 回目)"),
+            "{first}"
+        );
+        let third = step_line(&steps, 3);
+        assert!(third.contains("second 制限時間 1.5 分"), "{third}");
+        assert_eq!(loop_line(2, 3), "[実行リスト] 2 周目(3 周)");
+        assert_eq!(
+            loop_line(5, LOOP_FOREVER),
+            "[実行リスト] 5 周目(Stop を押すまで)"
+        );
     }
 
     #[test]

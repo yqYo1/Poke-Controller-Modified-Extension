@@ -679,7 +679,24 @@ impl CommandService {
             });
         }
         let service = Arc::clone(self);
+        let is_run_list = command.info.module_path.is_empty()
+            && crate::run_list::is_list_name("Python", &command.info.name);
         tokio::spawn(async move {
+            if is_run_list {
+                let display_name = command.info.name.clone();
+                let outcome = service
+                    .execute_run_list(Arc::clone(&session), epoch, &display_name)
+                    .await;
+                let result = match outcome {
+                    Ok(()) => Ok(ScriptExecutionResult {
+                        execution_id: 0,
+                        outcome: ScriptExecutionOutcome::Finished,
+                    }),
+                    Err(error) => Err(CommandBackendError::new("RunListFailed", error.to_string())),
+                };
+                service.finish_execution(epoch, result).await;
+                return;
+            }
             let result = session
                 .execute(ScriptExecuteRequest {
                     path: command.relative_path,
@@ -1020,6 +1037,132 @@ impl CommandService {
     }
 
     /// Returns a typed snapshot of the current profile-switch lifecycle for UI/log.
+    /// Runs a saved run list on the host side: each step starts the child
+    /// command through the worker session, waits for completion (or the row's
+    /// limit), applies the interval, and follows `on_error`/`loops`
+    /// (upstream `RunListCommand.do`).
+    async fn execute_run_list(
+        &self,
+        session: Arc<dyn UserScriptSession>,
+        epoch: u64,
+        display_name: &str,
+    ) -> Result<(), CommandServiceError> {
+        let settings = self.host.loaded_settings();
+        let Some(directory) = settings.profile_settings_path.parent() else {
+            return Err(CommandServiceError::CommandNotFound);
+        };
+        let (lists, _skipped) =
+            crate::run_list::load_lists(&crate::run_list::lists_path(directory));
+        let run_list = lists
+            .into_iter()
+            .find(|run_list| run_list.display_name() == display_name)
+            .ok_or(CommandServiceError::CommandNotFound)?;
+        let steps = crate::run_list::expand_steps(&run_list);
+        let mut loop_index = 0;
+        while crate::run_list::should_continue_loops(loop_index, run_list.loops) {
+            loop_index += 1;
+            if run_list.loops != 1 {
+                tracing::info!(line = %crate::run_list::loop_line(loop_index, run_list.loops), "run list");
+            }
+            for index in 1..=steps.len() {
+                if self.execution_epoch_changed(epoch).await {
+                    return Ok(());
+                }
+                tracing::info!(line = %crate::run_list::step_line(&steps, index), "run list");
+                let step = steps[index - 1].clone();
+                let ok = self
+                    .execute_run_list_step(&session, epoch, &step.item)
+                    .await;
+                if self.execution_epoch_changed(epoch).await {
+                    return Ok(());
+                }
+                if !ok && crate::run_list::aborts_on_error(&run_list.on_error) {
+                    tracing::info!("[実行リスト] エラーがあったので、ここで中止します。");
+                    return Ok(());
+                }
+                let last = index == steps.len()
+                    && run_list.loops != crate::run_list::LOOP_FOREVER
+                    && loop_index == run_list.loops;
+                if !last && run_list.interval_seconds > 0.0 {
+                    tokio::time::sleep(std::time::Duration::from_secs_f64(
+                        run_list.interval_seconds,
+                    ))
+                    .await;
+                }
+            }
+        }
+        tracing::info!("[実行リスト] すべて終わりました。");
+        Ok(())
+    }
+
+    async fn execution_epoch_changed(&self, epoch: u64) -> bool {
+        let inner = self.inner.lock().await;
+        inner.execution_epoch != epoch
+    }
+
+    /// Runs one row's command until completion or the row's limit.
+    ///
+    /// Returns whether it finished without an error (a limit stop or a
+    /// Stop press counts as success, upstream `_run_item`).
+    async fn execute_run_list_step(
+        &self,
+        session: &Arc<dyn UserScriptSession>,
+        epoch: u64,
+        item: &crate::run_list::RunItem,
+    ) -> bool {
+        if crate::run_list::is_list_name(&item.command_type, &item.name) {
+            tracing::warn!("[実行リスト] 実行リストの中の実行リストは、実行しません。");
+            return false;
+        }
+        let child = {
+            let inner = self.inner.lock().await;
+            inner
+                .commands
+                .iter()
+                .find(|command| command.info.name == item.name)
+                .cloned()
+        };
+        let Some(child) = child else {
+            tracing::warn!(name = %item.name, "[実行リスト] コマンドが見つかりません");
+            return false;
+        };
+        let request = ScriptExecuteRequest {
+            path: child.relative_path,
+            class_name: child.info.class_name,
+            tags: child.info.tags,
+        };
+        match item.limit_minutes {
+            Some(minutes) => {
+                let limit = std::time::Duration::from_secs_f64(minutes * 60.0);
+                match tokio::time::timeout(limit, session.execute(request)).await {
+                    Ok(Ok(_result)) => true,
+                    Ok(Err(error)) => {
+                        tracing::warn!(%error, name = %item.name, "run list step failed");
+                        false
+                    }
+                    Err(_elapsed) => {
+                        if let Err(error) = session.stop_command().await {
+                            tracing::warn!(%error, "run list limit stop failed");
+                        }
+                        tracing::info!(
+                            limit = %crate::run_list::describe_limit(item.limit_minutes),
+                            "[実行リスト] 制限時間になったので、止めました。"
+                        );
+                        let _ = epoch;
+                        true
+                    }
+                }
+            }
+            None => match session.execute(request).await {
+                Ok(_result) => true,
+                Err(error) => {
+                    tracing::warn!(%error, name = %item.name, "run list step failed");
+                    false
+                }
+            },
+        }
+    }
+
     /// Saved run lists appear in the command list as `name (実行リスト)`
     /// with the `@実行リスト` tag (upstream `RunListLoader.load`).
     fn run_list_candidates(&self) -> Vec<ScriptDiscoveredCommand> {

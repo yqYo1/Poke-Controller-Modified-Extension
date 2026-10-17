@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "envelope_kinds": [
+    "request",
+    "response",
+    "error",
+    "event",
+    "log"
+  ],
+  "closed_values": [
+    "nil",
+    "bool",
+    "int",
+    "uint",
+    "float",
+    "str",
+    "bin",
+    "array",
+    "map_str"
+  ],
+  "maximum_payload_bytes": 1048576,
+  "forbidden_wire_markers": [
+    "lua_value",
+    "native_handle",
+    "python_object",
+    "rust_arc",
+    "socket",
+    "token"
+  ],
+  "nonpublic_cases": [
+    "empty_op_string",
+    "nested_ext_in_map_value",
+    "non_string_map_key",
+    "top_level_fixext4_timestamp",
+    "trailing_second_object",
+    "unknown_envelope_field",
+    "unknown_error_payload_field"
+  ],
+  "note": "worker IPC の deployment-boundary pin (AR-11-37)。envelope_kinds は schema.rs の Envelope variant と protocol.json の ipc.kinds に対応し、closed_values は IpcValue の9 variant (nil／bool／int／uint／float／str／bin／array／map_str) に対応する。maximum_payload_bytes は codec.rs の MAX_PAYLOAD_BYTES と同一値である。forbidden_wire_markers は wire 上に現れてはならない非公開値の目印であり、source 内の出現を主張しない。nonpublic_cases は tests/fixtures/ipc_nonpublic_payloads.rs の CASES 名と 1:1 に対応する。op 名の allowlist、IPC payload 全体の corpus、プロセス内 (encode 側) 拒否は主張しない。"
+}

@@ -1,0 +1,23 @@
+PokeCon Rust runtime
+
+Usage: pokecon [OPTIONS]
+
+Options:
+      --ui <UI>
+          Selects the UI lifecycle mode
+
+          Possible values:
+          - web
+          - desktop
+          - gpui:    Native `GPUI` `PoC` shell sharing the single backend lifecycle
+          
+          [default: web]
+
+      --exit-after-startup
+          Exit successfully after the runtime boundaries have started
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version

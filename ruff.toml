@@ -1,8 +1,15 @@
-include = ["SerialController/**/*.py"]
+include = [
+  "SerialController/**/*.py",
+  "python/**/*.py",
+  "python/**/*.pyi",
+  "scripts/**/*.py",
+  "tests/**/*.py",
+  "tests/**/*.pyi",
+]
 # Same as Black.
 line-length = 88
 indent-width = 4
-target-version = "py312"
+target-version = "py314"
 
 [lint]
 select = [
@@ -41,6 +48,7 @@ ignore = [
   "UP009",
   "S107",
   "G004",
+  "COM812",  # formatterと競合する末尾カンマ規則
   "E501",  # formatはline-lengthを越える事がある
   "E731",
   "PLR0911",
@@ -54,6 +62,27 @@ fixable = ["ALL"]
 unfixable = []
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[lint.per-file-ignores]
+"scripts/compatibility/inventory.py" = [
+  "EM101",  # 検証失敗の動的な文脈を例外メッセージへ保持する
+  "EM102",
+  "S603",  # 引数配列で固定git実行ファイルを呼ぶ互換コーパス取得器
+  "S607",
+]
+"scripts/release/build_runtime.py" = [
+  "S603",  # release tool paths are explicit CLI/Nix inputs and never shell-expanded
+]
+"scripts/release/normalize_linux_elf.py" = [
+  "S603",  # release tool paths are explicit CLI/Nix inputs and never shell-expanded
+]
+"scripts/release/normalize_debian_package.py" = [
+  "S603",  # dpkg-deb is an explicit resolved CLI/Nix input and is never shell-expanded
+]
+"scripts/release/package_smoke.py" = [
+  "S603",  # package/tool paths are explicit CLI/Nix inputs and never shell-expanded
+]
+"tests/**/*.py" = ["S101"]
 
 [format]
 quote-style = "double"

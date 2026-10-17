@@ -1,0 +1,3360 @@
+{
+  "api_surface": {
+    "breaking_changes": [
+      "changed arguments: files > Commands/PythonCommandBase.py > classes > ImageProcPythonCommand > methods > discord_image: (self, content='', index=0, crop_fmt='', crop=[], keys='DISCORD_WEBHOOK') -> (self, content='', index=0, crop_fmt='', crop=[], keys=DEFAULT_DISCORD_WEBHOOK, name=None)",
+      "removed: files > Commands/PythonCommandBase.py > classes > ImageProcPythonCommand > methods > pausedecorator3",
+      "changed arguments: files > Commands/PythonCommandBase.py > classes > PythonCommand > methods > discord_text: (self, content='', index=0, keys='DISCORD_WEBHOOK') -> (self, content='', index=0, keys=DEFAULT_DISCORD_WEBHOOK, name=None)"
+    ],
+    "protocol_sha256": "afb2b0223f0616e074a82b4ed966e9cf63629cbde372cc80964f85cfb878ae58",
+    "result": "breaking",
+    "unrecorded_additions": [
+      "files > Commands/CommandBase.py > classes > Command > methods > finish",
+      "files > Commands/CommandBase.py > classes > Command > methods > get_output_page_for_current_thread",
+      "files > Commands/CommandBase.py > classes > Command > methods > output_to_page",
+      "files > Commands/CommandBase.py > classes > Command > methods > register_output_thread",
+      "files > Commands/CommandBase.py > classes > Command > methods > unregister_output_thread",
+      "files > Commands/CommandBase.py > classes > Command > attributes > dialogue_handler",
+      "files > Commands/CommandBase.py > classes > Command > attributes > output_page",
+      "files > Commands/CommandBase.py > classes > Command > values > _notification_image",
+      "files > Commands/CommandBase.py > classes > Command > values > _thread_output_pages",
+      "files > Commands/CommandBase.py > classes > Command > values > dialogue_handler",
+      "files > Commands/CommandBase.py > classes > Command > values > output_page",
+      "files > Commands/PythonCommandBase.py > functions > format_elapsed_time",
+      "files > Commands/PythonCommandBase.py > functions > precise_sleep",
+      "files > Commands/PythonCommandBase.py > classes > ImageProcPythonCommand > methods > getInterframeDiff",
+      "files > Commands/PythonCommandBase.py > classes > ImageProcPythonCommand > attributes > pausedecorator3",
+      "files > Commands/PythonCommandBase.py > classes > PythonCommand > methods > KeyBoard_Init",
+      "files > Commands/PythonCommandBase.py > classes > PythonCommand > methods > PressKey",
+      "files > Commands/PythonCommandBase.py > classes > PythonCommand > methods > ReleaseKey",
+      "files > Commands/PythonCommandBase.py > classes > PythonCommand > methods > TypeKey",
+      "files > Commands/PythonCommandBase.py > classes > PythonCommand > methods > TypeString",
+      "files > Commands/PythonCommandBase.py > classes > PythonCommand > methods > TypeStringln",
+      "files > Commands/PythonCommandBase.py > classes > PythonCommand > methods > do_safe_with_output_page",
+      "files > Commands/PythonCommandBase.py > classes > PythonCommand > methods > holdChange",
+      "files > Commands/PythonCommandBase.py > classes > PythonCommand > methods > waitWhilePaused",
+      "files > Commands/PythonCommandBase.py > variables > CROP_FORMAT_NAMES",
+      "files > Commands/PythonCommandBase.py > variables > HIDDEN_VARIABLES",
+      "files > Commands/PythonCommandBase.py > variables > PAUSE_POLL_INTERVAL",
+      "files > Commands/PythonCommandBase.py > variables > PYTHON_COMMANDS_DIR",
+      "files > Commands/PythonCommandBase.py > variables > SEPARATOR_LINE",
+      "files > Commands/PythonCommandBase.py > variables > SPIN_MARGIN",
+      "files > Commands/PythonCommandBase.py > variables > STOP_POLL_INTERVAL",
+      "files > Commands/PythonCommandBase.py > variables > TIME_FORMAT",
+      "files > Commands/PythonCommandBase.py > variables > VARIABLES_PER_PAGE",
+      "files > Commands/PythonCommandBase.py > variables > VARIABLE_VALUE_MAX_LENGTH",
+      "files > Commands/PythonCommandBase.py > constants > CROP_FORMAT_NAMES",
+      "files > Commands/PythonCommandBase.py > constants > HIDDEN_VARIABLES",
+      "files > Commands/PythonCommandBase.py > constants > PAUSE_POLL_INTERVAL",
+      "files > Commands/PythonCommandBase.py > constants > SPIN_MARGIN",
+      "files > Commands/PythonCommandBase.py > constants > STOP_POLL_INTERVAL",
+      "files > Commands/PythonCommandBase.py > constants > TIME_FORMAT",
+      "files > Commands/PythonCommandBase.py > constants > VARIABLES_PER_PAGE",
+      "files > Commands/PythonCommandBase.py > constants > VARIABLE_VALUE_MAX_LENGTH",
+      "files > Commands/Keys.py > functions > convert_button_bits",
+      "files > Commands/Keys.py > functions > get_button_conversion",
+      "files > Commands/Keys.py > functions > is_ftdi_format",
+      "files > Commands/Keys.py > functions > revert_button_bits",
+      "files > Commands/Keys.py > classes > KeyPress > methods > __init__: arguments source=InputSource.COMMAND",
+      "files > Commands/Keys.py > classes > KeyPress > methods > holdChange",
+      "files > Commands/Keys.py > classes > KeyPress > methods > release",
+      "files > Commands/Keys.py > classes > KeyPress > attributes > source",
+      "files > Commands/Keys.py > classes > SendFormat > methods > convert2list2: arguments mode=0",
+      "files > Commands/Keys.py > classes > InputSource",
+      "files > Commands/Keys.py > variables > FTDI_FORMAT_PREFIX",
+      "files > Commands/Keys.py > constants > FTDI_FORMAT_PREFIX",
+      "files > Commands/SwitchKeyboard.py"
+    ],
+    "verification": "ast_public_api_signature_comparison"
+  },
+  "baseline_id": "futo030-extension",
+  "candidate_execution": {
+    "commit": "cc49f828b4af82b49ae75480a9e648ef1639d5e1",
+    "discovered_command_count": 35,
+    "discovery_sha256": "9d4339786f3da6b19614d1e82574f1af4b5ac66acd92dbe5d5851aaa0e7ecb1c",
+    "id": "futo030-extension-cc49f828b4af",
+    "repository": "https://github.com/futo030/Poke-Controller-Modified-Extension.git",
+    "result": "passed",
+    "script_count": 37,
+    "scripts": [
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "mcu_device"
+        ],
+        "managed_worker": {
+          "commands": [],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/McuCommands/AutoLeague.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "mcu_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:mcu_serial_device_and_target_console"
+          }
+        ],
+        "sha256": "ad18121efa3f83c5c652064aa15b45fc31896259870baa9f4b7eb8c1e3d58bb5"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "mcu_device"
+        ],
+        "managed_worker": {
+          "commands": [],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/McuCommands/InfinityWatt.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "mcu_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:mcu_serial_device_and_target_console"
+          }
+        ],
+        "sha256": "35115b52841549cc117e1a68c99c2d2f43fa558d7e967b441291d62d316c6e67"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "mcu_device"
+        ],
+        "managed_worker": {
+          "commands": [],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/McuCommands/MashA.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "mcu_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:mcu_serial_device_and_target_console"
+          }
+        ],
+        "sha256": "70355f0ccfce1fcc8d77cec1ef57a82ac3aef6947ccb40f343c9277d90dc2966"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "mcu_device"
+        ],
+        "managed_worker": {
+          "commands": [],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/McuCommands/PickUpBerry.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "mcu_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:mcu_serial_device_and_target_console"
+          }
+        ],
+        "sha256": "fa024316d9faab3512b70ad2312c2011f66d7bfad66a8629270ffbd8969df034"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "AllHatching",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "全卵孵化"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/AllHatching.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          }
+        ],
+        "sha256": "4fbcc32fef0401e31fe8bab0431c950f842c1cd18d9075505e22542700094e0d"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "AutoHatching",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "自動卵孵化"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/AutoHatching.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          }
+        ],
+        "sha256": "62328e75e6e72644a5487199ba3b1d754bca7c1e717c0a7c5fd6c0ba53307bd4"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "Fossil_shiny_00",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "カセキ色厳選(パッチラゴン)"
+            },
+            {
+              "class_name": "Fossil_shiny_01",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "カセキ色厳選(パッチルドン)"
+            },
+            {
+              "class_name": "Fossil_shiny_10",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "カセキ色厳選(ウオノラゴン)"
+            },
+            {
+              "class_name": "Fossil_shiny_11",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "カセキ色厳選(ウオチルドン)"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/FossilShiny.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          }
+        ],
+        "sha256": "8d027cc72e99e915f4906b24ab6c11d4cd8c82656f2f5a715df30a415941e558"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "CalcTime",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "テンプレートマッチング時間計測"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/TemplateMatchingTimeMeasure.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          }
+        ],
+        "sha256": "48f6b92996fb2f60af4c46a06a5a6d6c2d6857f7a1f2ff4688c9308cecdb48d3"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device",
+          "filesystem"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "changetemplatedir",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "テンプレート画像ディレクトリ変更"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/changeTemplateDir.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          },
+          {
+            "id": "filesystem",
+            "mode": "deterministic_fixture",
+            "selector": "compatibility_runner::immutable_archive_and_digest_validation"
+          }
+        ],
+        "sha256": "6fd1b139756b3beb758cd56f05955214f412110b686e2af4986c9dfbda34db74"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "ImageRecRect",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "画像認識(枠表示)"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/imagerecrect.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          }
+        ],
+        "sha256": "b95978bf7e56937e0104469d6fad70d0bbb02516ff534b1a48a1cfe4bda24a74"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "ScreenShot",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "スクショ取るだけ"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/screenshot.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          }
+        ],
+        "sha256": "cb03668f9ca4baccdfb33503d8688850497a513c5f341e80c97ea2f97dd124a4"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "AutoLeague",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "自動リーグ周回"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/AutoLeague.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          }
+        ],
+        "sha256": "561e0d7c95b0b76984b038b09a0c65d600fc791463344c01b713156f915204f5"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "AutoRelease",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "自動リリース"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/AutoRelease.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          }
+        ],
+        "sha256": "4f051551e1d36dbd68cde277aefdde75a1d626e5defff0338b500b3729868492"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device",
+          "network_notification",
+          "external_services"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "DiscordTest",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "Discord通知テスト"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/Discord_Test.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          },
+          {
+            "id": "network_notification",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_network_and_notifications_use_closed_fail_soft_proxies"
+          },
+          {
+            "id": "external_services",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:credentialed_network_notification_endpoints"
+          }
+        ],
+        "sha256": "a6e74af93935a4a2d7e09f3eb92e06cfe4d25ab024eb6b58325325fd49694749"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "InputKeyboard",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "シリアル入力"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/InputSerial.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          }
+        ],
+        "sha256": "6fb4f5d14f1c290097b54bae0049d56bdd92459460fcfef4110f58409dc6d162"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "Keyboard_sample",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "Keyboard_sample"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/Keyboard_sample.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          }
+        ],
+        "sha256": "d0167009f30ce67755f91644076ddaffbb988e7b8bd2922b76a46dcb1d84b1f3"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device",
+          "network_notification",
+          "external_services"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "LineSample",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "LINE通知サンプル"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/LineNotifySample.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          },
+          {
+            "id": "network_notification",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_network_and_notifications_use_closed_fail_soft_proxies"
+          },
+          {
+            "id": "external_services",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:credentialed_network_notification_endpoints"
+          }
+        ],
+        "sha256": "44136bd1faaf72b964ed6f0b6b3d87d7c695951a820c48057683ad693640ef38"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "LoggingSample",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "ログ出力のサンプル"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/LoggingSample.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          }
+        ],
+        "sha256": "d5d628d88377334653cc797484dfe16251ed04c64036d6c19d75e7949f53f97f"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "Mash_A",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "A連打"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/MashA.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          }
+        ],
+        "sha256": "f283387edfe1cfdda491a0201c3ebb91f82e743b66016d52feb3492ddc56e809"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "Print_sample",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "Print出力(sample)"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/Print-sample.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          }
+        ],
+        "sha256": "9a59c67aaee08761f7b67cbda33217b0acce9eae593468edf1109de771bd31d4"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "Qingpi_Touchscreen_sample",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "Qingpi_Touchscreen_sample"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/Qingpi_Touchscreen_sample.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          }
+        ],
+        "sha256": "2d3e89e988c10f42890a2f326dafd3957c3b6f4b2689eb1d2b04fe81319c18e1"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "Move2",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "キーボード入力2"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/RaidPassword.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          }
+        ],
+        "sha256": "0fd55d97a0ff6748166add71551a9a1e76b24de2392a67423395886f151fdf3e"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "InfinityBerry",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "無限きのみ"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityBerry.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          }
+        ],
+        "sha256": "5be1d6e792f237e666c3c7bf81fda89ea21a49d995ec72c71c1e4b4521d0e7f2"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "InfinityCafe",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "無限カフェ"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityCafe.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          }
+        ],
+        "sha256": "e386f2a0327b0a5604ac7cffe873dd4700c3690c62f29c0d8a90ecf26591d06c"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "InfinityFeather",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "無限羽回収"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityFeather.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          }
+        ],
+        "sha256": "eda4bb94fba4bfb36a5541b769ff112441aa7631e7d5e7c9d3f6a7e551c8117d"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "InfinityLottery",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "無限IDくじ"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityLottery.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          }
+        ],
+        "sha256": "c065a5795b6e03b1046521482c3a2dc4435eaab95daf6f0e13beca84bb3bb560"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "InfinityWatt",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "無限ワット"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityWatt.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          }
+        ],
+        "sha256": "9e603766ac3a569fceb8eecf11a882b414aab3dd443494ccb6be2fd1f115041e"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device",
+          "dialog_tk",
+          "overlay_pointer"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "PlayRec",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "記録したログを再生"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/RecPlay.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          },
+          {
+            "id": "dialog_tk",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_dialogs_preserve_widget_lifecycle_and_legacy_forms"
+          },
+          {
+            "id": "overlay_pointer",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::overlay_pointer_events_run_fifo_callbacks_without_blocking_ipc"
+          }
+        ],
+        "sha256": "6b4156729550fd1c98660a70cf5502eb67d6a94bfb1c6fd5f0de0fc5dd64dbf9"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "StickSample2",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "スティック2"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/Stick-Sample2.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          }
+        ],
+        "sha256": "53a9aeb302e52643dc676c34c413f918e5df3b4444b66d0dc0b22d36dd830b1d"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "StickSample1",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "スティック1"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/Stick_Sample1.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          }
+        ],
+        "sha256": "a7bc4c5bbf6306104584ef24630d64bf8cfa3b9b24d04617349a3a65e005d681"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device",
+          "filesystem"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "TestPath",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "パス指定のテスト"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/TestPath.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          },
+          {
+            "id": "filesystem",
+            "mode": "deterministic_fixture",
+            "selector": "compatibility_runner::immutable_archive_and_digest_validation"
+          }
+        ],
+        "sha256": "a3e23013f42da3049ee4911c0719f8fb545fcee7635f2898d3c7e57c29ff92cc"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "dialog_tk"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "Widget_sample",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "Widget-sample"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/Widget-sample.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "dialog_tk",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_dialogs_preserve_widget_lifecycle_and_legacy_forms"
+          }
+        ],
+        "sha256": "3385280a84900f1223c4258b87422eb5517e57427bcedc47c58cbd1aa9e84ed6"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device",
+          "dialog_tk"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "isContainTemplate_sample",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "画像認識関数紹介(1) ver. 0.0.1"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/isContainTemplate_sample.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          },
+          {
+            "id": "dialog_tk",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_dialogs_preserve_widget_lifecycle_and_legacy_forms"
+          }
+        ],
+        "sha256": "c1b8b2f0282fdc723f98f679da36a1eae42d41dab7253d8797833585ea246af2"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device",
+          "filesystem"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "isContainTemplate_sample",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "画像認識関数紹介(2) ver. 0.0.1"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/isContainedImage_sample.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          },
+          {
+            "id": "filesystem",
+            "mode": "deterministic_fixture",
+            "selector": "compatibility_runner::immutable_archive_and_digest_validation"
+          }
+        ],
+        "sha256": "6343cd2a560a2769bfd037ea9995af0689a335ee7efbc84d26c03e9ac7f99d92"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device",
+          "audio_device"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "ListenShiny",
+              "kind": "python",
+              "manual_tags": [],
+              "name": "色違いの音を聴きたい"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/Samples/listen_shiny.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          },
+          {
+            "id": "audio_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:audio_input_device"
+          }
+        ],
+        "sha256": "e71a7288d3b15b69112541b2668c1c14e939b245a15c5f6ba468cce673571b96"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "controller_serial",
+          "camera_image",
+          "camera_device",
+          "dialog_tk",
+          "filesystem"
+        ],
+        "managed_worker": {
+          "commands": [
+            {
+              "class_name": "BridgeFunctionsSample",
+              "kind": "python",
+              "manual_tags": [
+                "Sample"
+              ],
+              "name": "PokeCon橋渡し関数サンプル ver. 0.1.0"
+            }
+          ],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/bridge_functions/Sample/bf_sample.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "controller_serial",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          },
+          {
+            "id": "dialog_tk",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_dialogs_preserve_widget_lifecycle_and_legacy_forms"
+          },
+          {
+            "id": "filesystem",
+            "mode": "deterministic_fixture",
+            "selector": "compatibility_runner::immutable_archive_and_digest_validation"
+          }
+        ],
+        "sha256": "5c92a27703b4b5992aa3f53227cca96ce14ce5df8b2b21e73c99a8834f8b060a"
+      },
+      {
+        "domains": [
+          "managed_worker_discovery",
+          "camera_image",
+          "camera_device",
+          "dialog_tk",
+          "filesystem"
+        ],
+        "managed_worker": {
+          "commands": [],
+          "import_evaluation": "passed"
+        },
+        "path": "SerialController/Commands/PythonCommands/bridge_functions/bridge_functions.py",
+        "result": "passed",
+        "runtime_evidence": [
+          {
+            "id": "managed_worker_discovery",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+          },
+          {
+            "id": "camera_image",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+          },
+          {
+            "id": "camera_device",
+            "mode": "explicit_hardware_gate",
+            "selector": "hardware:capture_device_with_known_frame_fixture"
+          },
+          {
+            "id": "dialog_tk",
+            "mode": "deterministic_fixture",
+            "selector": "pokecon-worker::script_runtime::script_dialogs_preserve_widget_lifecycle_and_legacy_forms"
+          },
+          {
+            "id": "filesystem",
+            "mode": "deterministic_fixture",
+            "selector": "compatibility_runner::immutable_archive_and_digest_validation"
+          }
+        ],
+        "sha256": "582b4ef71f66fb6f09eaa2d1882ba67c9f337e0805760d3bb552baa9d982dbbe"
+      }
+    ]
+  },
+  "candidate_id": "futo030-extension-cc49f828b4af",
+  "commit": "cc49f828b4af82b49ae75480a9e648ef1639d5e1",
+  "corpus_manifest": {
+    "commit": "cc49f828b4af82b49ae75480a9e648ef1639d5e1",
+    "id": "futo030-extension-cc49f828b4af",
+    "repository": "https://github.com/futo030/Poke-Controller-Modified-Extension.git",
+    "script_count": 37,
+    "scripts": [
+      {
+        "classes": [
+          {
+            "bases": [
+              "McuCommand"
+            ],
+            "line": 8,
+            "name": "AutoLeague"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "AutoLeague"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.McuCommandBase",
+            "names": [
+              "McuCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/McuCommands/AutoLeague.py",
+        "referenced_api": [],
+        "sha256": "ad18121efa3f83c5c652064aa15b45fc31896259870baa9f4b7eb8c1e3d58bb5"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "McuCommand"
+            ],
+            "line": 8,
+            "name": "InfinityWatt"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "InfinityWatt"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.McuCommandBase",
+            "names": [
+              "McuCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/McuCommands/InfinityWatt.py",
+        "referenced_api": [],
+        "sha256": "35115b52841549cc117e1a68c99c2d2f43fa558d7e967b441291d62d316c6e67"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "McuCommand"
+            ],
+            "line": 8,
+            "name": "Mash_A"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "Mash_A"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.McuCommandBase",
+            "names": [
+              "McuCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/McuCommands/MashA.py",
+        "referenced_api": [],
+        "sha256": "70355f0ccfce1fcc8d77cec1ef57a82ac3aef6947ccb40f343c9277d90dc2966"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "McuCommand"
+            ],
+            "line": 8,
+            "name": "PickUpBerry"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "PickUpBerry"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.McuCommandBase",
+            "names": [
+              "McuCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/McuCommands/PickUpBerry.py",
+        "referenced_api": [],
+        "sha256": "fa024316d9faab3512b70ad2312c2011f66d7bfad66a8629270ffbd8969df034"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 11,
+            "name": "AllHatching"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "AllHatching"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button",
+              "Direction"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/AllHatching.py",
+        "referenced_api": [
+          "self.hold",
+          "self.holdEnd",
+          "self.isContainTemplate",
+          "self.press",
+          "self.wait"
+        ],
+        "sha256": "4fbcc32fef0401e31fe8bab0431c950f842c1cd18d9075505e22542700094e0d"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 10,
+            "name": "AutoHatching"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "AutoHatching"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button",
+              "Direction"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/AutoHatching.py",
+        "referenced_api": [
+          "self.Release",
+          "self.ReleaseBox",
+          "self.finish",
+          "self.getNewEgg",
+          "self.hold",
+          "self.holdEnd",
+          "self.isContainTemplate",
+          "self.press",
+          "self.pressRep",
+          "self.putPokemonsToBox",
+          "self.wait"
+        ],
+        "sha256": "62328e75e6e72644a5487199ba3b1d754bca7c1e717c0a7c5fd6c0ba53307bd4"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 8,
+            "name": "Fossil_shiny"
+          },
+          {
+            "bases": [
+              "Fossil_shiny"
+            ],
+            "line": 85,
+            "name": "Fossil_shiny_00"
+          },
+          {
+            "bases": [
+              "Fossil_shiny"
+            ],
+            "line": 95,
+            "name": "Fossil_shiny_01"
+          },
+          {
+            "bases": [
+              "Fossil_shiny"
+            ],
+            "line": 105,
+            "name": "Fossil_shiny_10"
+          },
+          {
+            "bases": [
+              "Fossil_shiny"
+            ],
+            "line": 115,
+            "name": "Fossil_shiny_11"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "Fossil_shiny",
+            "Fossil_shiny_00",
+            "Fossil_shiny_01",
+            "Fossil_shiny_10",
+            "Fossil_shiny_11"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button",
+              "Direction"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/FossilShiny.py",
+        "referenced_api": [
+          "self.CheckBox",
+          "self.fossil_loop",
+          "self.isContainTemplate",
+          "self.press",
+          "self.wait"
+        ],
+        "sha256": "8d027cc72e99e915f4906b24ab6c11d4cd8c82656f2f5a715df30a415941e558"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 12,
+            "name": "CalcTime"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "CalcTime"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          },
+          {
+            "module": "cv2",
+            "names": [
+              "cv2"
+            ]
+          },
+          {
+            "module": "time",
+            "names": [
+              "time"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/TemplateMatchingTimeMeasure.py",
+        "referenced_api": [
+          "self.isContainTemplate",
+          "self.isContainTemplateGPU"
+        ],
+        "sha256": "48f6b92996fb2f60af4c46a06a5a6d6c2d6857f7a1f2ff4688c9308cecdb48d3"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 7,
+            "name": "changetemplatedir"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "changetemplatedir"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          },
+          {
+            "module": "os",
+            "names": [
+              "os"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/changeTemplateDir.py",
+        "referenced_api": [
+          "self.setTemplateDir"
+        ],
+        "sha256": "6fd1b139756b3beb758cd56f05955214f412110b686e2af4986c9dfbda34db74"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 7,
+            "name": "ImageRecRect"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "ImageRecRect"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/imagerecrect.py",
+        "referenced_api": [
+          "self.isContainTemplate"
+        ],
+        "sha256": "b95978bf7e56937e0104469d6fad70d0bbb02516ff534b1a48a1cfe4bda24a74"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 7,
+            "name": "ScreenShot"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "ScreenShot"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/screenshot.py",
+        "referenced_api": [
+          "self.camera.saveCapture"
+        ],
+        "sha256": "cb03668f9ca4baccdfb33503d8688850497a513c5f341e80c97ea2f97dd124a4"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 10,
+            "name": "AutoLeague"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "AutoLeague"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button",
+              "Direction",
+              "Stick"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/AutoLeague.py",
+        "referenced_api": [
+          "self.hold",
+          "self.press"
+        ],
+        "sha256": "561e0d7c95b0b76984b038b09a0c65d600fc791463344c01b713156f915204f5"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 9,
+            "name": "AutoRelease"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "AutoRelease"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button",
+              "Direction"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/AutoRelease.py",
+        "referenced_api": [
+          "self.Release",
+          "self.cam.isOpened",
+          "self.isContainTemplate",
+          "self.press",
+          "self.wait"
+        ],
+        "sha256": "4f051551e1d36dbd68cde277aefdde75a1d626e5defff0338b500b3729868492"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 7,
+            "name": "DiscordTest"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "DiscordTest"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/Discord_Test.py",
+        "referenced_api": [
+          "self.discord_image",
+          "self.discord_text"
+        ],
+        "sha256": "a6e74af93935a4a2d7e09f3eb92e06cfe4d25ab024eb6b58325325fd49694749"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 46,
+            "name": "InputKeyboard"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "InputKeyboard"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button",
+              "Direction"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          },
+          {
+            "module": "scipy.sparse",
+            "names": [
+              "csr_matrix"
+            ]
+          },
+          {
+            "module": "scipy.sparse.csgraph",
+            "names": [
+              "shortest_path"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/InputSerial.py",
+        "referenced_api": [
+          "self.MakeGraph",
+          "self.Move",
+          "self.press"
+        ],
+        "sha256": "6fb4f5d14f1c290097b54bae0049d56bdd92459460fcfef4110f58409dc6d162"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 8,
+            "name": "Keyboard_sample"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "Keyboard_sample"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          },
+          {
+            "module": "Commands.SwitchKeyboard",
+            "names": [
+              "KEY"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/Keyboard_sample.py",
+        "referenced_api": [
+          "self.KeyBoard_Init",
+          "self.TypeKey",
+          "self.TypeString",
+          "self.finish",
+          "self.wait"
+        ],
+        "sha256": "d0167009f30ce67755f91644076ddaffbb988e7b8bd2922b76a46dcb1d84b1f3"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 7,
+            "name": "LineSample"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "LineSample"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/LineNotifySample.py",
+        "referenced_api": [
+          "self.LINE_image",
+          "self.LINE_text"
+        ],
+        "sha256": "44136bd1faaf72b964ed6f0b6b3d87d7c695951a820c48057683ad693640ef38"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 9,
+            "name": "LoggingSample"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "LoggingSample"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          },
+          {
+            "module": "logging",
+            "names": [
+              "DEBUG",
+              "NullHandler",
+              "getLogger"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/LoggingSample.py",
+        "referenced_api": [
+          "self._logger.addHandler",
+          "self._logger.critical",
+          "self._logger.debug",
+          "self._logger.error",
+          "self._logger.info",
+          "self._logger.setLevel",
+          "self._logger.warning"
+        ],
+        "sha256": "d5d628d88377334653cc797484dfe16251ed04c64036d6c19d75e7949f53f97f"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 10,
+            "name": "Mash_A"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "Mash_A"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/MashA.py",
+        "referenced_api": [
+          "self.press",
+          "self.wait"
+        ],
+        "sha256": "f283387edfe1cfdda491a0201c3ebb91f82e743b66016d52feb3492ddc56e809"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 7,
+            "name": "Print_sample"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "Print_sample"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/Print-sample.py",
+        "referenced_api": [
+          "self.finish",
+          "self.print_s",
+          "self.print_t",
+          "self.print_t1",
+          "self.print_t1b",
+          "self.print_t2",
+          "self.print_t2b",
+          "self.print_tb"
+        ],
+        "sha256": "9a59c67aaee08761f7b67cbda33217b0acce9eae593468edf1109de771bd31d4"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 10,
+            "name": "Qingpi_Touchscreen_sample"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "Qingpi_Touchscreen_sample"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Touchscreen"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          },
+          {
+            "module": "numpy",
+            "names": [
+              "np"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/Qingpi_Touchscreen_sample.py",
+        "referenced_api": [
+          "self.finish",
+          "self.hold",
+          "self.holdEnd"
+        ],
+        "sha256": "2d3e89e988c10f42890a2f326dafd3957c3b6f4b2689eb1d2b04fe81319c18e1"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 16,
+            "name": "Move2"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "Move2"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button",
+              "Direction"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          },
+          {
+            "module": "scipy.sparse",
+            "names": [
+              "csr_matrix"
+            ]
+          },
+          {
+            "module": "scipy.sparse.csgraph",
+            "names": [
+              "shortest_path"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/RaidPassword.py",
+        "referenced_api": [
+          "self.MakeGraph",
+          "self.Move",
+          "self.press"
+        ],
+        "sha256": "0fd55d97a0ff6748166add71551a9a1e76b24de2392a67423395886f151fdf3e"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 13,
+            "name": "InfinityBerry"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "InfinityBerry"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          },
+          {
+            "module": "cv2",
+            "names": [
+              "cv2"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityBerry.py",
+        "referenced_api": [
+          "self.cam.isOpened",
+          "self.camera.readFrame",
+          "self.getInterframeDiff",
+          "self.isContainTemplate",
+          "self.isContinue",
+          "self.press",
+          "self.timeLeap",
+          "self.wait"
+        ],
+        "sha256": "5be1d6e792f237e666c3c7bf81fda89ea21a49d995ec72c71c1e4b4521d0e7f2"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 11,
+            "name": "InfinityCafe"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "InfinityCafe"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button",
+              "Direction"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityCafe.py",
+        "referenced_api": [
+          "self.press",
+          "self.timeLeap",
+          "self.wait"
+        ],
+        "sha256": "e386f2a0327b0a5604ac7cffe873dd4700c3690c62f29c0d8a90ecf26591d06c"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 8,
+            "name": "InfinityFeather"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "InfinityFeather"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button",
+              "Direction",
+              "Stick"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityFeather.py",
+        "referenced_api": [
+          "self.press",
+          "self.timeLeap",
+          "self.wait"
+        ],
+        "sha256": "eda4bb94fba4bfb36a5541b769ff112441aa7631e7d5e7c9d3f6a7e551c8117d"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 11,
+            "name": "InfinityLottery"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "InfinityLottery"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button",
+              "Direction"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityLottery.py",
+        "referenced_api": [
+          "self.press",
+          "self.timeLeap"
+        ],
+        "sha256": "c065a5795b6e03b1046521482c3a2dc4435eaab95daf6f0e13beca84bb3bb560"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 9,
+            "name": "InfinityWatt"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "InfinityWatt"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button",
+              "Direction"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityWatt.py",
+        "referenced_api": [
+          "self.press",
+          "self.timeLeap",
+          "self.wait"
+        ],
+        "sha256": "9e603766ac3a569fceb8eecf11a882b414aab3dd443494ccb6be2fd1f115041e"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 13,
+            "name": "PlayRec"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "PlayRec"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Direction",
+              "Stick"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          },
+          {
+            "module": "numpy",
+            "names": [
+              "np"
+            ]
+          },
+          {
+            "module": "time",
+            "names": [
+              "time"
+            ]
+          },
+          {
+            "module": "tkinter",
+            "names": [
+              "filedialog"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/RecPlay.py",
+        "referenced_api": [
+          "self.LStick",
+          "self.checkIfAlive",
+          "self.keys.input",
+          "self.keys.inputEnd",
+          "self.keys.ser.writeRow",
+          "self.stickEnd"
+        ],
+        "sha256": "6b4156729550fd1c98660a70cf5502eb67d6a94bfb1c6fd5f0de0fc5dd64dbf9"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 11,
+            "name": "StickSample2"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "StickSample2"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Button",
+              "Direction",
+              "Stick"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          },
+          {
+            "module": "numpy",
+            "names": [
+              "np"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/Stick-Sample2.py",
+        "referenced_api": [
+          "self.checkIfAlive",
+          "self.keys.input",
+          "self.keys.inputEnd",
+          "self.press",
+          "self.stick",
+          "self.stickEnd",
+          "self.wait"
+        ],
+        "sha256": "53a9aeb302e52643dc676c34c413f918e5df3b4444b66d0dc0b22d36dd830b1d"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 9,
+            "name": "StickSample1"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "StickSample1"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.Keys",
+            "names": [
+              "Direction",
+              "Stick"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/Stick_Sample1.py",
+        "referenced_api": [
+          "self.checkIfAlive",
+          "self.keys.input",
+          "self.keys.inputEnd",
+          "self.stick",
+          "self.stickEnd",
+          "self.wait"
+        ],
+        "sha256": "a7bc4c5bbf6306104584ef24630d64bf8cfa3b9b24d04617349a3a65e005d681"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 90,
+            "name": "TestPath"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "TestPath"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          },
+          {
+            "module": "os",
+            "names": [
+              "os"
+            ]
+          },
+          {
+            "module": "os",
+            "names": [
+              "path"
+            ]
+          },
+          {
+            "module": "shutil",
+            "names": [
+              "shutil"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/TestPath.py",
+        "referenced_api": [],
+        "sha256": "a3e23013f42da3049ee4911c0719f8fb545fcee7635f2898d3c7e57c29ff92cc"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 7,
+            "name": "Widget_sample"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "Widget_sample"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/Widget-sample.py",
+        "referenced_api": [
+          "self.dialogue",
+          "self.dialogue6widget",
+          "self.finish"
+        ],
+        "sha256": "3385280a84900f1223c4258b87422eb5517e57427bcedc47c58cbd1aa9e84ed6"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 8,
+            "name": "isContainTemplate_sample"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "isContainTemplate_sample"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          },
+          {
+            "module": "tkinter.messagebox",
+            "names": [
+              "tkmsg"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/isContainTemplate_sample.py",
+        "referenced_api": [
+          "self.finish",
+          "self.isContainTemplate"
+        ],
+        "sha256": "c1b8b2f0282fdc723f98f679da36a1eae42d41dab7253d8797833585ea246af2"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 8,
+            "name": "isContainTemplate_sample"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "isContainTemplate_sample"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          },
+          {
+            "module": "os",
+            "names": [
+              "os"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/isContainedImage_sample.py",
+        "referenced_api": [
+          "self.finish",
+          "self.isContainedImage",
+          "self.saveCapture"
+        ],
+        "sha256": "6343cd2a560a2769bfd037ea9995af0689a335ee7efbc84d26c03e9ac7f99d92"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "PythonCommand"
+            ],
+            "line": 46,
+            "name": "ListenShiny"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "ListenShiny"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "PythonCommand"
+            ]
+          },
+          {
+            "module": "datetime",
+            "names": [
+              "datetime"
+            ]
+          },
+          {
+            "module": "numpy",
+            "names": [
+              "np"
+            ]
+          },
+          {
+            "module": "pyaudio",
+            "names": [
+              "pyaudio"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/listen_shiny.py",
+        "referenced_api": [
+          "self._logger.debug",
+          "self.checkIfAlive"
+        ],
+        "sha256": "e71a7288d3b15b69112541b2668c1c14e939b245a15c5f6ba468cce673571b96"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "ImageProcPythonCommand"
+            ],
+            "line": 9,
+            "name": "BridgeFunctionsSample"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "BridgeFunctionsSample"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          },
+          {
+            "module": "Commands.PythonCommands.bridge_functions.bridge_functions",
+            "names": [
+              "BridgeFunctions"
+            ]
+          },
+          {
+            "module": "os",
+            "names": [
+              "os"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/bridge_functions/Sample/bf_sample.py",
+        "referenced_api": [
+          "self.bf.bf_dialogue6widget_save_settings",
+          "self.bf.bf_dialogue6widget_select_settings",
+          "self.bf.bf_print",
+          "self.bf.bf_print_w",
+          "self.bf.bf_show_informations",
+          "self.bf.set_template_directory"
+        ],
+        "sha256": "5c92a27703b4b5992aa3f53227cca96ce14ce5df8b2b21e73c99a8834f8b060a"
+      },
+      {
+        "classes": [
+          {
+            "bases": [
+              "object"
+            ],
+            "line": 54,
+            "name": "BridgeFunctions"
+          }
+        ],
+        "expected": {
+          "discovered_classes": [
+            "BridgeFunctions"
+          ],
+          "imports": "resolve_without_source_changes",
+          "python_3_14_parse": "success",
+          "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+        },
+        "imports": [
+          {
+            "module": "Commands.PythonCommandBase",
+            "names": [
+              "ImageProcPythonCommand"
+            ]
+          },
+          {
+            "module": "__future__",
+            "names": [
+              "annotations"
+            ]
+          },
+          {
+            "module": "os",
+            "names": [
+              "os"
+            ]
+          },
+          {
+            "module": "typing",
+            "names": [
+              "List",
+              "Optional"
+            ]
+          }
+        ],
+        "path": "SerialController/Commands/PythonCommands/bridge_functions/bridge_functions.py",
+        "referenced_api": [
+          "self._finish_if_canceled",
+          "self.bf_print",
+          "self.commands.dialogue",
+          "self.commands.dialogue6widget",
+          "self.commands.dialogue6widget_save_settings",
+          "self.commands.dialogue6widget_select_settings",
+          "self.commands.finish",
+          "self.commands.isContainTemplate",
+          "self.commands.isContainTemplate_max",
+          "self.commands.print_tb",
+          "self.commands.print_tbs",
+          "self.commands.setTemplateDir"
+        ],
+        "sha256": "582b4ef71f66fb6f09eaa2d1882ba67c9f337e0805760d3bb552baa9d982dbbe"
+      }
+    ]
+  },
+  "fixture_catalog": {
+    "audio_device": {
+      "mode": "explicit_hardware_gate",
+      "selector": "hardware:audio_input_device"
+    },
+    "camera_device": {
+      "mode": "explicit_hardware_gate",
+      "selector": "hardware:capture_device_with_known_frame_fixture"
+    },
+    "camera_image": {
+      "mode": "deterministic_fixture",
+      "selector": "pokecon-worker::script_runtime::script_camera_images_are_private_and_image_processing_stays_worker_local"
+    },
+    "controller_serial": {
+      "mode": "deterministic_fixture",
+      "selector": "pokecon-worker::script_runtime::script_worker_executes_controller_serial_and_output_proxies"
+    },
+    "dialog_tk": {
+      "mode": "deterministic_fixture",
+      "selector": "pokecon-worker::script_runtime::script_dialogs_preserve_widget_lifecycle_and_legacy_forms"
+    },
+    "external_services": {
+      "mode": "explicit_hardware_gate",
+      "selector": "hardware:credentialed_network_notification_endpoints"
+    },
+    "filesystem": {
+      "mode": "deterministic_fixture",
+      "selector": "compatibility_runner::immutable_archive_and_digest_validation"
+    },
+    "managed_worker_discovery": {
+      "mode": "deterministic_fixture",
+      "selector": "pokecon-worker::script_runtime::discovery_preserves_declaration_order_and_separates_tag_layers"
+    },
+    "mcu_device": {
+      "mode": "explicit_hardware_gate",
+      "selector": "hardware:mcu_serial_device_and_target_console"
+    },
+    "network_notification": {
+      "mode": "deterministic_fixture",
+      "selector": "pokecon-worker::script_runtime::script_network_and_notifications_use_closed_fail_soft_proxies"
+    },
+    "overlay_pointer": {
+      "mode": "deterministic_fixture",
+      "selector": "pokecon-worker::script_runtime::overlay_pointer_events_run_fifo_callbacks_without_blocking_ipc"
+    }
+  },
+  "full_fixed_chain": {
+    "baseline_count": 3,
+    "result": "passed",
+    "results_sha256": "8443242348120cda654be48715b3e331b1c23831bda841cf1dc959cf6b275cd7",
+    "script_count": 103
+  },
+  "repository": "https://github.com/futo030/Poke-Controller-Modified-Extension.git",
+  "result": "breaking",
+  "runtime": {
+    "changed_or_added": 14,
+    "deterministic_scripts": [
+      "SerialController/Commands/PythonCommands/Samples/InputSerial.py",
+      "SerialController/Commands/PythonCommands/Samples/Keyboard_sample.py",
+      "SerialController/Commands/PythonCommands/Samples/RaidPassword.py"
+    ],
+    "hardware_gates": [
+      {
+        "domains": [
+          "camera_device"
+        ],
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/TemplateMatchingTimeMeasure.py"
+      },
+      {
+        "domains": [
+          "camera_device"
+        ],
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/imagerecrect.py"
+      },
+      {
+        "domains": [
+          "camera_device"
+        ],
+        "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/screenshot.py"
+      },
+      {
+        "domains": [
+          "camera_device",
+          "external_services"
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/LineNotifySample.py"
+      },
+      {
+        "domains": [
+          "camera_device"
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/LoggingSample.py"
+      },
+      {
+        "domains": [
+          "camera_device"
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/Qingpi_Touchscreen_sample.py"
+      },
+      {
+        "domains": [
+          "camera_device"
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/RecPlay.py"
+      },
+      {
+        "domains": [
+          "camera_device"
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/TestPath.py"
+      },
+      {
+        "domains": [
+          "camera_device"
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/isContainedImage_sample.py"
+      },
+      {
+        "domains": [
+          "camera_device",
+          "audio_device"
+        ],
+        "path": "SerialController/Commands/PythonCommands/Samples/listen_shiny.py"
+      },
+      {
+        "domains": [
+          "camera_device"
+        ],
+        "path": "SerialController/Commands/PythonCommands/bridge_functions/bridge_functions.py"
+      }
+    ],
+    "missing_api": [],
+    "result": "unverified",
+    "unverified": 11
+  },
+  "schema_version": 1
+}

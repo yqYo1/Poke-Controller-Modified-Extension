@@ -35,6 +35,11 @@ mod platform;
 mod production;
 mod profile_service;
 mod runtime;
+#[allow(
+    dead_code,
+    reason = "used by the script-creation API and UI integration"
+)]
+mod script_creator;
 mod script_host;
 mod script_runtime;
 #[allow(dead_code, reason = "retained internal server and OpenAPI contracts")]

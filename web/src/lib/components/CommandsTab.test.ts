@@ -67,6 +67,8 @@ function commandActions() {
     createScript: vi.fn(),
     previewScriptCreation: vi.fn(),
     reloadCommands: vi.fn().mockResolvedValue({ changed: true, revision: '2' }),
+    runLists: vi.fn().mockResolvedValue({ lists: [], skipped: [] }),
+    saveRunLists: vi.fn().mockResolvedValue({ lists: [], skipped: [] }),
     scriptCreatorSnapshot: vi.fn().mockResolvedValue({
       author: '',
       bridge_available: false,
@@ -244,5 +246,15 @@ describe('CommandsTab', () => {
         .filter((label): label is string => (label?.startsWith('Select ') ?? false));
       expect(labels).toEqual(['Select First', 'Select Alpha']);
     });
+  });
+
+  it('opens the run-list editor from the toolbar', async () => {
+    const { runtime, view } = runtimeView();
+    const actions = commandActions();
+    render(CommandsTab, { actions, runtime, view });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Run lists' }));
+    await waitFor(() => expect(actions.runLists).toHaveBeenCalled());
+    expect(await screen.findByRole('heading', { name: 'Run list editor' })).toBeTruthy();
   });
 });

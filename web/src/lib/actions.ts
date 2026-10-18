@@ -10,6 +10,10 @@ export type GenerateLauncherResult = components['schemas']['GenerateLauncherResu
 export type NotificationTestRequest = components['schemas']['NotificationTestRequest'];
 export type NotificationTestResult = components['schemas']['NotificationTestResult'];
 export type OperationResult = components['schemas']['OperationResult'];
+export type RunListItem = components['schemas']['RunListItem'];
+export type RunListSaveRequest = components['schemas']['RunListSaveRequest'];
+export type RunListSnapshot = components['schemas']['RunListSnapshot'];
+export type RunListSpec = components['schemas']['RunListSpec'];
 export type SavedScreenshot = components['schemas']['SavedScreenshot'];
 export type ScreenshotRequest = components['schemas']['ScreenshotRequest'];
 export type ScriptCreatorPreview = components['schemas']['ScriptCreatorPreview'];
@@ -142,6 +146,17 @@ export class BackendActions {
     return unwrap(
       await this.client.POST('/api/script-creator/create', { body: request }),
       'script creation failed'
+    );
+  }
+
+  async runLists(): Promise<RunListSnapshot> {
+    return unwrap(await this.client.GET('/api/run-lists'), 'run list load failed');
+  }
+
+  async saveRunLists(request: RunListSaveRequest): Promise<RunListSnapshot> {
+    return unwrap(
+      await this.client.PUT('/api/run-lists', { body: request }),
+      'run list save failed'
     );
   }
 

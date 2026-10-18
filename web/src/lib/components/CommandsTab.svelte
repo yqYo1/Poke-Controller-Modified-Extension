@@ -4,11 +4,14 @@
   import type {
     CommandControlRequest,
     OperationResult,
+    RunListSaveRequest,
+    RunListSnapshot,
     ScriptCreatorPreview,
     ScriptCreatorResult,
     ScriptCreatorSnapshot,
     ScriptCreatorSpec
   } from '../actions';
+  import RunListEditorDialog from './RunListEditorDialog.svelte';
   import ScriptCreatorDialog from './ScriptCreatorDialog.svelte';
   import type { SettingsWriteValues } from '../api';
   import type { components } from '../api/openapi';
@@ -26,6 +29,8 @@
     createScript(request: ScriptCreatorSpec): Promise<ScriptCreatorResult>;
     previewScriptCreation(request: ScriptCreatorSpec): Promise<ScriptCreatorPreview>;
     reloadCommands(): Promise<OperationResult>;
+    runLists(): Promise<RunListSnapshot>;
+    saveRunLists(request: RunListSaveRequest): Promise<RunListSnapshot>;
     scriptCreatorSnapshot(): Promise<ScriptCreatorSnapshot>;
   }
 
@@ -44,6 +49,7 @@
 
   let { actions, runtime, view }: Props = $props();
   let creatorOpen = $state(false);
+  let runListOpen = $state(false);
   let activeSubtab = $state<Subtab>('python');
   let assigningSlot = $state<ShortcutIndex | null>(null);
   let busy = $state(false);
@@ -90,6 +96,11 @@
     backendState?.command_candidates.find(
       (command) => identity(command) === selectedIdentity
     ) ?? null
+  );
+  const runListSelection = $derived(
+    selectedCommand === null
+      ? null
+      : { name: selectedCommand.name, type: detectedMcu(selectedCommand) ? 'Mcu' : 'Python' }
   );
   const visibleItems = $derived.by<readonly CommandDisplayItem[]>(() => {
     const filtered = filterForSubtab(baseItems, activeSubtab);
@@ -487,6 +498,7 @@
     <button type="button" class="rounded-lg bg-red/10 px-3 py-2 text-sm text-red disabled:opacity-40" disabled={busy || (backendState?.command_state !== 'running' && backendState?.command_state !== 'paused')} onclick={() => void control({ action: 'stop' })}>Stop</button>
     <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-sm text-subtext1 disabled:opacity-40" disabled={busy} onclick={() => void reload()}>Reload</button>
     <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-sm text-subtext1" onclick={() => (creatorOpen = true)}>New script</button>
+    <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-sm text-subtext1" onclick={() => (runListOpen = true)}>Run lists</button>
     <span class="ml-auto text-xs text-subtext0">{selectedCommand?.name ?? backendState?.current_command ?? 'No command selected'}</span>
   </div>
 
@@ -518,5 +530,14 @@
 
   {#if creatorOpen}
     <ScriptCreatorDialog actions={actions} onclose={() => (creatorOpen = false)} />
+  {/if}
+
+  {#if runListOpen}
+    <RunListEditorDialog
+      actions={actions}
+      selected={runListSelection}
+      onclose={() => (runListOpen = false)}
+      onsaved={() => void reload()}
+    />
   {/if}
 </div>

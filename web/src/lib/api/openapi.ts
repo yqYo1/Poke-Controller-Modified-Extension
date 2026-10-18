@@ -164,6 +164,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/run-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["run_schedule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/run-schedule/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["control_run_schedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/script-creator": {
         parameters: {
             query?: never;
@@ -799,6 +831,46 @@ export interface components {
             on_error?: string;
             /** Format: int32 */
             loops?: number;
+        };
+        /** @description One schedule control request (upstream `run_schedule` inputs). */
+        RunScheduleControlRequest: {
+            target: components["schemas"]["RunScheduleTarget"];
+            clock?: string | null;
+            /** Format: double */
+            after_minutes?: number | null;
+            /** @enum {string} */
+            action: "reserve_start";
+        } | {
+            /** @enum {string} */
+            action: "cancel_start";
+        } | {
+            clock?: string | null;
+            /** Format: double */
+            after_minutes?: number | null;
+            /** @enum {string} */
+            action: "reserve_stop";
+        } | {
+            /** @enum {string} */
+            action: "cancel_stop";
+        };
+        /**
+         * @description Current start and stop reservations plus display strings for the schedule
+         *     tab.
+         */
+        RunScheduleSnapshot: {
+            pending: boolean;
+            has_start: boolean;
+            has_stop: boolean;
+            start_display: string;
+            stop_display: string;
+            message: string;
+            sleep_warning: string;
+        };
+        /** @description One scheduled start target on the wire (run lists use an empty module path). */
+        RunScheduleTarget: {
+            module_path: string;
+            class_name: string;
+            name: string;
         };
         SavedScreenshot: {
             display_path: string;
@@ -1677,6 +1749,22 @@ export interface components {
             };
         };
         /** @description Common successful JSON envelope. */
+        Success_RunScheduleSnapshot: {
+            /**
+             * @description Current start and stop reservations plus display strings for the schedule
+             *     tab.
+             */
+            data: {
+                pending: boolean;
+                has_start: boolean;
+                has_stop: boolean;
+                start_display: string;
+                stop_display: string;
+                message: string;
+                sleep_warning: string;
+            };
+        };
+        /** @description Common successful JSON envelope. */
         Success_SavedScreenshot: {
             data: {
                 display_path: string;
@@ -2295,6 +2383,77 @@ export interface operations {
                 };
             };
             /** @description Run list save failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    run_schedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current start and stop reservations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_RunScheduleSnapshot"];
+                };
+            };
+            /** @description Run schedule read failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    control_run_schedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunScheduleControlRequest"];
+            };
+        };
+        responses: {
+            /** @description Reservation applied and the snapshot returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_RunScheduleSnapshot"];
+                };
+            };
+            /** @description Reservation input is invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Run schedule control failure */
             500: {
                 headers: {
                     [name: string]: unknown;

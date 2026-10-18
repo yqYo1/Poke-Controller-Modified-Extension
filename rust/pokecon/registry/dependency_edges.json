@@ -259,6 +259,10 @@
     ],
     [
       "production",
+      "run_schedule"
+    ],
+    [
+      "production",
       "script_host"
     ],
     [
@@ -300,6 +304,10 @@
     [
       "profile_service",
       "worker"
+    ],
+    [
+      "run_schedule",
+      "command_service"
     ],
     [
       "runtime",

@@ -604,6 +604,86 @@
         }
       }
     },
+    "/api/run-schedule": {
+      "get": {
+        "tags": [
+          "run_schedule"
+        ],
+        "operationId": "run_schedule",
+        "responses": {
+          "200": {
+            "description": "Current start and stop reservations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_RunScheduleSnapshot"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Run schedule read failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/run-schedule/control": {
+      "post": {
+        "tags": [
+          "run_schedule"
+        ],
+        "operationId": "control_run_schedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunScheduleControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Reservation applied and the snapshot returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_RunScheduleSnapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Reservation input is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Run schedule control failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/script-creator": {
       "get": {
         "tags": [
@@ -3303,6 +3383,161 @@
             "type": "integer",
             "format": "int32",
             "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunScheduleControlRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Reserves a start at a clock time (the next occurrence) or after\nminutes; exactly one of `clock` and `after_minutes` must be present.",
+            "required": [
+              "target",
+              "action"
+            ],
+            "properties": {
+              "target": {
+                "$ref": "#/components/schemas/RunScheduleTarget"
+              },
+              "clock": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "after_minutes": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "format": "double"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "reserve_start"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "cancel_start"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Reserves a stop at a clock time or relative to the start; exactly one\nof `clock` and `after_minutes` must be present.",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "clock": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "after_minutes": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "format": "double"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "reserve_stop"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "cancel_stop"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "One schedule control request (upstream `run_schedule` inputs)."
+      },
+      "RunScheduleSnapshot": {
+        "type": "object",
+        "description": "Current start and stop reservations plus display strings for the schedule\ntab.",
+        "required": [
+          "pending",
+          "has_start",
+          "has_stop",
+          "start_display",
+          "stop_display",
+          "message",
+          "sleep_warning"
+        ],
+        "properties": {
+          "pending": {
+            "type": "boolean"
+          },
+          "has_start": {
+            "type": "boolean"
+          },
+          "has_stop": {
+            "type": "boolean"
+          },
+          "start_display": {
+            "type": "string"
+          },
+          "stop_display": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "sleep_warning": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunScheduleTarget": {
+        "type": "object",
+        "description": "One scheduled start target on the wire (run lists use an empty module path).",
+        "required": [
+          "module_path",
+          "class_name",
+          "name"
+        ],
+        "properties": {
+          "module_path": {
+            "type": "string"
+          },
+          "class_name": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -6850,6 +7085,53 @@
         },
         "additionalProperties": false
       },
+      "Success_RunScheduleSnapshot": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Current start and stop reservations plus display strings for the schedule\ntab.",
+            "required": [
+              "pending",
+              "has_start",
+              "has_stop",
+              "start_display",
+              "stop_display",
+              "message",
+              "sleep_warning"
+            ],
+            "properties": {
+              "pending": {
+                "type": "boolean"
+              },
+              "has_start": {
+                "type": "boolean"
+              },
+              "has_stop": {
+                "type": "boolean"
+              },
+              "start_display": {
+                "type": "string"
+              },
+              "stop_display": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "sleep_warning": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
       "Success_SavedScreenshot": {
         "type": "object",
         "description": "Common successful JSON envelope.",
@@ -7427,6 +7709,10 @@
     {
       "name": "run_lists",
       "description": "Saved command run lists"
+    },
+    {
+      "name": "run_schedule",
+      "description": "Command start and stop reservations"
     }
   ]
 }

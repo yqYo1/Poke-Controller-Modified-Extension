@@ -8,9 +8,10 @@ use crate::server::api::{
     ApiError, ApiErrorCode, CameraDevice, CommandControlRequest, DynamicConfigControlRequest,
     DynamicConfigResult, GenerateLauncherRequest, GenerateLauncherResult, ImageFormat,
     NotificationTestRequest, NotificationTestResult, OperationResult, RunListSnapshot, RunListSpec,
-    SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult,
-    ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult,
-    SerialControlRequest, SerialPort, SettingsPatchRequest, SettingsSnapshot, UpdateCheckResult,
+    RunScheduleControlRequest, RunScheduleSnapshot, SavedScreenshot, ScreenshotRequest,
+    ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec,
+    ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort, SettingsPatchRequest,
+    SettingsSnapshot, UpdateCheckResult,
 };
 use crate::server::state::StateHub;
 
@@ -191,6 +192,27 @@ pub trait RestBackend: Send + Sync + 'static {
             ApiFailureStatus::NotFound,
             ApiErrorCode::ResourceNotFound,
             "run lists are not available",
+        ))
+    }
+
+    /// Current start and stop reservations (upstream `run_schedule`).
+    async fn run_schedule(&self) -> ApiResult<RunScheduleSnapshot> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "run schedule is not available",
+        ))
+    }
+
+    /// Applies one schedule control and returns the snapshot.
+    async fn control_run_schedule(
+        &self,
+        _request: RunScheduleControlRequest,
+    ) -> ApiResult<RunScheduleSnapshot> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "run schedule is not available",
         ))
     }
 

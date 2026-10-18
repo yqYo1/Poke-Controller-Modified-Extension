@@ -155,6 +155,8 @@ use crate::server::api::{
         crate::server::paths::test_notification,
         crate::server::paths::run_lists,
         crate::server::paths::save_run_lists,
+        crate::server::paths::run_schedule,
+        crate::server::paths::control_run_schedule,
         crate::server::paths::script_creator_snapshot,
         crate::server::paths::preview_script_creation,
         crate::server::paths::create_script,
@@ -172,6 +174,7 @@ use crate::server::api::{
         ,(name = "script_ui", description = "Profile-scoped script dialogs and compatibility UI")
         ,(name = "script_creator", description = "Script template creation from the web interface")
         ,(name = "run_lists", description = "Saved command run lists")
+        ,(name = "run_schedule", description = "Command start and stop reservations")
     )
 )]
 struct ApiDocument;

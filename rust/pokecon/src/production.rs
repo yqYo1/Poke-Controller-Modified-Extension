@@ -43,11 +43,12 @@ use crate::application_backend::{
 };
 use crate::camera::ScreenshotMode;
 use crate::command_service::{
-    CommandService, CommandServiceError, DynamicCommandBridge, ScriptSessionStop,
+    CommandService, CommandServiceError, CommandStatus, DynamicCommandBridge, ScriptSessionStop,
     StaticCommandBridge,
 };
 use crate::dynamic_host::StartupDynamicHost;
 use crate::profile_service::ProfileService;
+use crate::run_schedule::{RunSchedule, ScheduleIo, ScheduleTarget};
 use crate::script_host::{ProductionScriptHostFactory, ScriptUiCoordinator};
 use crate::script_runtime::ManagedUserScriptFactory;
 use crate::settings_runtime::{
@@ -449,6 +450,10 @@ impl ProductionRuntime {
             Arc::clone(&commands),
             host.subscribe_command_recompute(),
         ));
+        cleanup.tasks.push(spawn_run_schedule(
+            backend.run_schedule_handle(),
+            Arc::clone(&commands),
+        ));
 
         Ok(Self {
             router,
@@ -477,6 +482,7 @@ impl ProductionRuntime {
     /// dynamic mutations.
     pub(crate) async fn stop_inputs_camera_and_scripts(&mut self) {
         abort_background_tasks(std::mem::take(&mut self.tasks)).await;
+        self.backend.run_schedule_handle().lock().await.cancel_all();
         let controller = {
             let arbiter = self.backend.host().controller_safety().arbiter();
             let mut arbiter = arbiter.lock();
@@ -985,6 +991,48 @@ fn spawn_command_recompute(
             if let Err(error) = backend.reconcile_host(StateChangeCause::Commands).await {
                 tracing::error!(error = ?error.error(), "command state reconciliation failed");
             }
+        }
+    })
+}
+
+/// Milliseconds between scheduler ticks: the upstream UI calls `tick` a few
+/// times per second.
+const RUN_SCHEDULE_TICK: Duration = Duration::from_millis(250);
+
+/// Bridges [`crate::run_schedule::ScheduleIo`] onto the command service.
+struct CommandScheduleIo {
+    commands: Arc<CommandService>,
+}
+
+impl ScheduleIo for CommandScheduleIo {
+    async fn is_running(&self) -> bool {
+        matches!(
+            self.commands.status().await,
+            CommandStatus::Running | CommandStatus::Paused
+        )
+    }
+
+    async fn start(&mut self, target: &ScheduleTarget) -> bool {
+        self.commands.start(&target.identity).await.is_ok()
+    }
+
+    async fn stop(&mut self) {
+        let _ = self.commands.stop().await;
+    }
+}
+
+fn spawn_run_schedule(
+    schedule: Arc<tokio::sync::Mutex<RunSchedule>>,
+    commands: Arc<CommandService>,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(RUN_SCHEDULE_TICK);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut io = CommandScheduleIo { commands };
+        loop {
+            interval.tick().await;
+            let now = chrono::Local::now().naive_local();
+            schedule.lock().await.tick(now, &mut io).await;
         }
     })
 }

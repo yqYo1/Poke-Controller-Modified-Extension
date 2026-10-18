@@ -212,6 +212,11 @@
       "path": "rust/pokecon/src/server/backend.rs",
       "name": "RestBackend",
       "justification": "transport seam: REST transport bounded to the public backend interface"
+    },
+    {
+      "path": "rust/pokecon/src/run_schedule.rs",
+      "name": "ScheduleIo",
+      "justification": "test seam: scheduler tick effects (start, stop, is_running) behind production and test implementations"
     }
   ],
   "services": [

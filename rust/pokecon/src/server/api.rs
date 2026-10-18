@@ -1161,6 +1161,54 @@ pub struct RunListSnapshot {
     pub skipped: Vec<String>,
 }
 
+/// One scheduled start target on the wire (run lists use an empty module path).
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RunScheduleTarget {
+    pub module_path: String,
+    pub class_name: String,
+    pub name: String,
+}
+
+/// Current start and stop reservations plus display strings for the schedule
+/// tab.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RunScheduleSnapshot {
+    pub pending: bool,
+    pub has_start: bool,
+    pub has_stop: bool,
+    pub start_display: String,
+    pub stop_display: String,
+    pub message: String,
+    pub sleep_warning: String,
+}
+
+/// One schedule control request (upstream `run_schedule` inputs).
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum RunScheduleControlRequest {
+    /// Reserves a start at a clock time (the next occurrence) or after
+    /// minutes; exactly one of `clock` and `after_minutes` must be present.
+    ReserveStart {
+        target: RunScheduleTarget,
+        #[serde(default)]
+        clock: Option<String>,
+        #[serde(default)]
+        after_minutes: Option<f64>,
+    },
+    CancelStart,
+    /// Reserves a stop at a clock time or relative to the start; exactly one
+    /// of `clock` and `after_minutes` must be present.
+    ReserveStop {
+        #[serde(default)]
+        clock: Option<String>,
+        #[serde(default)]
+        after_minutes: Option<f64>,
+    },
+    CancelStop,
+}
+
 /// Snapshot for the script-creator dialog: folder choices and remembered
 /// author (upstream `script_folders` / `template_folders` / `load_author`).
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]

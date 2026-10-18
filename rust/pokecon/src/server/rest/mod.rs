@@ -6,6 +6,7 @@ mod dynamic_config;
 mod notifications;
 mod profiles;
 mod run_lists;
+mod run_schedule;
 mod script_creator;
 mod script_ui;
 mod settings;
@@ -44,6 +45,7 @@ pub fn router(backend: Arc<dyn RestBackend>) -> Router {
         .merge(dynamic_config::router())
         .merge(profiles::router())
         .merge(run_lists::router())
+        .merge(run_schedule::router())
         .merge(script_creator::router())
         .merge(script_ui::router())
         .merge(state::router())
@@ -212,6 +214,7 @@ async fn method_not_allowed(uri: Uri) -> Response {
         "/api/run-lists" => "GET, PUT",
         "/api/devices/cameras"
         | "/api/devices/serial-ports"
+        | "/api/run-schedule"
         | "/api/script-creator"
         | "/api/state" => "GET",
         "/api/camera/retry"
@@ -221,6 +224,7 @@ async fn method_not_allowed(uri: Uri) -> Response {
         | "/api/dynamic-config/control"
         | "/api/notifications/test"
         | "/api/profiles/generate-launcher"
+        | "/api/run-schedule/control"
         | "/api/script-creator/create"
         | "/api/script-creator/preview"
         | "/api/script-ui/action"
@@ -263,9 +267,10 @@ mod tests {
         ApiErrorCode, CameraDevice, CameraSelector, CommandControlRequest, CommandState,
         DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
         GenerateLauncherRequest, GenerateLauncherResult, ImageFormat, NotificationTestRequest,
-        NotificationTestResult, OperationResult, RunListSnapshot, RunListSpec, SavedScreenshot,
-        ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot,
-        ScriptCreatorSpec, SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange,
+        NotificationTestResult, OperationResult, RunListSnapshot, RunListSpec,
+        RunScheduleControlRequest, RunScheduleSnapshot, SavedScreenshot, ScreenshotRequest,
+        ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec,
+        SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange,
         SettingsPatchRequest, SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot,
         StateChangeCause, StatePatch, StateSnapshot, UpdateCheckResult,
     };
@@ -406,6 +411,17 @@ mod tests {
                 lists: Vec::new(),
                 skipped: Vec::new(),
             })
+        }
+
+        async fn run_schedule(&self) -> ApiResult<RunScheduleSnapshot> {
+            Ok(schedule_snapshot())
+        }
+
+        async fn control_run_schedule(
+            &self,
+            _request: RunScheduleControlRequest,
+        ) -> ApiResult<RunScheduleSnapshot> {
+            Ok(schedule_snapshot())
         }
 
         async fn save_run_lists(&self, _lists: Vec<RunListSpec>) -> ApiResult<RunListSnapshot> {
@@ -568,6 +584,18 @@ mod tests {
         })
     }
 
+    fn schedule_snapshot() -> RunScheduleSnapshot {
+        RunScheduleSnapshot {
+            pending: false,
+            has_start: false,
+            has_stop: false,
+            start_display: "予約はありません".to_owned(),
+            stop_display: "予約はありません".to_owned(),
+            message: String::new(),
+            sleep_warning: String::new(),
+        }
+    }
+
     fn request_forbidden_error() -> Value {
         json!({
             "error": {
@@ -581,7 +609,7 @@ mod tests {
     const STANDARD_METHODS: [&str; 9] = [
         "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT",
     ];
-    const REST_METHOD_MATRIX: [(&str, &[&str]); 18] = [
+    const REST_METHOD_MATRIX: [(&str, &[&str]); 20] = [
         ("/api/camera/retry", &["POST"]),
         ("/api/camera/screenshot", &["POST"]),
         ("/api/commands/control", &["POST"]),
@@ -592,6 +620,8 @@ mod tests {
         ("/api/notifications/test", &["POST"]),
         ("/api/profiles/generate-launcher", &["POST"]),
         ("/api/run-lists", &["GET", "PUT"]),
+        ("/api/run-schedule", &["GET"]),
+        ("/api/run-schedule/control", &["POST"]),
         ("/api/script-creator", &["GET"]),
         ("/api/script-creator/create", &["POST"]),
         ("/api/script-creator/preview", &["POST"]),
@@ -681,8 +711,8 @@ mod tests {
             }
         }
 
-        assert_eq!(advertised_count, 20);
-        assert_eq!(rejected_count, 142);
+        assert_eq!(advertised_count, 22);
+        assert_eq!(rejected_count, 158);
     }
 
     #[tokio::test]

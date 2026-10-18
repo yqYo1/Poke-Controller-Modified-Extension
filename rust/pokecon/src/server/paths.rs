@@ -184,6 +184,30 @@ pub fn save_run_lists() {}
 
 #[utoipa::path(
     get,
+    path = "/api/run-schedule",
+    tag = "run_schedule",
+    responses(
+        (status = 200, description = "Current start and stop reservations", body = Success<crate::server::api::RunScheduleSnapshot>),
+        (status = 500, description = "Run schedule read failure", body = ErrorEnvelope)
+    )
+)]
+pub fn run_schedule() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/run-schedule/control",
+    tag = "run_schedule",
+    request_body(content = crate::server::api::RunScheduleControlRequest, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Reservation applied and the snapshot returned", body = Success<crate::server::api::RunScheduleSnapshot>),
+        (status = 422, description = "Reservation input is invalid", body = ErrorEnvelope),
+        (status = 500, description = "Run schedule control failure", body = ErrorEnvelope)
+    )
+)]
+pub fn control_run_schedule() {}
+
+#[utoipa::path(
+    get,
     path = "/api/script-creator",
     tag = "script_creator",
     responses(

@@ -27,10 +27,11 @@ use crate::server::api::{
     GamepadButton, GamepadHat, GamepadInput, GenerateLauncherRequest, GenerateLauncherResult,
     ImageFormat, InputApplied, InputGeneration, LauncherDestination, NotificationTestRequest,
     NotificationTestResult, OperationResult, RunListItem, RunListSnapshot, RunListSpec,
-    ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec,
-    ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort, SerialPortTransport,
-    SettingsChange, SettingsPatchRequest, SettingsReadPatchValues, SettingsReadValues,
-    SettingsSnapshot, StateChangeCause, StatePatch, StateSnapshot, UpdateCheckResult,
+    RunScheduleControlRequest, RunScheduleSnapshot, ScriptCreatorPreview, ScriptCreatorResult,
+    ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult,
+    SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange, SettingsPatchRequest,
+    SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch,
+    StateSnapshot, UpdateCheckResult,
 };
 use crate::server::backend::{
     ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload, LauncherOutput,
@@ -123,6 +124,7 @@ pub(crate) struct ApplicationBackend {
     motion_jpeg: Option<MotionJpegFeed>,
     screenshot_mode: ScreenshotMode,
     script_ui: ScriptUiCoordinator,
+    run_schedule: Arc<Mutex<crate::run_schedule::RunSchedule>>,
     arbiter: Arc<ParkingMutex<InputArbiter>>,
     browser_generations: ParkingMutex<BTreeMap<ConnectionId, InputGeneration>>,
     next_profile_generation: AtomicU64,
@@ -162,6 +164,7 @@ impl ApplicationBackend {
             motion_jpeg: parts.motion_jpeg,
             screenshot_mode: parts.screenshot_mode,
             script_ui: parts.script_ui,
+            run_schedule: Arc::new(Mutex::new(crate::run_schedule::RunSchedule::new())),
             arbiter,
             browser_generations: ParkingMutex::new(BTreeMap::new()),
             next_profile_generation: AtomicU64::new(0),
@@ -171,6 +174,12 @@ impl ApplicationBackend {
             dynamic_watcher: DynamicConfigWatcher::new(),
             watcher_owner: OnceLock::new(),
         }
+    }
+
+    /// Handle for the production scheduler ticker; the REST surface uses the
+    /// same instance.
+    pub(crate) fn run_schedule_handle(&self) -> Arc<Mutex<crate::run_schedule::RunSchedule>> {
+        Arc::clone(&self.run_schedule)
     }
 
     pub(crate) fn install_command_services(
@@ -508,6 +517,99 @@ fn to_creator_spec(spec: &ScriptCreatorSpec) -> CreatorSpec {
     }
 }
 
+fn schedule_snapshot(
+    schedule: &crate::run_schedule::RunSchedule,
+    now: chrono::NaiveDateTime,
+) -> RunScheduleSnapshot {
+    let (start_display, stop_display) = schedule.describe(now);
+    RunScheduleSnapshot {
+        pending: schedule.pending(),
+        has_start: schedule.start_at().is_some(),
+        has_stop: schedule.stop_at().is_some() || schedule.stop_after_minutes().is_some(),
+        start_display,
+        stop_display,
+        message: schedule.last_message().to_owned(),
+        sleep_warning: crate::run_schedule::SLEEP_WARNING.to_owned(),
+    }
+}
+
+fn invalid_reservation(message: String) -> ApiFailure {
+    ApiFailure::new(
+        ApiFailureStatus::UnprocessableEntity,
+        ApiErrorCode::InvalidRequest,
+        message,
+    )
+}
+
+fn reservation_time(
+    clock: Option<&str>,
+    after_minutes: Option<f64>,
+    now: chrono::NaiveDateTime,
+) -> ApiResult<chrono::NaiveDateTime> {
+    match (clock, after_minutes) {
+        (Some(text), None) => {
+            crate::run_schedule::parse_clock(text, now).map_err(invalid_reservation)
+        }
+        (None, Some(minutes)) => {
+            crate::run_schedule::check_minutes(minutes).map_err(invalid_reservation)?;
+            Ok(crate::run_schedule::minutes_from(now, minutes))
+        }
+        _ => Err(invalid_reservation(
+            "「時刻」か「分後」のどちらかを指定してください。".to_owned(),
+        )),
+    }
+}
+
+fn apply_schedule_control(
+    schedule: &mut crate::run_schedule::RunSchedule,
+    request: RunScheduleControlRequest,
+    running: bool,
+    now: chrono::NaiveDateTime,
+) -> ApiResult<()> {
+    match request {
+        RunScheduleControlRequest::ReserveStart {
+            target,
+            clock,
+            after_minutes,
+        } => {
+            let when = reservation_time(clock.as_deref(), after_minutes, now)?;
+            schedule.reserve_start(
+                when,
+                crate::run_schedule::ScheduleTarget {
+                    identity: crate::command_service::CommandIdentity {
+                        module_path: target.module_path,
+                        class_name: target.class_name,
+                    },
+                    name: target.name,
+                },
+            );
+        }
+        RunScheduleControlRequest::CancelStart => schedule.cancel_start(),
+        RunScheduleControlRequest::ReserveStop {
+            clock,
+            after_minutes,
+        } => match (clock.as_deref(), after_minutes) {
+            (Some(text), None) => {
+                let when =
+                    crate::run_schedule::parse_clock(text, now).map_err(invalid_reservation)?;
+                schedule.reserve_stop_at(when, running);
+            }
+            (None, Some(minutes)) => {
+                schedule
+                    .reserve_stop_after(minutes, running, now)
+                    .map_err(invalid_reservation)?;
+            }
+            _ => {
+                return Err(invalid_reservation(
+                    "「時刻」か「分後」のどちらかを指定してください。".to_owned(),
+                ));
+            }
+        },
+        RunScheduleControlRequest::CancelStop => schedule.cancel_stop(),
+    }
+    Ok(())
+}
+
 #[allow(
     clippy::too_many_lines,
     reason = "the REST surface mirrors the upstream control endpoints"
@@ -583,6 +685,29 @@ impl RestBackend for ApplicationBackend {
                 "run list save failed",
             )
         })?
+    }
+
+    // TEMP TEST: overrides removed
+
+    async fn run_schedule(&self) -> ApiResult<RunScheduleSnapshot> {
+        let now = chrono::Local::now().naive_local();
+        let schedule = self.run_schedule.lock().await;
+        Ok(schedule_snapshot(&schedule, now))
+    }
+
+    async fn control_run_schedule(
+        &self,
+        request: RunScheduleControlRequest,
+    ) -> ApiResult<RunScheduleSnapshot> {
+        let now = chrono::Local::now().naive_local();
+        let running = matches!(
+            self.commands()?.status().await,
+            crate::command_service::CommandStatus::Running
+                | crate::command_service::CommandStatus::Paused
+        );
+        let mut schedule = self.run_schedule.lock().await;
+        apply_schedule_control(&mut schedule, request, running, now)?;
+        Ok(schedule_snapshot(&schedule, now))
     }
 
     async fn script_creator_snapshot(&self) -> ApiResult<ScriptCreatorSnapshot> {

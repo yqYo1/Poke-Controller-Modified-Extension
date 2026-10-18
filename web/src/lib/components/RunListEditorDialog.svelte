@@ -1,14 +1,24 @@
 <script lang="ts">
-  import type { RunListItem, RunListSnapshot, RunListSpec } from '../actions';
+  import type {
+    RunListItem,
+    RunListSnapshot,
+    RunListSpec,
+    RunScheduleControlRequest,
+    RunScheduleSnapshot
+  } from '../actions';
 
   interface RunListActions {
+    controlRunSchedule(request: RunScheduleControlRequest): Promise<RunScheduleSnapshot>;
     runLists(): Promise<RunListSnapshot>;
+    runSchedule(): Promise<RunScheduleSnapshot>;
     saveRunLists(request: { lists: RunListSpec[] }): Promise<RunListSnapshot>;
   }
 
   interface Selection {
     readonly name: string;
     readonly type: string;
+    readonly module_path: string;
+    readonly class_name: string;
   }
 
   interface Props {
@@ -30,6 +40,17 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
   let message = $state<string | null>(null);
+  let activeTab = $state<'lists' | 'schedule'>('lists');
+  let schedule = $state<RunScheduleSnapshot | null>(null);
+  let scheduleError = $state<string | null>(null);
+  let scheduleMessage = $state<string | null>(null);
+  let scheduleBusy = $state(false);
+  let startMode = $state<'clock' | 'minutes'>('clock');
+  let startClock = $state('');
+  let startMinutes = $state('');
+  let stopMode = $state<'clock' | 'minutes'>('clock');
+  let stopClock = $state('');
+  let stopMinutes = $state('');
 
   const rows = $derived(draft?.items ?? []);
   const selectedItem = $derived(
@@ -38,6 +59,13 @@
 
   $effect(() => {
     void load();
+  });
+
+  $effect(() => {
+    if (activeTab !== 'schedule') return;
+    void refreshSchedule();
+    const timer = setInterval(() => void refreshSchedule(), 1000);
+    return () => clearInterval(timer);
   });
 
   async function load(): Promise<void> {
@@ -336,6 +364,77 @@
       busy = false;
     }
   }
+
+  async function refreshSchedule(): Promise<void> {
+    try {
+      schedule = await actions.runSchedule();
+      scheduleError = null;
+    } catch (reason: unknown) {
+      scheduleError = messageOf(reason, 'Run schedule load failed');
+    }
+  }
+
+  function confirmSleepWarning(): boolean {
+    if (schedule?.pending) return true;
+    const warning = schedule?.sleep_warning ?? '';
+    return window.confirm(`${warning}\n\n予約しますか?`);
+  }
+
+  async function controlSchedule(request: RunScheduleControlRequest): Promise<void> {
+    scheduleBusy = true;
+    scheduleMessage = null;
+    try {
+      schedule = await actions.controlRunSchedule(request);
+      scheduleError = null;
+    } catch (reason: unknown) {
+      scheduleMessage = messageOf(reason, 'Run schedule control failed');
+    } finally {
+      scheduleBusy = false;
+    }
+  }
+
+  function reserveStart(): void {
+    if (selected === null) {
+      scheduleMessage = 'Select a command in the Commands tab first.';
+      return;
+    }
+    if (startMode === 'clock' && startClock.trim().length === 0) {
+      scheduleMessage = 'Enter the start time as 23:30.';
+      return;
+    }
+    if (startMode === 'minutes' && startMinutes.trim().length === 0) {
+      scheduleMessage = 'Enter the minutes as a number.';
+      return;
+    }
+    const target = {
+      module_path: selected.module_path,
+      class_name: selected.class_name,
+      name: selected.name
+    };
+    const request: RunScheduleControlRequest =
+      startMode === 'clock'
+        ? { action: 'reserve_start', target, clock: startClock }
+        : { action: 'reserve_start', target, after_minutes: Number(startMinutes) };
+    if (!confirmSleepWarning()) return;
+    void controlSchedule(request);
+  }
+
+  function reserveStop(): void {
+    if (stopMode === 'clock' && stopClock.trim().length === 0) {
+      scheduleMessage = 'Enter the stop time as 23:30.';
+      return;
+    }
+    if (stopMode === 'minutes' && stopMinutes.trim().length === 0) {
+      scheduleMessage = 'Enter the minutes as a number.';
+      return;
+    }
+    const request: RunScheduleControlRequest =
+      stopMode === 'clock'
+        ? { action: 'reserve_stop', clock: stopClock }
+        : { action: 'reserve_stop', after_minutes: Number(stopMinutes) };
+    if (!confirmSleepWarning()) return;
+    void controlSchedule(request);
+  }
 </script>
 
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="presentation">
@@ -348,10 +447,16 @@
       <button type="button" class="rounded-md bg-text/5 px-2 py-1 text-[11px] text-subtext1" onclick={onclose}>Close</button>
     </header>
 
+    <div class="mb-3 flex gap-1" role="tablist" aria-label="Run list editor tabs">
+      <button type="button" role="tab" aria-selected={activeTab === 'lists'} class={`rounded-md px-3 py-1 text-xs font-medium ${activeTab === 'lists' ? 'bg-blue/15 text-blue' : 'bg-text/5 text-subtext1'}`} onclick={() => (activeTab = 'lists')}>Run lists</button>
+      <button type="button" role="tab" aria-selected={activeTab === 'schedule'} class={`rounded-md px-3 py-1 text-xs font-medium ${activeTab === 'schedule' ? 'bg-blue/15 text-blue' : 'bg-text/5 text-subtext1'}`} onclick={() => (activeTab = 'schedule')}>Schedule</button>
+    </div>
+
     {#if error !== null}
       <p class="mb-3 rounded-md bg-red/10 px-3 py-2 text-xs text-red" role="alert">{error}</p>
     {/if}
 
+    {#if activeTab === 'lists'}
     <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
       <div class="rounded-md border border-text/10 bg-crust/25 p-3">
         <h3 class="mb-2 text-xs font-semibold text-subtext1">Saved lists</h3>
@@ -450,5 +555,60 @@
       {/if}
       <button type="button" class="ml-auto rounded-lg bg-blue/15 px-4 py-2 text-sm font-medium text-blue disabled:opacity-40" disabled={busy || draft === null} onclick={() => void save()}>Save</button>
     </div>
+    {:else}
+    <div class="grid gap-3 sm:grid-cols-2">
+      <div class="rounded-md border border-text/10 bg-crust/25 p-3">
+        <h3 class="mb-2 text-xs font-semibold text-subtext1">Start reservation</h3>
+        <p class="text-xs text-subtext0">Command: <span class="text-text">{selected === null ? '(no command selected)' : `[${selected.type}] ${selected.name}`}</span></p>
+        <p class="mt-1 text-[11px] text-subtext0">Uses the command selected in the Commands tab; run lists can be selected too.</p>
+        <div class="mt-2 space-y-1 text-xs text-subtext1">
+          <label class="flex items-center gap-2">
+            <input type="radio" name="schedule-start-mode" checked={startMode === 'clock'} onchange={() => (startMode = 'clock')} />
+            At a time (hour:minute)
+            <input class="w-20 rounded-md border border-text/15 bg-crust/40 px-2 py-0.5 text-sm text-text" aria-label="Start time" value={startClock} oninput={(event) => (startClock = event.currentTarget.value)} />
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="radio" name="schedule-start-mode" checked={startMode === 'minutes'} onchange={() => (startMode = 'minutes')} />
+            After minutes
+            <input class="w-20 rounded-md border border-text/15 bg-crust/40 px-2 py-0.5 text-sm text-text" aria-label="Start minutes" value={startMinutes} oninput={(event) => (startMinutes = event.currentTarget.value)} />
+          </label>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-1">
+          <button type="button" class="rounded-md bg-blue/15 px-2 py-1 text-[11px] text-blue disabled:opacity-40" disabled={scheduleBusy} onclick={reserveStart}>Reserve start</button>
+          <button type="button" class="rounded-md bg-text/5 px-2 py-1 text-[11px] text-subtext1 disabled:opacity-40" aria-label="Cancel the start reservation" disabled={scheduleBusy || !(schedule?.has_start ?? false)} onclick={() => void controlSchedule({ action: 'cancel_start' })}>Cancel</button>
+        </div>
+        <p class="mt-2 text-xs text-subtext1" role="status">Now reserved: {schedule?.start_display ?? '予約はありません'}</p>
+      </div>
+
+      <div class="rounded-md border border-text/10 bg-crust/25 p-3">
+        <h3 class="mb-2 text-xs font-semibold text-subtext1">Stop reservation</h3>
+        <div class="mt-2 space-y-1 text-xs text-subtext1">
+          <label class="flex items-center gap-2">
+            <input type="radio" name="schedule-stop-mode" checked={stopMode === 'clock'} onchange={() => (stopMode = 'clock')} />
+            At a time (hour:minute)
+            <input class="w-20 rounded-md border border-text/15 bg-crust/40 px-2 py-0.5 text-sm text-text" aria-label="Stop time" value={stopClock} oninput={(event) => (stopClock = event.currentTarget.value)} />
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="radio" name="schedule-stop-mode" checked={stopMode === 'minutes'} onchange={() => (stopMode = 'minutes')} />
+            After start (minutes)
+            <input class="w-20 rounded-md border border-text/15 bg-crust/40 px-2 py-0.5 text-sm text-text" aria-label="Stop minutes" value={stopMinutes} oninput={(event) => (stopMinutes = event.currentTarget.value)} />
+          </label>
+        </div>
+        <p class="mt-1 text-[11px] text-subtext0">"After start" counts from now while a command is running, or from the reserved start.</p>
+        <div class="mt-2 flex flex-wrap gap-1">
+          <button type="button" class="rounded-md bg-blue/15 px-2 py-1 text-[11px] text-blue disabled:opacity-40" disabled={scheduleBusy} onclick={reserveStop}>Reserve stop</button>
+          <button type="button" class="rounded-md bg-text/5 px-2 py-1 text-[11px] text-subtext1 disabled:opacity-40" aria-label="Cancel the stop reservation" disabled={scheduleBusy || !(schedule?.has_stop ?? false)} onclick={() => void controlSchedule({ action: 'cancel_stop' })}>Cancel</button>
+        </div>
+        <p class="mt-2 text-xs text-subtext1" role="status">Now reserved: {schedule?.stop_display ?? '予約はありません'}</p>
+      </div>
+    </div>
+    <p class="mt-2 text-[11px] text-subtext0">Reservations stay after this window is closed; they are cleared when the application exits. If the PC is asleep at the reserved time, reservations will not work correctly.</p>
+    {#if scheduleMessage !== null}
+      <p class="mt-2 text-xs text-yellow" role="status">{scheduleMessage}</p>
+    {/if}
+    {#if scheduleError !== null}
+      <p class="mt-2 text-xs text-red" role="alert">{scheduleError}</p>
+    {/if}
+    {/if}
   </section>
 </div>

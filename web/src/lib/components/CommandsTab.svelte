@@ -6,6 +6,8 @@
     OperationResult,
     RunListSaveRequest,
     RunListSnapshot,
+    RunScheduleControlRequest,
+    RunScheduleSnapshot,
     ScriptCreatorPreview,
     ScriptCreatorResult,
     ScriptCreatorSnapshot,
@@ -30,6 +32,8 @@
     previewScriptCreation(request: ScriptCreatorSpec): Promise<ScriptCreatorPreview>;
     reloadCommands(): Promise<OperationResult>;
     runLists(): Promise<RunListSnapshot>;
+    runSchedule(): Promise<RunScheduleSnapshot>;
+    controlRunSchedule(request: RunScheduleControlRequest): Promise<RunScheduleSnapshot>;
     saveRunLists(request: RunListSaveRequest): Promise<RunListSnapshot>;
     scriptCreatorSnapshot(): Promise<ScriptCreatorSnapshot>;
   }
@@ -100,7 +104,12 @@
   const runListSelection = $derived(
     selectedCommand === null
       ? null
-      : { name: selectedCommand.name, type: detectedMcu(selectedCommand) ? 'Mcu' : 'Python' }
+      : {
+          name: selectedCommand.name,
+          type: detectedMcu(selectedCommand) ? 'Mcu' : 'Python',
+          module_path: selectedCommand.module_path,
+          class_name: selectedCommand.class_name
+        }
   );
   const visibleItems = $derived.by<readonly CommandDisplayItem[]>(() => {
     const filtered = filterForSubtab(baseItems, activeSubtab);

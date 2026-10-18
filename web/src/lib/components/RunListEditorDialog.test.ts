@@ -4,6 +4,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RunListSpec } from '../actions';
 import RunListEditorDialog from './RunListEditorDialog.svelte';
 
+function scheduleSnapshot(overrides: Record<string, unknown> = {}) {
+  return {
+    pending: false,
+    has_start: false,
+    has_stop: false,
+    start_display: '予約はありません',
+    stop_display: '予約はありません',
+    message: '',
+    sleep_warning: '予約した時刻に PC がスリープしていると、予約は正常に動作しません。',
+    ...overrides
+  };
+}
+
 function runListActions(lists: RunListSpec[] = []) {
   return {
     runLists: vi.fn().mockResolvedValue({ lists, skipped: [] }),
@@ -11,7 +24,11 @@ function runListActions(lists: RunListSpec[] = []) {
       .fn()
       .mockImplementation((request: { lists: RunListSpec[] }) =>
         Promise.resolve({ lists: request.lists, skipped: [] })
-      )
+      ),
+    runSchedule: vi.fn().mockResolvedValue(scheduleSnapshot()),
+    controlRunSchedule: vi
+      .fn()
+      .mockImplementation(() => Promise.resolve(scheduleSnapshot({ pending: true })))
   };
 }
 
@@ -45,7 +62,12 @@ describe('RunListEditorDialog', () => {
     const actions = runListActions([]);
     render(RunListEditorDialog, {
       actions,
-      selected: { name: 'wave', type: 'Python' },
+      selected: {
+        name: 'wave',
+        type: 'Python',
+        module_path: 'Commands.PythonCommands.samples.wave',
+        class_name: 'wave'
+      },
       onclose: vi.fn()
     });
 
@@ -141,5 +163,98 @@ describe('RunListEditorDialog', () => {
     await waitFor(() => expect(actions.saveRunLists).toHaveBeenCalled());
     const request = actions.saveRunLists.mock.calls[0]?.[0] as { lists: RunListSpec[] };
     expect(request.lists[0]?.items?.map((item) => item.name)).toEqual(['b', 'a']);
+  });
+
+  it('reserves a start for the selected command from the schedule tab', async () => {
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true)
+    );
+    const actions = runListActions([]);
+    render(RunListEditorDialog, {
+      actions,
+      selected: {
+        name: 'wave',
+        type: 'Python',
+        module_path: 'Commands.PythonCommands.samples.wave',
+        class_name: 'wave'
+      },
+      onclose: vi.fn()
+    });
+
+    await waitFor(() => expect(actions.runLists).toHaveBeenCalled());
+    await fireEvent.click(screen.getByRole('tab', { name: 'Schedule' }));
+    await waitFor(() => expect(actions.runSchedule).toHaveBeenCalled());
+    await fireEvent.input(screen.getByLabelText('Start time'), {
+      target: { value: '23:30' }
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Reserve start' }));
+
+    await waitFor(() => expect(actions.controlRunSchedule).toHaveBeenCalled());
+    expect(actions.controlRunSchedule).toHaveBeenCalledWith({
+      action: 'reserve_start',
+      target: {
+        module_path: 'Commands.PythonCommands.samples.wave',
+        class_name: 'wave',
+        name: 'wave'
+      },
+      clock: '23:30'
+    });
+  });
+
+  it('cancels the start reservation', async () => {
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true)
+    );
+    const actions = runListActions([]);
+    actions.runSchedule.mockResolvedValue(
+      scheduleSnapshot({
+        pending: true,
+        has_start: true,
+        start_display: '2026-10-11 23:30:00 に「wave」を開始(あと 30 秒)'
+      })
+    );
+    render(RunListEditorDialog, { actions, selected: null, onclose: vi.fn() });
+
+    await waitFor(() => expect(actions.runLists).toHaveBeenCalled());
+    await fireEvent.click(screen.getByRole('tab', { name: 'Schedule' }));
+    await waitFor(() => expect(actions.runSchedule).toHaveBeenCalled());
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Cancel the start reservation' })
+    );
+
+    await waitFor(() =>
+      expect(actions.controlRunSchedule).toHaveBeenCalledWith({ action: 'cancel_start' })
+    );
+  });
+
+  it('shows the reason when a stop reservation is rejected', async () => {
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true)
+    );
+    const actions = runListActions([]);
+    actions.controlRunSchedule.mockRejectedValue(
+      new Error(
+        'コマンドを実行中か、開始を予約しているときだけ、「開始から」の停止を予約できます。'
+      )
+    );
+    render(RunListEditorDialog, { actions, selected: null, onclose: vi.fn() });
+
+    await waitFor(() => expect(actions.runLists).toHaveBeenCalled());
+    await fireEvent.click(screen.getByRole('tab', { name: 'Schedule' }));
+    await waitFor(() => expect(actions.runSchedule).toHaveBeenCalled());
+    await fireEvent.click(screen.getByRole('radio', { name: /After start/ }));
+    await fireEvent.input(screen.getByLabelText('Stop minutes'), {
+      target: { value: '5' }
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Reserve stop' }));
+
+    expect(
+      await screen.findByText(
+        'コマンドを実行中か、開始を予約しているときだけ、「開始から」の停止を予約できます。'
+      )
+    ).toBeTruthy();
   });
 });

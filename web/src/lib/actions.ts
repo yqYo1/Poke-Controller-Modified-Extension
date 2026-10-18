@@ -14,6 +14,8 @@ export type RunListItem = components['schemas']['RunListItem'];
 export type RunListSaveRequest = components['schemas']['RunListSaveRequest'];
 export type RunListSnapshot = components['schemas']['RunListSnapshot'];
 export type RunListSpec = components['schemas']['RunListSpec'];
+export type RunScheduleControlRequest = components['schemas']['RunScheduleControlRequest'];
+export type RunScheduleSnapshot = components['schemas']['RunScheduleSnapshot'];
 export type SavedScreenshot = components['schemas']['SavedScreenshot'];
 export type ScreenshotRequest = components['schemas']['ScreenshotRequest'];
 export type ScriptCreatorPreview = components['schemas']['ScriptCreatorPreview'];
@@ -157,6 +159,19 @@ export class BackendActions {
     return unwrap(
       await this.client.PUT('/api/run-lists', { body: request }),
       'run list save failed'
+    );
+  }
+
+  async runSchedule(): Promise<RunScheduleSnapshot> {
+    return unwrap(await this.client.GET('/api/run-schedule'), 'run schedule load failed');
+  }
+
+  async controlRunSchedule(
+    request: RunScheduleControlRequest
+  ): Promise<RunScheduleSnapshot> {
+    return unwrap(
+      await this.client.POST('/api/run-schedule/control', { body: request }),
+      'run schedule control failed'
     );
   }
 

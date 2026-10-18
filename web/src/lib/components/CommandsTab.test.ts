@@ -69,6 +69,24 @@ function commandActions() {
     reloadCommands: vi.fn().mockResolvedValue({ changed: true, revision: '2' }),
     runLists: vi.fn().mockResolvedValue({ lists: [], skipped: [] }),
     saveRunLists: vi.fn().mockResolvedValue({ lists: [], skipped: [] }),
+    runSchedule: vi.fn().mockResolvedValue({
+      pending: false,
+      has_start: false,
+      has_stop: false,
+      start_display: '予約はありません',
+      stop_display: '予約はありません',
+      message: '',
+      sleep_warning: ''
+    }),
+    controlRunSchedule: vi.fn().mockResolvedValue({
+      pending: false,
+      has_start: false,
+      has_stop: false,
+      start_display: '予約はありません',
+      stop_display: '予約はありません',
+      message: '',
+      sleep_warning: ''
+    }),
     scriptCreatorSnapshot: vi.fn().mockResolvedValue({
       author: '',
       bridge_available: false,

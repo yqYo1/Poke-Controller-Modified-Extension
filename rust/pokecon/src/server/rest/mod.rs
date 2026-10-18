@@ -5,6 +5,7 @@ mod devices;
 mod dynamic_config;
 mod notifications;
 mod profiles;
+mod run_lists;
 mod script_creator;
 mod script_ui;
 mod settings;
@@ -42,6 +43,7 @@ pub fn router(backend: Arc<dyn RestBackend>) -> Router {
         .merge(notifications::router())
         .merge(dynamic_config::router())
         .merge(profiles::router())
+        .merge(run_lists::router())
         .merge(script_creator::router())
         .merge(script_ui::router())
         .merge(state::router())
@@ -207,6 +209,7 @@ async fn not_found() -> RestError {
 async fn method_not_allowed(uri: Uri) -> Response {
     let allow = match uri.path() {
         "/api/settings" => "GET, PATCH",
+        "/api/run-lists" => "GET, PUT",
         "/api/devices/cameras"
         | "/api/devices/serial-ports"
         | "/api/script-creator"
@@ -260,9 +263,9 @@ mod tests {
         ApiErrorCode, CameraDevice, CameraSelector, CommandControlRequest, CommandState,
         DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
         GenerateLauncherRequest, GenerateLauncherResult, ImageFormat, NotificationTestRequest,
-        NotificationTestResult, OperationResult, SavedScreenshot, ScreenshotRequest,
-        ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec,
-        SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange,
+        NotificationTestResult, OperationResult, RunListSnapshot, RunListSpec, SavedScreenshot,
+        ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot,
+        ScriptCreatorSpec, SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange,
         SettingsPatchRequest, SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot,
         StateChangeCause, StatePatch, StateSnapshot, UpdateCheckResult,
     };
@@ -395,6 +398,20 @@ mod tests {
             Ok(OperationResult {
                 changed: false,
                 revision,
+            })
+        }
+
+        async fn run_lists(&self) -> ApiResult<RunListSnapshot> {
+            Ok(RunListSnapshot {
+                lists: Vec::new(),
+                skipped: Vec::new(),
+            })
+        }
+
+        async fn save_run_lists(&self, _lists: Vec<RunListSpec>) -> ApiResult<RunListSnapshot> {
+            Ok(RunListSnapshot {
+                lists: Vec::new(),
+                skipped: Vec::new(),
             })
         }
 
@@ -564,7 +581,7 @@ mod tests {
     const STANDARD_METHODS: [&str; 9] = [
         "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT",
     ];
-    const REST_METHOD_MATRIX: [(&str, &[&str]); 17] = [
+    const REST_METHOD_MATRIX: [(&str, &[&str]); 18] = [
         ("/api/camera/retry", &["POST"]),
         ("/api/camera/screenshot", &["POST"]),
         ("/api/commands/control", &["POST"]),
@@ -574,6 +591,7 @@ mod tests {
         ("/api/dynamic-config/control", &["POST"]),
         ("/api/notifications/test", &["POST"]),
         ("/api/profiles/generate-launcher", &["POST"]),
+        ("/api/run-lists", &["GET", "PUT"]),
         ("/api/script-creator", &["GET"]),
         ("/api/script-creator/create", &["POST"]),
         ("/api/script-creator/preview", &["POST"]),
@@ -663,8 +681,8 @@ mod tests {
             }
         }
 
-        assert_eq!(advertised_count, 18);
-        assert_eq!(rejected_count, 135);
+        assert_eq!(advertised_count, 20);
+        assert_eq!(rejected_count, 142);
     }
 
     #[tokio::test]

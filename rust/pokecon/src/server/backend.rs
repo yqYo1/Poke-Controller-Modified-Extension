@@ -7,10 +7,10 @@ use async_trait::async_trait;
 use crate::server::api::{
     ApiError, ApiErrorCode, CameraDevice, CommandControlRequest, DynamicConfigControlRequest,
     DynamicConfigResult, GenerateLauncherRequest, GenerateLauncherResult, ImageFormat,
-    NotificationTestRequest, NotificationTestResult, OperationResult, SavedScreenshot,
-    ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot,
-    ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort,
-    SettingsPatchRequest, SettingsSnapshot, UpdateCheckResult,
+    NotificationTestRequest, NotificationTestResult, OperationResult, RunListSnapshot, RunListSpec,
+    SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult,
+    ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult,
+    SerialControlRequest, SerialPort, SettingsPatchRequest, SettingsSnapshot, UpdateCheckResult,
 };
 use crate::server::state::StateHub;
 
@@ -175,6 +175,24 @@ pub trait RestBackend: Send + Sync + 'static {
         &self,
         request: NotificationTestRequest,
     ) -> ApiResult<NotificationTestResult>;
+
+    /// Saved run lists plus skip reasons for the editor.
+    async fn run_lists(&self) -> ApiResult<RunListSnapshot> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "run lists are not available",
+        ))
+    }
+
+    /// Saves the run lists after validation (upstream `save_lists`).
+    async fn save_run_lists(&self, _lists: Vec<RunListSpec>) -> ApiResult<RunListSnapshot> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "run lists are not available",
+        ))
+    }
 
     /// Folder choices and remembered author for the script-creator dialog.
     async fn script_creator_snapshot(&self) -> ApiResult<ScriptCreatorSnapshot> {

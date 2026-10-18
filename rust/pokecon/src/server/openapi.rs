@@ -17,17 +17,18 @@ use crate::server::api::{
     InputSnapshot, KeyboardInput, LauncherDestination, LogData, LogLevel, LogOperation, LogTarget,
     MessageData, MouseButton, MouseButtons, MouseInput, MouseStickInput, Nonce, NormalizedRegion,
     NotificationTestRequest, NotificationTestResult, OperationResult, PressState,
-    RevisionedStateChange, SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview,
-    ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptDialog,
-    ScriptDialogAbortReason, ScriptDialogValue, ScriptDialogWidget, ScriptDialogWidgetKind,
-    ScriptOverlayRectangle, ScriptOverlayShape, ScriptOverlaySnapshot, ScriptOverlayText,
-    ScriptPointerBindings, ScriptPointerButton, ScriptPointerPhase, ScriptPopupImage,
-    ScriptTkButton, ScriptTkLabel, ScriptTkScale, ScriptTkWidget, ScriptTkWindow, ScriptUiAction,
-    ScriptUiActionResult, ScriptUiSnapshot, SerialControlRequest, SerialData, SerialEncoding,
-    SerialPort, SerialSend, ServerMessage, SessionDescription, SettingsChange,
-    SettingsPatchRequest, SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot,
-    SettingsWriteValues, StateChangeCause, StatePatch, StateSnapshot, StickName, StickPosition,
-    Success, TouchPoint, UiStateChange, UpdateCheckResult,
+    RevisionedStateChange, RunListItem, RunListSaveRequest, RunListSnapshot, RunListSpec,
+    SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult,
+    ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptDialog, ScriptDialogAbortReason,
+    ScriptDialogValue, ScriptDialogWidget, ScriptDialogWidgetKind, ScriptOverlayRectangle,
+    ScriptOverlayShape, ScriptOverlaySnapshot, ScriptOverlayText, ScriptPointerBindings,
+    ScriptPointerButton, ScriptPointerPhase, ScriptPopupImage, ScriptTkButton, ScriptTkLabel,
+    ScriptTkScale, ScriptTkWidget, ScriptTkWindow, ScriptUiAction, ScriptUiActionResult,
+    ScriptUiSnapshot, SerialControlRequest, SerialData, SerialEncoding, SerialPort, SerialSend,
+    ServerMessage, SessionDescription, SettingsChange, SettingsPatchRequest,
+    SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, SettingsWriteValues,
+    StateChangeCause, StatePatch, StateSnapshot, StickName, StickPosition, Success, TouchPoint,
+    UiStateChange, UpdateCheckResult,
 };
 
 #[derive(OpenApi)]
@@ -105,6 +106,10 @@ use crate::server::api::{
         ScriptTkWidget,
         ScriptTkWindow,
         ScriptUiAction,
+        RunListItem,
+        RunListSaveRequest,
+        RunListSnapshot,
+        RunListSpec,
         ScriptCreatorPreview,
         ScriptCreatorResult,
         ScriptCreatorSnapshot,
@@ -148,6 +153,8 @@ use crate::server::api::{
         crate::server::paths::retry_camera,
         crate::server::paths::screenshot,
         crate::server::paths::test_notification,
+        crate::server::paths::run_lists,
+        crate::server::paths::save_run_lists,
         crate::server::paths::script_creator_snapshot,
         crate::server::paths::preview_script_creation,
         crate::server::paths::create_script,
@@ -164,6 +171,7 @@ use crate::server::api::{
         (name = "devices", description = "Camera and serial devices")
         ,(name = "script_ui", description = "Profile-scoped script dialogs and compatibility UI")
         ,(name = "script_creator", description = "Script template creation from the web interface")
+        ,(name = "run_lists", description = "Saved command run lists")
     )
 )]
 struct ApiDocument;

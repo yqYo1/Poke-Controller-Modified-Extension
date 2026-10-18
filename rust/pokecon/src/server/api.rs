@@ -1102,6 +1102,65 @@ pub enum ScriptUiAction {
     },
 }
 
+/// One run-list row on the wire (mirror of the stored shape).
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RunListItem {
+    #[serde(rename = "type")]
+    pub command_type: String,
+    pub name: String,
+    #[serde(default = "default_run_item_repeat")]
+    pub repeat: u32,
+    #[serde(default)]
+    pub limit_minutes: Option<f64>,
+}
+
+fn default_run_item_repeat() -> u32 {
+    1
+}
+
+/// One run list on the wire.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RunListSpec {
+    pub name: String,
+    #[serde(default)]
+    pub items: Vec<RunListItem>,
+    #[serde(default = "default_run_interval")]
+    pub interval_seconds: f64,
+    #[serde(default = "default_run_on_error")]
+    pub on_error: String,
+    #[serde(default = "default_run_loops")]
+    pub loops: u32,
+}
+
+fn default_run_interval() -> f64 {
+    1.0
+}
+
+fn default_run_on_error() -> String {
+    "stop".to_owned()
+}
+
+fn default_run_loops() -> u32 {
+    1
+}
+
+/// Save request for the run-list editor (one JSON object).
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RunListSaveRequest {
+    pub lists: Vec<RunListSpec>,
+}
+
+/// Saved run lists plus the reasons invalid ones were skipped.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RunListSnapshot {
+    pub lists: Vec<RunListSpec>,
+    pub skipped: Vec<String>,
+}
+
 /// Snapshot for the script-creator dialog: folder choices and remembered
 /// author (upstream `script_folders` / `template_folders` / `load_author`).
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]

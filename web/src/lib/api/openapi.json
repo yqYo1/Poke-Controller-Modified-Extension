@@ -526,6 +526,84 @@
         }
       }
     },
+    "/api/run-lists": {
+      "get": {
+        "tags": [
+          "run_lists"
+        ],
+        "operationId": "run_lists",
+        "responses": {
+          "200": {
+            "description": "Saved run lists and skip reasons",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_RunListSnapshot"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Run list read failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "run_lists"
+        ],
+        "operationId": "save_run_lists",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunListSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Run lists saved after validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_RunListSnapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A run list is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Run list save failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/script-creator": {
       "get": {
         "tags": [
@@ -3126,6 +3204,105 @@
           },
           "data": {
             "$ref": "#/components/schemas/UiStateChange"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunListItem": {
+        "type": "object",
+        "description": "One run-list row on the wire (mirror of the stored shape).",
+        "required": [
+          "type",
+          "name"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "repeat": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "limit_minutes": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunListSaveRequest": {
+        "type": "object",
+        "description": "Save request for the run-list editor (one JSON object).",
+        "required": [
+          "lists"
+        ],
+        "properties": {
+          "lists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunListSpec"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunListSnapshot": {
+        "type": "object",
+        "description": "Saved run lists plus the reasons invalid ones were skipped.",
+        "required": [
+          "lists",
+          "skipped"
+        ],
+        "properties": {
+          "lists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunListSpec"
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunListSpec": {
+        "type": "object",
+        "description": "One run list on the wire.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunListItem"
+            }
+          },
+          "interval_seconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "on_error": {
+            "type": "string"
+          },
+          "loops": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
           }
         },
         "additionalProperties": false
@@ -6640,6 +6817,39 @@
         },
         "additionalProperties": false
       },
+      "Success_RunListSnapshot": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Saved run lists plus the reasons invalid ones were skipped.",
+            "required": [
+              "lists",
+              "skipped"
+            ],
+            "properties": {
+              "lists": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RunListSpec"
+                }
+              },
+              "skipped": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
       "Success_SavedScreenshot": {
         "type": "object",
         "description": "Common successful JSON envelope.",
@@ -7213,6 +7423,10 @@
     {
       "name": "script_creator",
       "description": "Script template creation from the web interface"
+    },
+    {
+      "name": "run_lists",
+      "description": "Saved command run lists"
     }
   ]
 }

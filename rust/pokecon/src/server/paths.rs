@@ -160,6 +160,30 @@ pub fn test_notification() {}
 
 #[utoipa::path(
     get,
+    path = "/api/run-lists",
+    tag = "run_lists",
+    responses(
+        (status = 200, description = "Saved run lists and skip reasons", body = Success<crate::server::api::RunListSnapshot>),
+        (status = 500, description = "Run list read failure", body = ErrorEnvelope)
+    )
+)]
+pub fn run_lists() {}
+
+#[utoipa::path(
+    put,
+    path = "/api/run-lists",
+    tag = "run_lists",
+    request_body(content = crate::server::api::RunListSaveRequest, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Run lists saved after validation", body = Success<crate::server::api::RunListSnapshot>),
+        (status = 422, description = "A run list is invalid", body = ErrorEnvelope),
+        (status = 500, description = "Run list save failure", body = ErrorEnvelope)
+    )
+)]
+pub fn save_run_lists() {}
+
+#[utoipa::path(
+    get,
     path = "/api/script-creator",
     tag = "script_creator",
     responses(

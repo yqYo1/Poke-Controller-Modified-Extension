@@ -148,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/run-lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["run_lists"];
+        put: operations["save_run_lists"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/script-creator": {
         parameters: {
             query?: never;
@@ -755,6 +771,34 @@ export interface components {
         RevisionedStateChange: {
             revision: components["schemas"]["DecimalString"];
             data: components["schemas"]["UiStateChange"];
+        };
+        /** @description One run-list row on the wire (mirror of the stored shape). */
+        RunListItem: {
+            type: string;
+            name: string;
+            /** Format: int32 */
+            repeat?: number;
+            /** Format: double */
+            limit_minutes?: number | null;
+        };
+        /** @description Save request for the run-list editor (one JSON object). */
+        RunListSaveRequest: {
+            lists: components["schemas"]["RunListSpec"][];
+        };
+        /** @description Saved run lists plus the reasons invalid ones were skipped. */
+        RunListSnapshot: {
+            lists: components["schemas"]["RunListSpec"][];
+            skipped: string[];
+        };
+        /** @description One run list on the wire. */
+        RunListSpec: {
+            name: string;
+            items?: components["schemas"]["RunListItem"][];
+            /** Format: double */
+            interval_seconds?: number;
+            on_error?: string;
+            /** Format: int32 */
+            loops?: number;
         };
         SavedScreenshot: {
             display_path: string;
@@ -1625,6 +1669,14 @@ export interface components {
             };
         };
         /** @description Common successful JSON envelope. */
+        Success_RunListSnapshot: {
+            /** @description Saved run lists plus the reasons invalid ones were skipped. */
+            data: {
+                lists: components["schemas"]["RunListSpec"][];
+                skipped: string[];
+            };
+        };
+        /** @description Common successful JSON envelope. */
         Success_SavedScreenshot: {
             data: {
                 display_path: string;
@@ -2172,6 +2224,77 @@ export interface operations {
                 };
             };
             /** @description Profile or launcher write failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    run_lists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved run lists and skip reasons */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_RunListSnapshot"];
+                };
+            };
+            /** @description Run list read failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    save_run_lists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunListSaveRequest"];
+            };
+        };
+        responses: {
+            /** @description Run lists saved after validation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_RunListSnapshot"];
+                };
+            };
+            /** @description A run list is invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Run list save failure */
             500: {
                 headers: {
                     [name: string]: unknown;

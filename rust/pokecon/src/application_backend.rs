@@ -26,11 +26,11 @@ use crate::server::api::{
     DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
     GamepadButton, GamepadHat, GamepadInput, GenerateLauncherRequest, GenerateLauncherResult,
     ImageFormat, InputApplied, InputGeneration, LauncherDestination, NotificationTestRequest,
-    NotificationTestResult, OperationResult, ScriptCreatorPreview, ScriptCreatorResult,
-    ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult,
-    SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange, SettingsPatchRequest,
-    SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch,
-    StateSnapshot, UpdateCheckResult,
+    NotificationTestResult, OperationResult, RunListItem, RunListSnapshot, RunListSpec,
+    ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec,
+    ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort, SerialPortTransport,
+    SettingsChange, SettingsPatchRequest, SettingsReadPatchValues, SettingsReadValues,
+    SettingsSnapshot, StateChangeCause, StatePatch, StateSnapshot, UpdateCheckResult,
 };
 use crate::server::backend::{
     ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload, LauncherOutput,
@@ -458,6 +458,44 @@ impl ApplicationBackend {
 // This implementation intentionally keeps the complete HTTP surface together
 // so endpoint-to-runtime mappings remain auditable against the specification.
 #[allow(clippy::too_many_lines)]
+fn to_run_list_spec(list: &crate::run_list::RunList) -> RunListSpec {
+    RunListSpec {
+        name: list.name.clone(),
+        items: list
+            .items
+            .iter()
+            .map(|item| RunListItem {
+                command_type: item.command_type.clone(),
+                name: item.name.clone(),
+                repeat: item.repeat,
+                limit_minutes: item.limit_minutes,
+            })
+            .collect(),
+        interval_seconds: list.interval_seconds,
+        on_error: list.on_error.clone(),
+        loops: list.loops,
+    }
+}
+
+fn from_run_list_spec(spec: &RunListSpec) -> crate::run_list::RunList {
+    crate::run_list::RunList {
+        name: spec.name.clone(),
+        items: spec
+            .items
+            .iter()
+            .map(|item| crate::run_list::RunItem {
+                command_type: item.command_type.clone(),
+                name: item.name.clone(),
+                repeat: item.repeat,
+                limit_minutes: item.limit_minutes,
+            })
+            .collect(),
+        interval_seconds: spec.interval_seconds,
+        on_error: spec.on_error.clone(),
+        loops: spec.loops,
+    }
+}
+
 fn to_creator_spec(spec: &ScriptCreatorSpec) -> CreatorSpec {
     CreatorSpec {
         name: spec.name.clone(),
@@ -478,6 +516,73 @@ fn to_creator_spec(spec: &ScriptCreatorSpec) -> CreatorSpec {
 impl RestBackend for ApplicationBackend {
     fn state_hub(&self) -> &StateHub {
         &self.hub
+    }
+
+    async fn run_lists(&self) -> ApiResult<RunListSnapshot> {
+        let config_root = self.config_root.clone();
+        let profile = self.settings.lock().await.active_profile().to_owned();
+        tokio::task::spawn_blocking(move || {
+            let directory = config_root.join("profiles").join(profile);
+            let (lists, skipped) =
+                crate::run_list::load_lists(&crate::run_list::lists_path(&directory));
+            RunListSnapshot {
+                lists: lists.iter().map(to_run_list_spec).collect(),
+                skipped,
+            }
+        })
+        .await
+        .map_err(|_error| {
+            ApiFailure::new(
+                ApiFailureStatus::InternalServerError,
+                ApiErrorCode::InternalError,
+                "run list snapshot failed",
+            )
+        })
+    }
+
+    async fn save_run_lists(&self, lists: Vec<RunListSpec>) -> ApiResult<RunListSnapshot> {
+        let config_root = self.config_root.clone();
+        let profile = self.settings.lock().await.active_profile().to_owned();
+        tokio::task::spawn_blocking(move || {
+            let directory = config_root.join("profiles").join(profile);
+            let path = crate::run_list::lists_path(&directory);
+            let mut converted = Vec::new();
+            for spec in &lists {
+                let run_list = from_run_list_spec(spec);
+                let others: Vec<String> = converted
+                    .iter()
+                    .map(|list: &crate::run_list::RunList| list.name.clone())
+                    .collect();
+                let error = crate::run_list::check_list(&run_list, &others);
+                if !error.is_empty() {
+                    return Err(ApiFailure::new(
+                        ApiFailureStatus::UnprocessableEntity,
+                        ApiErrorCode::InvalidRequest,
+                        error,
+                    ));
+                }
+                converted.push(run_list);
+            }
+            crate::run_list::save_lists(&converted, &path).map_err(|error| {
+                ApiFailure::new(
+                    ApiFailureStatus::InternalServerError,
+                    ApiErrorCode::InternalError,
+                    format!("run list save failed: {error}"),
+                )
+            })?;
+            Ok(RunListSnapshot {
+                lists: converted.iter().map(to_run_list_spec).collect(),
+                skipped: Vec::new(),
+            })
+        })
+        .await
+        .map_err(|_error| {
+            ApiFailure::new(
+                ApiFailureStatus::InternalServerError,
+                ApiErrorCode::InternalError,
+                "run list save failed",
+            )
+        })?
     }
 
     async fn script_creator_snapshot(&self) -> ApiResult<ScriptCreatorSnapshot> {

@@ -2895,12 +2895,28 @@ class Pausable(PythonCommand):
             })
             .await
     });
-    tokio::time::sleep(Duration::from_millis(400)).await;
+    for _ in 0..100 {
+        if client.status().await.expect("status is readable").running {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
 
     let paused = client.pause().await.expect("pause request succeeds");
     assert!(paused.changed);
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    let info = client.pause_info().await.expect("pause info is returned");
+    let mut info = client.pause_info().await.expect("pause info is returned");
+    for _ in 0..50 {
+        if info
+            .frames
+            .iter()
+            .any(|frame| frame.function == "do" && frame.file.ends_with("pausable.py"))
+        {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        info = client.pause_info().await.expect("pause info is returned");
+    }
     assert!(
         info.frames
             .iter()

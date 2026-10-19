@@ -1136,19 +1136,19 @@ build_openapi_operation_inventory() {
       ]
       | sort_by([.path, .method])
       | if (
-          length == 27
+          length == 28
           and length == (unique_by([.path, .method]) | length)
           and length == (unique_by(.operation_id) | length)
-          and (unique_by(.path) | length) == 25
-          and ([.[] | select(.path | startswith("/api/"))] | length) == 26
+          and (unique_by(.path) | length) == 26
+          and ([.[] | select(.path | startswith("/api/"))] | length) == 27
           and ([.[] | select(.path == "/ws")] | length) == 1
           and ([.[] | select(.path == "/ws" and .method == "get")] | length) == 1
-          and ([.[] | select(.method == "get")] | length) == 10
+          and ([.[] | select(.method == "get")] | length) == 11
           and ([.[] | select(.method == "post")] | length) == 15
           and ([.[] | select(.method == "patch")] | length) == 1
           and ([.[] | select(.method == "put")] | length) == 1
         ) then .
-        else error("OpenAPI public operation inventory is not the canonical 27-operation shape")
+        else error("OpenAPI public operation inventory is not the canonical 28-operation shape")
         end
     end
   ' "$document" >"$inventory"; then
@@ -4821,34 +4821,34 @@ jq -n \
         "unknown_api_boundary", "web_method_probe_count"
       ])
       and (.api_inventory.canonical_openapi_sha256 | test("^[0-9a-f]{64}$"))
-      and .api_inventory.advertised_operation_count == 27
-      and .api_inventory.advertised_rest_operation_count == 26
+      and .api_inventory.advertised_operation_count == 28
+      and .api_inventory.advertised_rest_operation_count == 27
       and .api_inventory.advertised_websocket_operation_count == 1
-      and .api_inventory.canonical_path_count == 25
+      and .api_inventory.canonical_path_count == 26
       and .api_inventory.standard_method_count == 9
-      and .api_inventory.method_matrix_probe_count == 225
-      and .api_inventory.rejected_method_count == 173
-      and .api_inventory.cors_preflight_count == 25
+      and .api_inventory.method_matrix_probe_count == 234
+      and .api_inventory.rejected_method_count == 180
+      and .api_inventory.cors_preflight_count == 26
       and ((.api_inventory.bare_options_security_boundary | keys) == [
         "advertised_path_count", "desktop_probe_count",
         "mode_results_byte_identical", "rest_path_count", "results",
         "results_sha256", "web_probe_count", "websocket_path_count"
       ])
-      and .api_inventory.bare_options_security_boundary.advertised_path_count == 25
-      and .api_inventory.bare_options_security_boundary.desktop_probe_count == 25
+      and .api_inventory.bare_options_security_boundary.advertised_path_count == 26
+      and .api_inventory.bare_options_security_boundary.desktop_probe_count == 26
       and .api_inventory.bare_options_security_boundary.mode_results_byte_identical
         == true
-      and .api_inventory.bare_options_security_boundary.rest_path_count == 24
-      and .api_inventory.bare_options_security_boundary.web_probe_count == 25
+      and .api_inventory.bare_options_security_boundary.rest_path_count == 25
+      and .api_inventory.bare_options_security_boundary.web_probe_count == 26
       and .api_inventory.bare_options_security_boundary.websocket_path_count == 1
       and (.api_inventory.bare_options_security_boundary.results_sha256
         | test("^[0-9a-f]{64}$"))
-      and (.api_inventory.bare_options_security_boundary.results | length) == 25
+      and (.api_inventory.bare_options_security_boundary.results | length) == 26
       and (.api_inventory.bare_options_security_boundary.results | length)
         == (.api_inventory.bare_options_security_boundary.results
           | unique_by(.path) | length)
       and ([.api_inventory.bare_options_security_boundary.results[]
-        | select(.path_kind == "rest")] | length) == 24
+        | select(.path_kind == "rest")] | length) == 25
       and ([.api_inventory.bare_options_security_boundary.results[]
         | select(.path_kind == "websocket" and .path == "/ws")] | length) == 1
       and ([.api_inventory.bare_options_security_boundary.results[]
@@ -4899,16 +4899,16 @@ jq -n \
         == ["Content-Type", "X-Pokecon-Request"]
       and .api_inventory.cors_preflight_policy.allowed_methods
         == ["GET", "PATCH", "POST", "OPTIONS"]
-      and .api_inventory.cors_preflight_policy.advertised_pair_count == 27
+      and .api_inventory.cors_preflight_policy.advertised_pair_count == 28
       and .api_inventory.cors_preflight_policy.known_path_wrong_method_count == 6
       and .api_inventory.cors_preflight_policy.unknown_path_count == 1
-      and .api_inventory.cors_preflight_policy.probe_count_per_mode == 34
+      and .api_inventory.cors_preflight_policy.probe_count_per_mode == 35
       and .api_inventory.cors_preflight_policy.mode_results_byte_identical == true
       and (.api_inventory.cors_preflight_policy.results_sha256
         | test("^[0-9a-f]{64}$"))
-      and (.api_inventory.cors_preflight_policy.results | length) == 34
+      and (.api_inventory.cors_preflight_policy.results | length) == 35
       and ([.api_inventory.cors_preflight_policy.results[]
-        | select(.classification == "advertised_pair")] | length) == 27
+        | select(.classification == "advertised_pair")] | length) == 28
       and ([.api_inventory.cors_preflight_policy.results[]
         | select(.classification == "known_path_wrong_method")] | length) == 6
       and ([.api_inventory.cors_preflight_policy.results[]
@@ -5029,8 +5029,8 @@ jq -n \
         .method == "options"
         and .request_variant == "complete_preflight"
       )
-      and .api_inventory.web_method_probe_count == 225
-      and .api_inventory.desktop_method_probe_count == 225
+      and .api_inventory.web_method_probe_count == 234
+      and .api_inventory.desktop_method_probe_count == 234
       and (.api_inventory.method_results_sha256 | test("^[0-9a-f]{64}$"))
       and .api_inventory.mode_results_byte_identical == true
       and .api_inventory.allow_policy

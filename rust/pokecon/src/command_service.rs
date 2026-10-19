@@ -14,8 +14,8 @@ use crate::settings::pipeline::LoadedSettings;
 use crate::worker::dynamic::DynamicWorkerClient;
 use crate::worker::script::protocol::{
     ScriptCommandKind, ScriptDiscoveredCommand, ScriptDiscoveryResult, ScriptExecuteRequest,
-    ScriptExecutionOutcome, ScriptExecutionResult, ScriptPauseResult, ScriptPointerEvent,
-    ScriptStopResult, ScriptTkEvent,
+    ScriptExecutionOutcome, ScriptExecutionResult, ScriptPauseInfo, ScriptPauseResult,
+    ScriptPointerEvent, ScriptStopResult, ScriptTkEvent,
 };
 use async_trait::async_trait;
 use thiserror::Error;
@@ -250,6 +250,11 @@ pub trait UserScriptSession: Send + Sync {
     ) -> Result<ScriptExecutionResult, CommandBackendError>;
 
     async fn pause(&self) -> Result<ScriptPauseResult, CommandBackendError>;
+
+    /// Pause location and variables captured from the paused command thread.
+    async fn pause_info(&self) -> Result<ScriptPauseInfo, CommandBackendError> {
+        Ok(ScriptPauseInfo::default())
+    }
 
     async fn resume(&self) -> Result<ScriptPauseResult, CommandBackendError>;
 
@@ -779,6 +784,20 @@ impl CommandService {
         } else {
             Ok(CommandActionResult::AlreadyInState)
         }
+    }
+
+    /// Returns the captured pause location and variables while paused.
+    ///
+    /// # Errors
+    ///
+    /// Rejects an inactive command or reports a worker/host failure.
+    pub async fn pause_info(&self) -> Result<Option<ScriptPauseInfo>, CommandServiceError> {
+        let _lifecycle = self.lifecycle.lock().await;
+        let (session, _epoch, status) = self.active_session().await?;
+        if status != CommandStatus::Paused {
+            return Ok(None);
+        }
+        Ok(Some(session.pause_info().await?))
     }
 
     /// Resumes the currently paused command.

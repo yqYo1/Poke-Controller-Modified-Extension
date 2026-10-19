@@ -14,6 +14,7 @@ pub const DISCOVER: &str = "script.discover";
 pub const EXECUTE: &str = "script.execute";
 pub const PAUSE: &str = "script.pause";
 pub const RESUME: &str = "script.resume";
+pub const PAUSE_INFO: &str = "script.pause_info";
 pub const STOP: &str = "script.stop";
 
 /// Private worker environment bridge for the exact synchronized script venv.
@@ -132,6 +133,32 @@ pub struct ScriptExecuteRequest {
 #[serde(deny_unknown_fields)]
 pub struct ScriptPauseResult {
     pub changed: bool,
+}
+
+/// One Python frame captured when a pause gate engaged, outermost first.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptPauseFrame {
+    /// Absolute command file path.
+    pub file: String,
+    pub line: u32,
+    pub function: String,
+}
+
+/// One user script instance variable rendered at pause time.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptPauseVariable {
+    pub name: String,
+    pub value: String,
+}
+
+/// Pause location and variables captured from the paused command thread.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptPauseInfo {
+    pub frames: Vec<ScriptPauseFrame>,
+    pub variables: Vec<ScriptPauseVariable>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

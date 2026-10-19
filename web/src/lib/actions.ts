@@ -6,6 +6,7 @@ export type CommandControlRequest = components['schemas']['CommandControlRequest
 export type CommandHistoryControlRequest = components['schemas']['CommandHistoryControlRequest'];
 export type CommandHistoryEntry = components['schemas']['CommandHistoryEntry'];
 export type CommandHistorySnapshot = components['schemas']['CommandHistorySnapshot'];
+export type CommandPauseSnapshot = components['schemas']['CommandPauseSnapshot'];
 export type CommandTagCommand = components['schemas']['CommandTagCommand'];
 export type CommandTagEdit = components['schemas']['CommandTagEdit'];
 export type CommandTagInfo = components['schemas']['CommandTagInfo'];
@@ -197,6 +198,10 @@ export class BackendActions {
       await this.client.POST('/api/run-schedule/control', { body: request }),
       'run schedule control failed'
     );
+  }
+
+  async commandPause(): Promise<CommandPauseSnapshot> {
+    return unwrap(await this.client.GET('/api/command-pause'), 'pause info load failed');
   }
 
   async commandTags(): Promise<CommandTagSnapshot> {

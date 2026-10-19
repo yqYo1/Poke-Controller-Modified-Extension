@@ -1274,6 +1274,33 @@ pub struct CommandTagResult {
     pub snapshot: CommandTagSnapshot,
 }
 
+/// One paused Python frame, outermost first.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommandPauseFrame {
+    /// Absolute command file path.
+    pub file: String,
+    pub line: u32,
+    pub function: String,
+}
+
+/// One command instance variable rendered at pause time.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommandPauseVariable {
+    pub name: String,
+    pub value: String,
+}
+
+/// Pause location and variables for the paused command.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommandPauseSnapshot {
+    pub paused: bool,
+    pub frames: Vec<CommandPauseFrame>,
+    pub variables: Vec<CommandPauseVariable>,
+}
+
 /// One run-history control request.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]

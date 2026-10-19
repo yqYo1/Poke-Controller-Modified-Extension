@@ -232,6 +232,17 @@ pub fn control_command_history() {}
 
 #[utoipa::path(
     get,
+    path = "/api/command-pause",
+    tag = "command_pause",
+    responses(
+        (status = 200, description = "Pause location and variables while paused", body = Success<crate::server::api::CommandPauseSnapshot>),
+        (status = 500, description = "Pause information read failure", body = ErrorEnvelope)
+    )
+)]
+pub fn command_pause() {}
+
+#[utoipa::path(
+    get,
     path = "/api/command-tags",
     tag = "command_tags",
     responses(

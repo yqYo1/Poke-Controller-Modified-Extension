@@ -24,7 +24,8 @@ use self::protocol::{
     HostSerialFormatAttributes, HostSerialWriteNxKeyboardRequest, HostSerialWriteRequest,
     HostSerialWriteRowRequest, HostTkRequest, HostTkResult, ScriptDiscoveryResult,
     ScriptExecuteRequest, ScriptExecutionResult, ScriptInitializeRequest, ScriptInitializeResult,
-    ScriptPauseResult, ScriptPointerEvent, ScriptStopResult, ScriptTkEvent, ScriptWorkerStatus,
+    ScriptPauseInfo, ScriptPauseResult, ScriptPointerEvent, ScriptStopResult, ScriptTkEvent,
+    ScriptWorkerStatus,
 };
 const LOG_QUEUE_CAPACITY: usize = 128;
 
@@ -315,6 +316,16 @@ impl ScriptWorkerClient {
     /// Returns a generation, transport, or payload error.
     pub async fn pause(&self) -> Result<ScriptPauseResult, ScriptClientError> {
         self.request(OperationClass::MutatingResource, protocol::PAUSE, &())
+            .await
+    }
+
+    /// Returns the pause location and variables captured when the gate engaged.
+    ///
+    /// # Errors
+    ///
+    /// Returns a generation, transport, or payload error.
+    pub async fn pause_info(&self) -> Result<ScriptPauseInfo, ScriptClientError> {
+        self.request(OperationClass::ReadOnly, protocol::PAUSE_INFO, &())
             .await
     }
 

@@ -68,6 +68,7 @@ impl ScriptWorkerRuntime {
                 | protocol::EXECUTE
                 | protocol::PAUSE
                 | protocol::RESUME
+                | protocol::PAUSE_INFO
                 | protocol::STOP
         )
     }
@@ -180,6 +181,15 @@ impl ScriptWorkerRuntime {
                 decode_empty(payload)?;
                 let changed = self.actor.as_ref().is_some_and(PythonActor::resume);
                 serialize_dispatch(&ScriptPauseResult { changed })
+            }
+            protocol::PAUSE_INFO => {
+                decode_empty(payload)?;
+                let info = self
+                    .actor
+                    .as_ref()
+                    .map(PythonActor::pause_info)
+                    .unwrap_or_default();
+                serialize_dispatch(&info)
             }
             protocol::STOP => {
                 decode_empty(payload)?;

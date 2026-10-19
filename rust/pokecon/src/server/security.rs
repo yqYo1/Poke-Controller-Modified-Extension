@@ -188,6 +188,7 @@ fn validate_preflight(path: &str, headers: &HeaderMap) -> Result<(), SecurityErr
         "/api/devices/cameras"
         | "/api/devices/serial-ports"
         | "/api/command-history"
+        | "/api/command-pause"
         | "/api/command-tags"
         | "/api/run-schedule"
         | "/api/script-creator"

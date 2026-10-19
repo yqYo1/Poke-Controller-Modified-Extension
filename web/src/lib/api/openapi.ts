@@ -68,6 +68,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/command-pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["command_pause"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/command-tags": {
         parameters: {
             query?: never;
@@ -540,6 +556,25 @@ export interface components {
              *     (0 when unknown).
              */
             modified_at?: number;
+        };
+        /** @description One paused Python frame, outermost first. */
+        CommandPauseFrame: {
+            /** @description Absolute command file path. */
+            file: string;
+            /** Format: int32 */
+            line: number;
+            function: string;
+        };
+        /** @description Pause location and variables for the paused command. */
+        CommandPauseSnapshot: {
+            paused: boolean;
+            frames: components["schemas"]["CommandPauseFrame"][];
+            variables: components["schemas"]["CommandPauseVariable"][];
+        };
+        /** @description One command instance variable rendered at pause time. */
+        CommandPauseVariable: {
+            name: string;
+            value: string;
         };
         CommandStartFields: {
             command: components["schemas"]["CommandIdentity"];
@@ -1881,6 +1916,15 @@ export interface components {
             };
         };
         /** @description Common successful JSON envelope. */
+        Success_CommandPauseSnapshot: {
+            /** @description Pause location and variables for the paused command. */
+            data: {
+                paused: boolean;
+                frames: components["schemas"]["CommandPauseFrame"][];
+                variables: components["schemas"]["CommandPauseVariable"][];
+            };
+        };
+        /** @description Common successful JSON envelope. */
         Success_CommandTagResult: {
             /** @description Result of a tag edit, including the refreshed snapshot. */
             data: {
@@ -2261,6 +2305,35 @@ export interface operations {
                 };
             };
             /** @description Command history update failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    command_pause: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pause location and variables while paused */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_CommandPauseSnapshot"];
+                };
+            };
+            /** @description Pause information read failure */
             500: {
                 headers: {
                     [name: string]: unknown;

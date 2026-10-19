@@ -228,6 +228,36 @@
         }
       }
     },
+    "/api/command-pause": {
+      "get": {
+        "tags": [
+          "command_pause"
+        ],
+        "operationId": "command_pause",
+        "responses": {
+          "200": {
+            "description": "Pause location and variables while paused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_CommandPauseSnapshot"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Pause information read failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/command-tags": {
       "get": {
         "tags": [
@@ -1954,6 +1984,74 @@
             "format": "int64",
             "description": "Command file modification time in milliseconds since the Unix epoch\n(0 when unknown).",
             "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandPauseFrame": {
+        "type": "object",
+        "description": "One paused Python frame, outermost first.",
+        "required": [
+          "file",
+          "line",
+          "function"
+        ],
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Absolute command file path."
+          },
+          "line": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "function": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandPauseSnapshot": {
+        "type": "object",
+        "description": "Pause location and variables for the paused command.",
+        "required": [
+          "paused",
+          "frames",
+          "variables"
+        ],
+        "properties": {
+          "paused": {
+            "type": "boolean"
+          },
+          "frames": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommandPauseFrame"
+            }
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommandPauseVariable"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandPauseVariable": {
+        "type": "object",
+        "description": "One command instance variable rendered at pause time.",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -7496,6 +7594,43 @@
         },
         "additionalProperties": false
       },
+      "Success_CommandPauseSnapshot": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Pause location and variables for the paused command.",
+            "required": [
+              "paused",
+              "frames",
+              "variables"
+            ],
+            "properties": {
+              "paused": {
+                "type": "boolean"
+              },
+              "frames": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CommandPauseFrame"
+                }
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CommandPauseVariable"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
       "Success_CommandTagResult": {
         "type": "object",
         "description": "Common successful JSON envelope.",
@@ -8351,6 +8486,10 @@
     {
       "name": "command_history",
       "description": "Recent command run history"
+    },
+    {
+      "name": "command_pause",
+      "description": "Paused command location and variables"
     },
     {
       "name": "command_tags",

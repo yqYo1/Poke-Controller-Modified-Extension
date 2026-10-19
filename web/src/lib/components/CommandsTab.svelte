@@ -6,6 +6,7 @@
     CommandHistoryControlRequest,
     CommandHistoryEntry,
     CommandHistorySnapshot,
+    CommandPauseSnapshot,
     CommandTagRequest,
     CommandTagResult,
     CommandTagSnapshot,
@@ -35,6 +36,7 @@
 
   interface CommandActions {
     commandHistory(): Promise<CommandHistorySnapshot>;
+    commandPause(): Promise<CommandPauseSnapshot>;
     commandTags(): Promise<CommandTagSnapshot>;
     applyCommandTags(request: CommandTagRequest): Promise<CommandTagResult>;
     controlCommand(request: CommandControlRequest): Promise<OperationResult>;
@@ -69,6 +71,8 @@
   let creatorOpen = $state(false);
   let runListOpen = $state(false);
   let tagOpen = $state(false);
+  let pauseInfo = $state<CommandPauseSnapshot | null>(null);
+  let copiedPauseFile = $state<string | null>(null);
   let activeSubtab = $state<Subtab>('python');
   let assigningSlot = $state<ShortcutIndex | null>(null);
   let busy = $state(false);
@@ -476,6 +480,37 @@
       ?.querySelectorAll<HTMLElement>('[role="tab"]');
     buttons?.[next]?.focus();
   }
+  $effect(() => {
+    if (backendState?.command_state !== 'paused') {
+      pauseInfo = null;
+      return;
+    }
+    let active = true;
+    const load = async (): Promise<void> => {
+      try {
+        const snapshot = await actions.commandPause();
+        if (active) pauseInfo = snapshot;
+      } catch {
+        // The command can resume between the state update and this read;
+        // keep the panel hidden rather than surfacing a transient error.
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 1000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  });
+
+  async function copyPauseFile(file: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(file);
+      copiedPauseFile = file;
+    } catch {
+      copiedPauseFile = null;
+    }
+  }
 </script>
 
 <div class="space-y-4">
@@ -493,6 +528,39 @@
     <div class="rounded-lg border border-red/20 bg-red/10 px-3 py-2 text-sm text-red" role="alert">{error}</div>
   {:else if notice !== null}
     <div class="rounded-lg border border-green/20 bg-green/10 px-3 py-2 text-sm text-green" role="status">{notice}</div>
+  {/if}
+
+  {#if pauseInfo?.paused}
+    <section class="rounded-lg border border-yellow/25 bg-yellow/10 p-3" aria-label="Pause information">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="text-xs font-semibold text-yellow">停止位置</h3>
+        <span class="text-[11px] text-subtext0">呼び出し順（外側 → 内側）</span>
+      </div>
+      <ol class="mt-2 space-y-1">
+        {#each pauseInfo.frames as frame, index (frame.file + ':' + String(frame.line) + ':' + frame.function)}
+          <li class="flex flex-wrap items-center gap-2 text-[11px] text-subtext0">
+            <span class="text-text">{String(index + 1)}. {frame.function}</span>
+            <span class="break-all">{frame.file}:{String(frame.line)}</span>
+            <button type="button" class="rounded bg-text/5 px-1.5 py-0.5 text-[10px] text-subtext1" aria-label={`Copy pause path ${frame.file}`} onclick={() => void copyPauseFile(frame.file)}>Copy path</button>
+            {#if copiedPauseFile === frame.file}<span class="text-[10px] text-green">Copied</span>{/if}
+          </li>
+        {/each}
+        {#if pauseInfo.frames.length === 0}
+          <li class="text-[11px] text-subtext0">停止位置を取得できませんでした。</li>
+        {/if}
+      </ol>
+      <h3 class="mt-3 text-xs font-semibold text-yellow">変数</h3>
+      {#if pauseInfo.variables.length > 0}
+        <dl class="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,auto)_minmax(0,1fr)]">
+          {#each pauseInfo.variables as variable (variable.name)}
+            <dt class="break-all text-[11px] text-text">{variable.name}</dt>
+            <dd class="break-all text-[11px] text-subtext0">{variable.value}</dd>
+          {/each}
+        </dl>
+      {:else}
+        <p class="mt-1 text-[11px] text-subtext0">表示できる変数はありません。</p>
+      {/if}
+    </section>
   {/if}
 
   <div class="flex gap-1 overflow-x-auto border-b border-text/10" role="tablist" aria-label="Command views">

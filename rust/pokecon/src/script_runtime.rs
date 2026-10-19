@@ -18,8 +18,8 @@ use crate::worker::WorkerKind;
 use crate::worker::ipc::{LogLevel, LogPayload, ResourceSafety};
 use crate::worker::script::protocol::{
     PYTHON_SITE_PACKAGES_ENV, ScriptDiscoveryResult, ScriptExecuteRequest, ScriptExecutionResult,
-    ScriptInitializeRequest, ScriptPauseResult, ScriptPointerEvent, ScriptStopResult,
-    ScriptTkEvent,
+    ScriptInitializeRequest, ScriptPauseInfo, ScriptPauseResult, ScriptPointerEvent,
+    ScriptStopResult, ScriptTkEvent,
 };
 use crate::worker::script::{ScriptHost, ScriptWorkerClient};
 use crate::worker::supervisor::{ManagedWorker, StopPurpose, WorkerSupervisor};
@@ -407,6 +407,13 @@ impl UserScriptSession for ManagedUserScriptSession {
 
     async fn pause(&self) -> Result<ScriptPauseResult, CommandBackendError> {
         self.client.pause().await.map_err(runtime_environment_error)
+    }
+
+    async fn pause_info(&self) -> Result<ScriptPauseInfo, CommandBackendError> {
+        self.client
+            .pause_info()
+            .await
+            .map_err(runtime_environment_error)
     }
 
     async fn resume(&self) -> Result<ScriptPauseResult, CommandBackendError> {

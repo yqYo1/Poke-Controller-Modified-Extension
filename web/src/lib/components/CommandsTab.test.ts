@@ -31,7 +31,9 @@ const alpha: CommandInfo = {
   modified_at: 200
 };
 
-function runtimeView(): { runtime: ApplicationRuntime; view: RuntimeView } {
+function runtimeView(
+  overrides: Record<string, unknown> = {}
+): { runtime: ApplicationRuntime; view: RuntimeView } {
   const runtime = new ApplicationRuntime();
   let initial: RuntimeView | undefined;
   const unsubscribe = runtime.subscribe((view) => {
@@ -55,7 +57,8 @@ function runtimeView(): { runtime: ApplicationRuntime; view: RuntimeView } {
           ],
           Rank: [{ command: first, kind: 'command' }]
         },
-        tags: ['Rank', '@Samples']
+        tags: ['Rank', '@Samples'],
+        ...overrides
       })
     }
   };
@@ -71,6 +74,7 @@ function commandActions() {
     saveRunLists: vi.fn().mockResolvedValue({ lists: [], skipped: [] }),
     commandHistory: vi.fn().mockResolvedValue({ entries: [] }),
     controlCommandHistory: vi.fn().mockResolvedValue({ entries: [] }),
+    commandPause: vi.fn().mockResolvedValue({ paused: false, frames: [], variables: [] }),
     commandTags: vi.fn().mockResolvedValue({ commands: [], tags: [] }),
     applyCommandTags: vi.fn().mockResolvedValue({
       results: [],
@@ -124,6 +128,24 @@ describe('CommandsTab', () => {
         }
       });
     });
+  });
+
+  it('shows the pause position and instance variables while paused', async () => {
+    const { runtime, view } = runtimeView({ command_state: 'paused' });
+    const actions = commandActions();
+    actions.commandPause.mockResolvedValue({
+      paused: true,
+      frames: [{ file: '/commands/samples/first.py', line: 42, function: 'do' }],
+      variables: [{ name: 'counter', value: '3' }]
+    });
+    render(CommandsTab, { actions, runtime, view });
+
+    await waitFor(() => expect(actions.commandPause).toHaveBeenCalled());
+    const panel = await screen.findByRole('region', { name: 'Pause information' });
+    expect(panel.textContent).toContain('do');
+    expect(panel.textContent).toContain('/commands/samples/first.py:42');
+    expect(panel.textContent).toContain('counter');
+    expect(panel.textContent).toContain('3');
   });
 
   it('writes tag matching and persists shortcut module paths', async () => {

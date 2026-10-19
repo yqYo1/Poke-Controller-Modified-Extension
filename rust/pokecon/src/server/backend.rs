@@ -6,8 +6,8 @@ use async_trait::async_trait;
 
 use crate::server::api::{
     ApiError, ApiErrorCode, CameraDevice, CommandControlRequest, CommandHistoryControlRequest,
-    CommandHistorySnapshot, CommandTagRequest, CommandTagResult, CommandTagSnapshot,
-    DynamicConfigControlRequest, DynamicConfigResult, GenerateLauncherRequest,
+    CommandHistorySnapshot, CommandPauseSnapshot, CommandTagRequest, CommandTagResult,
+    CommandTagSnapshot, DynamicConfigControlRequest, DynamicConfigResult, GenerateLauncherRequest,
     GenerateLauncherResult, ImageFormat, NotificationTestRequest, NotificationTestResult,
     OperationResult, RunListSnapshot, RunListSpec, RunScheduleControlRequest, RunScheduleSnapshot,
     SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult,
@@ -235,6 +235,15 @@ pub trait RestBackend: Send + Sync + 'static {
             ApiFailureStatus::NotFound,
             ApiErrorCode::ResourceNotFound,
             "command history is not available",
+        ))
+    }
+
+    /// Pause location and variables for the paused command.
+    async fn command_pause(&self) -> ApiResult<CommandPauseSnapshot> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "command pause information is not available",
         ))
     }
 

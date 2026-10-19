@@ -29,7 +29,8 @@ use super::protocol::{
     HostSerialFormatAttributes, HostSerialWriteNxKeyboardRequest, HostSerialWriteRequest,
     HostSerialWriteRowRequest, HostTkRequest, HostTkResult, ScriptCommandKind, ScriptControl,
     ScriptDiscoveredCommand, ScriptExecutionOutcome, ScriptExecutionResult, ScriptInputAction,
-    ScriptOutputMode, ScriptOutputTarget, ScriptPointerEvent, ScriptTkEvent, ScriptWorkerStatus,
+    ScriptOutputMode, ScriptOutputTarget, ScriptPauseInfo, ScriptPointerEvent, ScriptTkEvent,
+    ScriptWorkerStatus,
 };
 
 #[derive(Clone, Debug)]
@@ -88,6 +89,8 @@ struct ExecutionState {
     paused: AtomicBool,
     pause_gate: Mutex<()>,
     resumed: Condvar,
+    pause_generation: AtomicU64,
+    pause_capture: Mutex<Option<String>>,
 }
 
 impl ExecutionState {
@@ -100,6 +103,8 @@ impl ExecutionState {
             paused: AtomicBool::new(false),
             pause_gate: Mutex::new(()),
             resumed: Condvar::new(),
+            pause_generation: AtomicU64::new(0),
+            pause_capture: Mutex::new(None),
         }
     }
 
@@ -112,6 +117,10 @@ impl ExecutionState {
     fn clear_pause(&self) {
         let _gate = self.lock_pause_gate();
         self.paused.store(false, Ordering::Release);
+        *self
+            .pause_capture
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         self.resumed.notify_all();
     }
 
@@ -177,7 +186,29 @@ impl ExecutionState {
             return false;
         }
         let _gate = self.lock_pause_gate();
-        !self.paused.swap(true, Ordering::AcqRel)
+        let changed = !self.paused.swap(true, Ordering::AcqRel);
+        if changed {
+            self.pause_generation.fetch_add(1, Ordering::AcqRel);
+        }
+        changed
+    }
+
+    fn pause_generation(&self) -> u64 {
+        self.pause_generation.load(Ordering::Acquire)
+    }
+
+    fn record_pause_capture(&self, capture: String) {
+        *self
+            .pause_capture
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(capture);
+    }
+
+    fn read_pause_capture(&self) -> Option<String> {
+        self.pause_capture
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     fn resume(&self) -> bool {
@@ -354,6 +385,13 @@ impl PythonActor {
 
     pub(super) fn pause(&self) -> bool {
         self.state.pause()
+    }
+
+    pub(super) fn pause_info(&self) -> ScriptPauseInfo {
+        self.state
+            .read_pause_capture()
+            .and_then(|capture| serde_json::from_str::<ScriptPauseInfo>(&capture).ok())
+            .unwrap_or_default()
     }
 
     pub(super) fn resume(&self) -> bool {
@@ -860,6 +898,14 @@ impl PyApi {
         self.state.alive.load(Ordering::Acquire)
     }
 
+    fn pause_generation(&self) -> u64 {
+        self.state.pause_generation()
+    }
+
+    fn record_pause_capture(&self, capture: String) {
+        self.state.record_pause_capture(capture);
+    }
+
     fn execution_checkpoint(&self, py: Python<'_>) -> bool {
         if self.state.paused.load(Ordering::Acquire) {
             py.detach(|| self.state.checkpoint())
@@ -1268,8 +1314,75 @@ class Command(metaclass=CommandMeta):
         return page
 
 
+_pause_capture_generation = 0
+
+
+def _pause_variables(command):
+    internal = {
+        "_logger",
+        "_stop_cleanup_done",
+        "_keyboard_pressed",
+        "_keyboard_format_warned",
+        "isRunning",
+        "keys",
+        "postProcess",
+    }
+    variables = []
+    for name, value in vars(command).items():
+        if name.startswith("__") or name in internal:
+            continue
+        try:
+            rendered = repr(value)
+        except Exception:
+            rendered = "<repr failed>"
+        if len(rendered) > 200:
+            rendered = rendered[:197] + "..."
+        variables.append({"name": str(name), "value": rendered})
+    variables.sort(key=lambda item: item["name"])
+    return variables[:64]
+
+
+def _capture_pause_frames():
+    frames = []
+    variables = []
+    try:
+        root = _api.command_root()
+        frame = _sys._getframe(1)
+        while frame is not None:
+            filename = frame.f_code.co_filename
+            if filename.startswith(root):
+                frames.append(
+                    {
+                        "file": filename,
+                        "line": int(frame.f_lineno),
+                        "function": frame.f_code.co_name,
+                    }
+                )
+                if not variables:
+                    candidate = frame.f_locals.get("self")
+                    if candidate is not None and hasattr(candidate, "waitWhilePaused"):
+                        variables = _pause_variables(candidate)
+            frame = frame.f_back
+    except Exception:
+        return {"frames": [], "variables": []}
+    frames.reverse()
+    return {"frames": frames[:32], "variables": variables}
+
+
+def _checkpoint():
+    global _pause_capture_generation
+    generation = int(_api.pause_generation())
+    if generation != _pause_capture_generation:
+        _pause_capture_generation = generation
+        if generation:
+            _api.record_pause_capture(
+                _json.dumps(_capture_pause_frames(), ensure_ascii=False)
+            )
+    return _api.execution_checkpoint()
+
+
 def _monitor_stop(_code, _offset):
-    if _api.is_executing() and not _api.execution_checkpoint():
+    if _api.is_executing() and not _checkpoint():
         current = globals().get("_current")
         command = None if current is None else getattr(current, "command", None)
         if command is not None:
@@ -2561,7 +2674,7 @@ class PythonCommand(Command):
 
         待っている間に止める指示が出た場合はStopThreadを送出する。
         """
-        if not _api.execution_checkpoint():
+        if not _checkpoint():
             raise StopThread()
 
     def _keyboardStepsRaw(self, kind, value=None):
@@ -4719,7 +4832,7 @@ def _run_source(source, path, class_name, tags_json):
         _current.command = command
         _active_command = command
         try:
-            while _api.execution_checkpoint():
+            while _checkpoint():
                 _time.sleep(0.02)
         finally:
             command.end(sender)

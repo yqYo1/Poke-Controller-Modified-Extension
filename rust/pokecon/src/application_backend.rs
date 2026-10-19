@@ -23,17 +23,18 @@ use crate::dynamic::{DynamicConfigControl, DynamicConfigLanguage};
 use crate::script_creator::ScriptSpec as CreatorSpec;
 use crate::server::api::{
     ApiErrorCode, CameraDevice, CameraSelector, ClientMessage, CommandControlRequest,
-    CommandHistoryControlRequest, CommandHistoryEntry, CommandHistorySnapshot, CommandTagCommand,
-    CommandTagInfo, CommandTagOutcome, CommandTagRequest, CommandTagResult, CommandTagSnapshot,
-    CommandTagStatus, DecimalString, DynamicConfigControlRequest, DynamicConfigResult,
-    DynamicLanguage, GamepadButton, GamepadHat, GamepadInput, GenerateLauncherRequest,
-    GenerateLauncherResult, ImageFormat, InputApplied, InputGeneration, LauncherDestination,
-    NotificationTestRequest, NotificationTestResult, OperationResult, RunListItem, RunListSnapshot,
-    RunListSpec, RunScheduleControlRequest, RunScheduleSnapshot, ScriptCreatorPreview,
-    ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptUiAction,
-    ScriptUiActionResult, SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange,
-    SettingsPatchRequest, SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot,
-    StateChangeCause, StatePatch, StateSnapshot, UpdateCheckResult,
+    CommandHistoryControlRequest, CommandHistoryEntry, CommandHistorySnapshot, CommandPauseFrame,
+    CommandPauseSnapshot, CommandPauseVariable, CommandTagCommand, CommandTagInfo,
+    CommandTagOutcome, CommandTagRequest, CommandTagResult, CommandTagSnapshot, CommandTagStatus,
+    DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
+    GamepadButton, GamepadHat, GamepadInput, GenerateLauncherRequest, GenerateLauncherResult,
+    ImageFormat, InputApplied, InputGeneration, LauncherDestination, NotificationTestRequest,
+    NotificationTestResult, OperationResult, RunListItem, RunListSnapshot, RunListSpec,
+    RunScheduleControlRequest, RunScheduleSnapshot, ScriptCreatorPreview, ScriptCreatorResult,
+    ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult,
+    SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange, SettingsPatchRequest,
+    SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch,
+    StateSnapshot, UpdateCheckResult,
 };
 use crate::server::backend::{
     ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload, LauncherOutput,
@@ -1003,6 +1004,42 @@ impl RestBackend for ApplicationBackend {
             changed: matches!(result, CommandReloadResult::Published { .. }) && outcome.changed(),
             revision: outcome.revision().clone(),
         })
+    }
+
+    async fn command_pause(&self) -> ApiResult<CommandPauseSnapshot> {
+        match self.commands()?.pause_info().await {
+            Ok(Some(info)) => Ok(CommandPauseSnapshot {
+                paused: true,
+                frames: info
+                    .frames
+                    .into_iter()
+                    .map(|frame| CommandPauseFrame {
+                        file: frame.file,
+                        line: frame.line,
+                        function: frame.function,
+                    })
+                    .collect(),
+                variables: info
+                    .variables
+                    .into_iter()
+                    .map(|variable| CommandPauseVariable {
+                        name: variable.name,
+                        value: variable.value,
+                    })
+                    .collect(),
+            }),
+            // The command completed between the UI state snapshot and this
+            // read; an empty snapshot is not an error for the polling client.
+            Ok(None)
+            | Err(CommandServiceError::CommandNotRunning | CommandServiceError::CommandNotFound) => {
+                Ok(CommandPauseSnapshot {
+                    paused: false,
+                    frames: Vec::new(),
+                    variables: Vec::new(),
+                })
+            }
+            Err(error) => Err(command_failure(&error)),
+        }
     }
 
     async fn command_tags(&self) -> ApiResult<CommandTagSnapshot> {

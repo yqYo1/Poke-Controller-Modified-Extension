@@ -1,6 +1,7 @@
 //! Closed axum routing and common REST response handling.
 
 mod command_history;
+mod command_pause;
 mod command_tags;
 mod commands;
 mod devices;
@@ -43,6 +44,7 @@ pub fn router(backend: Arc<dyn RestBackend>) -> Router {
         .merge(settings::router())
         .merge(commands::router())
         .merge(command_history::router())
+        .merge(command_pause::router())
         .merge(command_tags::router())
         .merge(devices::router())
         .merge(notifications::router())
@@ -219,6 +221,7 @@ async fn method_not_allowed(uri: Uri) -> Response {
         "/api/devices/cameras"
         | "/api/devices/serial-ports"
         | "/api/command-history"
+        | "/api/command-pause"
         | "/api/command-tags"
         | "/api/run-schedule"
         | "/api/script-creator"
@@ -273,16 +276,16 @@ mod tests {
     use super::router;
     use crate::server::api::{
         ApiErrorCode, CameraDevice, CameraSelector, CommandControlRequest,
-        CommandHistoryControlRequest, CommandHistorySnapshot, CommandState, CommandTagRequest,
-        CommandTagResult, CommandTagSnapshot, DecimalString, DynamicConfigControlRequest,
-        DynamicConfigResult, DynamicLanguage, GenerateLauncherRequest, GenerateLauncherResult,
-        ImageFormat, NotificationTestRequest, NotificationTestResult, OperationResult,
-        RunListSnapshot, RunListSpec, RunScheduleControlRequest, RunScheduleSnapshot,
-        SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult,
-        ScriptCreatorSnapshot, ScriptCreatorSpec, SerialControlRequest, SerialPort,
-        SerialPortTransport, SettingsChange, SettingsPatchRequest, SettingsReadPatchValues,
-        SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch, StateSnapshot,
-        UpdateCheckResult,
+        CommandHistoryControlRequest, CommandHistorySnapshot, CommandPauseSnapshot, CommandState,
+        CommandTagRequest, CommandTagResult, CommandTagSnapshot, DecimalString,
+        DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage, GenerateLauncherRequest,
+        GenerateLauncherResult, ImageFormat, NotificationTestRequest, NotificationTestResult,
+        OperationResult, RunListSnapshot, RunListSpec, RunScheduleControlRequest,
+        RunScheduleSnapshot, SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview,
+        ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec, SerialControlRequest,
+        SerialPort, SerialPortTransport, SettingsChange, SettingsPatchRequest,
+        SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause,
+        StatePatch, StateSnapshot, UpdateCheckResult,
     };
     use crate::server::backend::{
         ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload,
@@ -453,6 +456,14 @@ mod tests {
             Ok(RunListSnapshot {
                 lists: Vec::new(),
                 skipped: Vec::new(),
+            })
+        }
+
+        async fn command_pause(&self) -> ApiResult<CommandPauseSnapshot> {
+            Ok(CommandPauseSnapshot {
+                paused: false,
+                frames: Vec::new(),
+                variables: Vec::new(),
             })
         }
 
@@ -657,11 +668,12 @@ mod tests {
     const STANDARD_METHODS: [&str; 9] = [
         "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT",
     ];
-    const REST_METHOD_MATRIX: [(&str, &[&str]); 24] = [
+    const REST_METHOD_MATRIX: [(&str, &[&str]); 25] = [
         ("/api/camera/retry", &["POST"]),
         ("/api/camera/screenshot", &["POST"]),
         ("/api/command-history", &["GET"]),
         ("/api/command-history/control", &["POST"]),
+        ("/api/command-pause", &["GET"]),
         ("/api/command-tags", &["GET"]),
         ("/api/command-tags/apply", &["POST"]),
         ("/api/commands/control", &["POST"]),
@@ -763,8 +775,8 @@ mod tests {
             }
         }
 
-        assert_eq!(advertised_count, 26);
-        assert_eq!(rejected_count, 190);
+        assert_eq!(advertised_count, 27);
+        assert_eq!(rejected_count, 198);
     }
 
     #[tokio::test]

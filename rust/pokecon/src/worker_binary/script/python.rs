@@ -725,6 +725,16 @@ struct PythonDiscoveredClass {
 fn discover_commands(
     sources: &[DiscoverSource],
 ) -> Result<Vec<ScriptDiscoveredCommand>, PythonActorError> {
+    // Sibling helper modules are cached in sys.modules for the worker
+    // lifetime; refresh them once before reading every command source so a
+    // reload observes edited imports and drops deleted files (L889).
+    Python::attach(|py| -> PyResult<()> {
+        py.import("_pokecon_script")?
+            .getattr("_refresh_command_modules")?
+            .call0()?;
+        Ok(())
+    })
+    .map_err(|error| PythonActorError::new("ScriptDiscoveryError", error.to_string()))?;
     let mut commands = Vec::new();
     for source in sources {
         let content = std::fs::read_to_string(&source.path)
@@ -1220,6 +1230,7 @@ const PYTHON_BOOTSTRAP: &str = r#"
 import collections as _collections
 import contextlib as _contextlib
 import enum as _enum
+import importlib as _importlib
 import inspect as _inspect
 import json as _json
 import logging as _logging
@@ -4763,6 +4774,37 @@ def _manual_tags(command):
     if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
         raise TypeError("command TAGS must be list[str] or None")
     return tags.copy()
+
+
+def _refresh_command_modules():
+    """Reload helper modules imported from the command root (L889).
+
+    Python caches imported helper modules in ``sys.modules`` for the worker
+    lifetime. Command reload must observe edited siblings, and removed files
+    must disappear; modules outside the command root (stdlib, site-packages,
+    the bridge) are never touched.
+    """
+    root = _api.command_root()
+    for name, module in list(_sys.modules.items()):
+        try:
+            filename = getattr(module, "__file__", None)
+        except Exception:
+            continue
+        if not isinstance(filename, str) or not filename.startswith(root):
+            continue
+        try:
+            if _os.path.isfile(filename):
+                # Compile from the current bytes: importlib.reload reuses the
+                # cached .pyc when mtime and size did not change (edits within
+                # the same second), which would hide the update.
+                with open(filename, "r", encoding="utf-8") as handle:
+                    source = handle.read()
+                exec(compile(source, filename, "exec"), module.__dict__)
+            else:
+                _sys.modules.pop(name, None)
+        except Exception:
+            _sys.modules.pop(name, None)
+    _importlib.invalidate_caches()
 
 
 def _discover_source(source, path, module_path):

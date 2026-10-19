@@ -73,3 +73,4 @@ Rules:
 - The repository root's `target/` must stay absent; builds happen in worktrees only. A stale root target (for example from before the worktree split) is removable without ceremony.
 - Detached worktrees created for clean gates or probes must be removed after use (`git worktree remove --force` then `git worktree prune`); leftovers under `~/.hermes/cache/` are cleanup targets, never evidence.
 - Keep `target/nix-tasks/debug/deps` and `target/nix-tasks/release`: they carry the expensive dependency builds, and removing them costs tens of minutes on the next gate run.
+- Project-generated artifacts (command/gate logs, probes, temporary outputs) belong inside the worktree under gitignored paths: `target/logs/` for logs and `target/tmp/` for probes that need isolated HOME/XDG layouts. Never create `pokecon-*` probe directories or log files directly under `$HOME` or anywhere else outside the repository; if a probe needs an isolated home, build it under `target/tmp/`.

@@ -2823,3 +2823,103 @@ class InterframeDiff(ImageProcPythonCommand):
 
     stop_worker(&worker).await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn reload_refreshes_sibling_helper_modules() {
+    const HELPER_ONE: &str = "TAG = \"one\"\n";
+    const HELPER_TWO: &str = "TAG = \"two\"\n";
+    const SOURCE: &str = r#"
+from Commands.PythonCommandBase import PythonCommand
+from Commands.Samples.Rank.helper import TAG
+
+
+class Sample(PythonCommand):
+    NAME = "sample"
+    TAGS = [TAG]
+
+    def do(self):
+        pass
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    let directory = command_root.join("Samples/Rank");
+    std::fs::create_dir_all(&directory).expect("nested command directory is created");
+    std::fs::write(directory.join("helper.py"), HELPER_ONE).expect("helper fixture is written");
+    std::fs::write(directory.join("commands.py"), SOURCE).expect("script fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let first = client.discover().await.expect("first discovery succeeds");
+    assert_eq!(first.commands.len(), 1);
+    assert_eq!(first.commands[0].manual_tags, ["one"]);
+
+    std::fs::write(directory.join("helper.py"), HELPER_TWO).expect("helper fixture is updated");
+    let second = client
+        .discover()
+        .await
+        .expect("second discovery reloads the sibling helper");
+    assert_eq!(second.commands.len(), 1);
+    assert_eq!(second.commands[0].manual_tags, ["two"]);
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn pause_info_reports_the_paused_command_frame_and_variables() {
+    const SOURCE: &str = r"
+from Commands.PythonCommandBase import PythonCommand
+
+
+class Pausable(PythonCommand):
+    def do(self):
+        self.counter = 3
+        while True:
+            self.wait(0.05)
+";
+
+    let (_temporary, command_root, data_root) = create_profile();
+    let path = command_root.join("pausable.py");
+    std::fs::write(&path, SOURCE).expect("pause fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let execution_client = client.clone();
+    let execution = tokio::spawn(async move {
+        execution_client
+            .execute(&ScriptExecuteRequest {
+                path: "pausable.py".into(),
+                class_name: "Pausable".to_owned(),
+                tags: Vec::new(),
+            })
+            .await
+    });
+    tokio::time::sleep(Duration::from_millis(400)).await;
+
+    let paused = client.pause().await.expect("pause request succeeds");
+    assert!(paused.changed);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let info = client.pause_info().await.expect("pause info is returned");
+    assert!(
+        info.frames
+            .iter()
+            .any(|frame| frame.function == "do" && frame.file.ends_with("pausable.py")),
+        "{info:?}"
+    );
+    assert!(
+        info.variables
+            .iter()
+            .any(|variable| variable.name == "counter" && variable.value == "3"),
+        "{info:?}"
+    );
+
+    let resumed = client.resume().await.expect("resume succeeds");
+    assert!(resumed.changed);
+    client.stop().await.expect("stop succeeds");
+    let _result = tokio::time::timeout(Duration::from_secs(5), execution)
+        .await
+        .expect("execution waiter joins")
+        .expect("execution task joins");
+    stop_worker(&worker).await;
+}

@@ -6,6 +6,14 @@ export type CommandControlRequest = components['schemas']['CommandControlRequest
 export type CommandHistoryControlRequest = components['schemas']['CommandHistoryControlRequest'];
 export type CommandHistoryEntry = components['schemas']['CommandHistoryEntry'];
 export type CommandHistorySnapshot = components['schemas']['CommandHistorySnapshot'];
+export type CommandTagCommand = components['schemas']['CommandTagCommand'];
+export type CommandTagEdit = components['schemas']['CommandTagEdit'];
+export type CommandTagInfo = components['schemas']['CommandTagInfo'];
+export type CommandTagOutcome = components['schemas']['CommandTagOutcome'];
+export type CommandTagRequest = components['schemas']['CommandTagRequest'];
+export type CommandTagResult = components['schemas']['CommandTagResult'];
+export type CommandTagSnapshot = components['schemas']['CommandTagSnapshot'];
+export type CommandTagStatus = components['schemas']['CommandTagStatus'];
 export type DynamicConfigControlRequest = components['schemas']['DynamicConfigControlRequest'];
 export type DynamicConfigResult = components['schemas']['DynamicConfigResult'];
 export type GenerateLauncherRequest = components['schemas']['GenerateLauncherRequest'];
@@ -188,6 +196,17 @@ export class BackendActions {
     return unwrap(
       await this.client.POST('/api/run-schedule/control', { body: request }),
       'run schedule control failed'
+    );
+  }
+
+  async commandTags(): Promise<CommandTagSnapshot> {
+    return unwrap(await this.client.GET('/api/command-tags'), 'command tag load failed');
+  }
+
+  async applyCommandTags(request: CommandTagRequest): Promise<CommandTagResult> {
+    return unwrap(
+      await this.client.POST('/api/command-tags/apply', { body: request }),
+      'command tag update failed'
     );
   }
 

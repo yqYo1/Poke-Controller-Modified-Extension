@@ -6,6 +6,9 @@
     CommandHistoryControlRequest,
     CommandHistoryEntry,
     CommandHistorySnapshot,
+    CommandTagRequest,
+    CommandTagResult,
+    CommandTagSnapshot,
     OperationResult,
     RunListSaveRequest,
     RunListSnapshot,
@@ -17,6 +20,7 @@
     ScriptCreatorSpec
   } from '../actions';
   import RunListEditorDialog from './RunListEditorDialog.svelte';
+  import TagEditorDialog from './TagEditorDialog.svelte';
   import ScriptCreatorDialog from './ScriptCreatorDialog.svelte';
   import type { SettingsWriteValues } from '../api';
   import type { components } from '../api/openapi';
@@ -31,6 +35,8 @@
 
   interface CommandActions {
     commandHistory(): Promise<CommandHistorySnapshot>;
+    commandTags(): Promise<CommandTagSnapshot>;
+    applyCommandTags(request: CommandTagRequest): Promise<CommandTagResult>;
     controlCommand(request: CommandControlRequest): Promise<OperationResult>;
     controlCommandHistory(
       request: CommandHistoryControlRequest
@@ -62,6 +68,7 @@
   let { actions, runtime, view }: Props = $props();
   let creatorOpen = $state(false);
   let runListOpen = $state(false);
+  let tagOpen = $state(false);
   let activeSubtab = $state<Subtab>('python');
   let assigningSlot = $state<ShortcutIndex | null>(null);
   let busy = $state(false);
@@ -644,6 +651,7 @@
     <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-sm text-subtext1 disabled:opacity-40" disabled={busy} onclick={() => void reload()}>Reload</button>
     <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-sm text-subtext1" onclick={() => (creatorOpen = true)}>New script</button>
     <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-sm text-subtext1" onclick={() => (runListOpen = true)}>Run lists</button>
+    <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-sm text-subtext1" onclick={() => (tagOpen = true)}>Tags</button>
     <span class="ml-auto text-xs text-subtext0">{selectedCommand?.name ?? backendState?.current_command ?? 'No command selected'}</span>
   </div>
 
@@ -682,6 +690,15 @@
       actions={actions}
       selected={runListSelection}
       onclose={() => (runListOpen = false)}
+      onsaved={() => void reload()}
+    />
+  {/if}
+
+  {#if tagOpen}
+    <TagEditorDialog
+      actions={actions}
+      selected={selectedCommand}
+      onclose={() => (tagOpen = false)}
       onsaved={() => void reload()}
     />
   {/if}

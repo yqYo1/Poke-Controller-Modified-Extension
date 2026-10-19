@@ -159,6 +159,8 @@ use crate::server::api::{
         crate::server::paths::control_run_schedule,
         crate::server::paths::command_history,
         crate::server::paths::control_command_history,
+        crate::server::paths::command_tags,
+        crate::server::paths::apply_command_tags,
         crate::server::paths::script_creator_snapshot,
         crate::server::paths::preview_script_creation,
         crate::server::paths::create_script,
@@ -178,6 +180,7 @@ use crate::server::api::{
         ,(name = "run_lists", description = "Saved command run lists")
         ,(name = "run_schedule", description = "Command start and stop reservations")
         ,(name = "command_history", description = "Recent command run history")
+        ,(name = "command_tags", description = "Manual command tag editing")
     )
 )]
 struct ApiDocument;

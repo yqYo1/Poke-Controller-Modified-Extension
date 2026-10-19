@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "42d9546437a3f88326c8904fa40ed4b351d932682603cbb768f616ff4e691c67";
+      canonicalFlakeHash = "2a8ae0dfca9c0f6cc561f7e240934b46045613e917d5bc957a805a757b57816f";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -763,7 +763,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "ab25ff6b2c231015aab46d68a74401964fe37e760476b5d4806bedabc8f02700";
+          expectedAuditTestHash = "a41fe05c522c9b0c0a5d209e409bb1523a97625dee35df67f3cacca84f1e1946";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -784,7 +784,7 @@
             "rust/pokecon" = "build.rs";
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "be55ab90fc8b1ea6112c6420b24797de59ad9fad1ee93fe93e7c2be65e87577c";
+            "rust/pokecon" = "953353dd00abb4f5e7ddfed84a92adb85a3e0d325ab5f462154bdae5809f10a3";
           };
           expectedWorkspaceBuildDependencies = {
             "rust/pokecon" = {
@@ -992,7 +992,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.toml" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.toml")
-                == "213f814bbccc2ee98e7dd316f5c18d839cf845c5935905d8ae960a05b61d02c7"
+                == "51fd0b8fcd9e4bb1559debe52013078ec02a17bec54d623b975cf187973c8acb"
             ) "Cargo workspace manifest content changed";
             assert lib.assertMsg workspaceMemberManifestsAreCanonical
               "Cargo workspace member manifest content changed";
@@ -1000,7 +1000,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
-                == "9492e46e775e3cb93b01867aceb1ce401253797027fe9469becdf38e8fabcc8d"
+                == "3f7b28135ff2ee015464a7be7533f2c272666b67886e71ea7eceded8f9a9b302"
             ) "Cargo lockfile content changed";
             assert lib.assertMsg (
               actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts
@@ -2661,7 +2661,7 @@
             inherit (gateCargoLock) metadata;
           };
           gateCargoVendorIdentity = builtins.hashString "sha256" (builtins.toJSON gateCargoVendorLock);
-          expectedGateCargoVendorIdentity = "cf5ed257386f182e928d5856fc4b1aa75c7b646747394ce44a87a38b6b8fb0eb";
+          expectedGateCargoVendorIdentity = "53920440ce131467941260c51953476e753b371cbac2852f6db23cf4338d7ad5";
           # buildRustPackage vendors from the full workspace lock, whose store
           # path changes for local-only graph edits. This source-only lock keeps
           # the immutable gate vendor path stable until external inputs change.

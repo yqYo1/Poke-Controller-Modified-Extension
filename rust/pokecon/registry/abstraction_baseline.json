@@ -34,6 +34,7 @@
     "rmp-serde",
     "rumqttc",
     "rustls",
+    "rustpython-parser",
     "semver",
     "serde",
     "serde_json",

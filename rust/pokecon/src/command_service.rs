@@ -1549,13 +1549,6 @@ impl CommandService {
     }
 
     #[must_use]
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "command listing awaits product command adapter wiring"
-        )
-    )]
     pub async fn commands(&self) -> Vec<LoadedCommand> {
         self.inner.lock().await.commands.clone()
     }

@@ -228,6 +228,86 @@
         }
       }
     },
+    "/api/command-tags": {
+      "get": {
+        "tags": [
+          "command_tags"
+        ],
+        "operationId": "command_tags",
+        "responses": {
+          "200": {
+            "description": "Every command file with its editable manual tags",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_CommandTagSnapshot"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Command tag snapshot failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/command-tags/apply": {
+      "post": {
+        "tags": [
+          "command_tags"
+        ],
+        "operationId": "apply_command_tags",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tag edit applied and the refreshed snapshot returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_CommandTagResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Tag input is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Tag edit failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/commands/control": {
       "post": {
         "tags": [
@@ -1896,6 +1976,290 @@
           "running",
           "paused",
           "stopped",
+          "error"
+        ]
+      },
+      "CommandTagCommand": {
+        "type": "object",
+        "description": "One command file with its editable manual tags.",
+        "required": [
+          "name",
+          "module_path",
+          "class_name",
+          "relative_path",
+          "digest",
+          "manual_tags",
+          "automatic_tags"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "module_path": {
+            "type": "string"
+          },
+          "class_name": {
+            "type": "string"
+          },
+          "relative_path": {
+            "type": "string",
+            "description": "Command file path relative to the command root."
+          },
+          "digest": {
+            "type": "string",
+            "description": "SHA-256 of the bytes this tag list was read from; empty on error."
+          },
+          "manual_tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Class-level `TAGS` that the editor may change."
+          },
+          "automatic_tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Directory-derived and dynamic tags that follow other sources."
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Read or parse failure for this command file."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandTagEdit": {
+        "type": "object",
+        "description": "One digest-guarded per-command tag replacement.",
+        "required": [
+          "module_path",
+          "class_name",
+          "digest",
+          "tags"
+        ],
+        "properties": {
+          "module_path": {
+            "type": "string"
+          },
+          "class_name": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandTagInfo": {
+        "type": "object",
+        "description": "One tag with its sources and usage count.",
+        "required": [
+          "name",
+          "manual",
+          "automatic",
+          "count"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "manual": {
+            "type": "boolean"
+          },
+          "automatic": {
+            "type": "boolean"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandTagOutcome": {
+        "type": "object",
+        "description": "One file outcome of a tag edit.",
+        "required": [
+          "module_path",
+          "class_name",
+          "relative_path",
+          "status"
+        ],
+        "properties": {
+          "module_path": {
+            "type": "string"
+          },
+          "class_name": {
+            "type": "string"
+          },
+          "relative_path": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CommandTagStatus"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandTagRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Replaces the manual tags of the listed commands.",
+            "required": [
+              "edits",
+              "action"
+            ],
+            "properties": {
+              "edits": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CommandTagEdit"
+                }
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "set"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Renames one manual tag across every command that declares it.",
+            "required": [
+              "from",
+              "to",
+              "action"
+            ],
+            "properties": {
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "rename"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Removes one manual tag from every command that declares it.",
+            "required": [
+              "tag",
+              "action"
+            ],
+            "properties": {
+              "tag": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "delete"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "One tag edit request."
+      },
+      "CommandTagResult": {
+        "type": "object",
+        "description": "Result of a tag edit, including the refreshed snapshot.",
+        "required": [
+          "results",
+          "changed",
+          "conflicts",
+          "snapshot"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommandTagOutcome"
+            }
+          },
+          "changed": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "conflicts": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "reload_error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Command reload failure after a successful write; the files are already\nupdated, so the caller can retry the reload."
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/CommandTagSnapshot"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandTagSnapshot": {
+        "type": "object",
+        "description": "Every command file and the merged tag list.",
+        "required": [
+          "commands",
+          "tags"
+        ],
+        "properties": {
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommandTagCommand"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommandTagInfo"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandTagStatus": {
+        "type": "string",
+        "description": "Per-file result of one tag edit.",
+        "enum": [
+          "updated",
+          "unchanged",
+          "conflict",
           "error"
         ]
       },
@@ -7132,6 +7496,88 @@
         },
         "additionalProperties": false
       },
+      "Success_CommandTagResult": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Result of a tag edit, including the refreshed snapshot.",
+            "required": [
+              "results",
+              "changed",
+              "conflicts",
+              "snapshot"
+            ],
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CommandTagOutcome"
+                }
+              },
+              "changed": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "conflicts": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "reload_error": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Command reload failure after a successful write; the files are already\nupdated, so the caller can retry the reload."
+              },
+              "snapshot": {
+                "$ref": "#/components/schemas/CommandTagSnapshot"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_CommandTagSnapshot": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Every command file and the merged tag list.",
+            "required": [
+              "commands",
+              "tags"
+            ],
+            "properties": {
+              "commands": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CommandTagCommand"
+                }
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CommandTagInfo"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
       "Success_DynamicConfigResult": {
         "type": "object",
         "description": "Common successful JSON envelope.",
@@ -7905,6 +8351,10 @@
     {
       "name": "command_history",
       "description": "Recent command run history"
+    },
+    {
+      "name": "command_tags",
+      "description": "Manual command tag editing"
     }
   ]
 }

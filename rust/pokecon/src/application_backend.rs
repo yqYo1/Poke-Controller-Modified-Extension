@@ -23,16 +23,17 @@ use crate::dynamic::{DynamicConfigControl, DynamicConfigLanguage};
 use crate::script_creator::ScriptSpec as CreatorSpec;
 use crate::server::api::{
     ApiErrorCode, CameraDevice, CameraSelector, ClientMessage, CommandControlRequest,
-    CommandHistoryControlRequest, CommandHistoryEntry, CommandHistorySnapshot, DecimalString,
-    DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage, GamepadButton, GamepadHat,
-    GamepadInput, GenerateLauncherRequest, GenerateLauncherResult, ImageFormat, InputApplied,
-    InputGeneration, LauncherDestination, NotificationTestRequest, NotificationTestResult,
-    OperationResult, RunListItem, RunListSnapshot, RunListSpec, RunScheduleControlRequest,
-    RunScheduleSnapshot, ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot,
-    ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort,
-    SerialPortTransport, SettingsChange, SettingsPatchRequest, SettingsReadPatchValues,
-    SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch, StateSnapshot,
-    UpdateCheckResult,
+    CommandHistoryControlRequest, CommandHistoryEntry, CommandHistorySnapshot, CommandTagCommand,
+    CommandTagInfo, CommandTagOutcome, CommandTagRequest, CommandTagResult, CommandTagSnapshot,
+    CommandTagStatus, DecimalString, DynamicConfigControlRequest, DynamicConfigResult,
+    DynamicLanguage, GamepadButton, GamepadHat, GamepadInput, GenerateLauncherRequest,
+    GenerateLauncherResult, ImageFormat, InputApplied, InputGeneration, LauncherDestination,
+    NotificationTestRequest, NotificationTestResult, OperationResult, RunListItem, RunListSnapshot,
+    RunListSpec, RunScheduleControlRequest, RunScheduleSnapshot, ScriptCreatorPreview,
+    ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptUiAction,
+    ScriptUiActionResult, SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange,
+    SettingsPatchRequest, SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot,
+    StateChangeCause, StatePatch, StateSnapshot, UpdateCheckResult,
 };
 use crate::server::backend::{
     ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload, LauncherOutput,
@@ -132,6 +133,7 @@ pub(crate) struct ApplicationBackend {
     mutation_gate: Mutex<()>,
     commands: OnceLock<Arc<CommandService>>,
     profiles: OnceLock<Arc<ProfileService>>,
+    tag_editor: crate::command_tags::CommandTagEditor,
     dynamic_watcher: DynamicConfigWatcher,
     watcher_owner: OnceLock<Weak<ApplicationBackend>>,
 }
@@ -150,6 +152,8 @@ impl std::fmt::Debug for ApplicationBackend {
 impl ApplicationBackend {
     pub(crate) fn new(parts: ApplicationBackendParts) -> Self {
         let arbiter = parts.host.controller_safety().arbiter();
+        let tag_editor =
+            crate::command_tags::CommandTagEditor::new(parts.data_root.join("Commands"));
         Self {
             data_root: parts.data_root,
             config_root: parts.config_root,
@@ -172,6 +176,7 @@ impl ApplicationBackend {
             mutation_gate: Mutex::new(()),
             commands: OnceLock::new(),
             profiles: OnceLock::new(),
+            tag_editor,
             dynamic_watcher: DynamicConfigWatcher::new(),
             watcher_owner: OnceLock::new(),
         }
@@ -429,6 +434,22 @@ impl ApplicationBackend {
         self.commands
             .get()
             .ok_or_else(|| internal_failure("command service is unavailable"))
+    }
+
+    async fn tag_sources(&self) -> ApiResult<Vec<crate::command_tags::TagCommandSource>> {
+        Ok(self
+            .commands()?
+            .commands()
+            .await
+            .into_iter()
+            .map(|command| crate::command_tags::TagCommandSource {
+                name: command.info.name,
+                module_path: command.info.module_path,
+                class_name: command.info.class_name,
+                relative_path: command.relative_path,
+                tags: command.info.tags,
+            })
+            .collect())
     }
 
     fn usage(&self) -> ApiResult<Arc<crate::command_usage::CommandUsageStore>> {
@@ -982,6 +1003,31 @@ impl RestBackend for ApplicationBackend {
             changed: matches!(result, CommandReloadResult::Published { .. }) && outcome.changed(),
             revision: outcome.revision().clone(),
         })
+    }
+
+    async fn command_tags(&self) -> ApiResult<CommandTagSnapshot> {
+        let sources = self.tag_sources().await?;
+        let snapshot = self.tag_editor.snapshot(&sources);
+        Ok(tag_snapshot(snapshot))
+    }
+
+    async fn apply_command_tags(&self, request: CommandTagRequest) -> ApiResult<CommandTagResult> {
+        let sources = self.tag_sources().await?;
+        let report = self
+            .tag_editor
+            .apply(&sources, &tag_request(request))
+            .map_err(|error| tag_failure(&error))?;
+        let mut reload_error = None;
+        if report.changed > 0 {
+            match self.commands()?.reload().await {
+                Ok(_result) => {
+                    self.commit_projection(StateChangeCause::Commands, false, None)
+                        .await?;
+                }
+                Err(error) => reload_error = Some(error.to_string()),
+            }
+        }
+        Ok(tag_report(report, reload_error))
     }
 
     async fn enumerate_cameras(&self) -> ApiResult<Vec<CameraDevice>> {
@@ -1957,6 +2003,106 @@ fn patch_failure(error: &PatchError) -> ApiFailure {
         _ => ApiErrorCode::InvalidRequest,
     };
     ApiFailure::new(status, code, error.to_string())
+}
+
+fn tag_failure(error: &crate::command_tags::TagEditError) -> ApiFailure {
+    match error {
+        crate::command_tags::TagEditError::EmptyTag
+        | crate::command_tags::TagEditError::TagTooLong
+        | crate::command_tags::TagEditError::ReservedTag
+        | crate::command_tags::TagEditError::ControlTag
+        | crate::command_tags::TagEditError::DuplicateTag(_)
+        | crate::command_tags::TagEditError::InvalidTags => ApiFailure::new(
+            ApiFailureStatus::UnprocessableEntity,
+            ApiErrorCode::InvalidRequest,
+            error.to_string(),
+        ),
+        crate::command_tags::TagEditError::Parse(_)
+        | crate::command_tags::TagEditError::MissingClass(_)
+        | crate::command_tags::TagEditError::PathEscape
+        | crate::command_tags::TagEditError::Io(_) => ApiFailure::new(
+            ApiFailureStatus::InternalServerError,
+            ApiErrorCode::InternalError,
+            error.to_string(),
+        ),
+    }
+}
+
+fn tag_request(request: CommandTagRequest) -> crate::command_tags::TagApplyRequest {
+    match request {
+        CommandTagRequest::Set { edits } => crate::command_tags::TagApplyRequest::Set(
+            edits
+                .into_iter()
+                .map(|edit| crate::command_tags::TagSetEdit {
+                    module_path: edit.module_path,
+                    class_name: edit.class_name,
+                    digest: edit.digest,
+                    tags: edit.tags,
+                })
+                .collect(),
+        ),
+        CommandTagRequest::Rename { from, to } => {
+            crate::command_tags::TagApplyRequest::Rename { from, to }
+        }
+        CommandTagRequest::Delete { tag } => crate::command_tags::TagApplyRequest::Delete { tag },
+    }
+}
+
+fn tag_snapshot(snapshot: crate::command_tags::TagSnapshot) -> CommandTagSnapshot {
+    let tags = crate::command_tags::CommandTagEditor::summarize(&snapshot)
+        .into_iter()
+        .map(|tag| CommandTagInfo {
+            name: tag.name,
+            manual: tag.manual,
+            automatic: tag.automatic,
+            count: tag.count as u64,
+        })
+        .collect();
+    CommandTagSnapshot {
+        commands: snapshot
+            .commands
+            .into_iter()
+            .map(|command| CommandTagCommand {
+                name: command.name,
+                module_path: command.module_path,
+                class_name: command.class_name,
+                relative_path: command.relative_path,
+                digest: command.digest,
+                manual_tags: command.manual_tags,
+                automatic_tags: command.automatic_tags,
+                error: command.error,
+            })
+            .collect(),
+        tags,
+    }
+}
+
+fn tag_report(
+    report: crate::command_tags::TagApplyReport,
+    reload_error: Option<String>,
+) -> CommandTagResult {
+    CommandTagResult {
+        results: report
+            .outcomes
+            .into_iter()
+            .map(|outcome| CommandTagOutcome {
+                module_path: outcome.module_path,
+                class_name: outcome.class_name,
+                relative_path: outcome.relative_path,
+                status: match outcome.status {
+                    crate::command_tags::TagApplyStatus::Updated => CommandTagStatus::Updated,
+                    crate::command_tags::TagApplyStatus::Unchanged => CommandTagStatus::Unchanged,
+                    crate::command_tags::TagApplyStatus::Conflict => CommandTagStatus::Conflict,
+                    crate::command_tags::TagApplyStatus::Error => CommandTagStatus::Error,
+                },
+                message: outcome.message,
+            })
+            .collect(),
+        changed: report.changed as u64,
+        conflicts: report.conflicts as u64,
+        reload_error,
+        snapshot: tag_snapshot(report.snapshot),
+    }
 }
 
 fn command_failure(error: &CommandServiceError) -> ApiFailure {

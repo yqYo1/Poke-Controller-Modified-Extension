@@ -6,13 +6,13 @@ use async_trait::async_trait;
 
 use crate::server::api::{
     ApiError, ApiErrorCode, CameraDevice, CommandControlRequest, CommandHistoryControlRequest,
-    CommandHistorySnapshot, DynamicConfigControlRequest, DynamicConfigResult,
-    GenerateLauncherRequest, GenerateLauncherResult, ImageFormat, NotificationTestRequest,
-    NotificationTestResult, OperationResult, RunListSnapshot, RunListSpec,
-    RunScheduleControlRequest, RunScheduleSnapshot, SavedScreenshot, ScreenshotRequest,
-    ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec,
-    ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort, SettingsPatchRequest,
-    SettingsSnapshot, UpdateCheckResult,
+    CommandHistorySnapshot, CommandTagRequest, CommandTagResult, CommandTagSnapshot,
+    DynamicConfigControlRequest, DynamicConfigResult, GenerateLauncherRequest,
+    GenerateLauncherResult, ImageFormat, NotificationTestRequest, NotificationTestResult,
+    OperationResult, RunListSnapshot, RunListSpec, RunScheduleControlRequest, RunScheduleSnapshot,
+    SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult,
+    ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult,
+    SerialControlRequest, SerialPort, SettingsPatchRequest, SettingsSnapshot, UpdateCheckResult,
 };
 use crate::server::state::StateHub;
 
@@ -235,6 +235,24 @@ pub trait RestBackend: Send + Sync + 'static {
             ApiFailureStatus::NotFound,
             ApiErrorCode::ResourceNotFound,
             "command history is not available",
+        ))
+    }
+
+    /// Every command file with its editable manual tags and digest.
+    async fn command_tags(&self) -> ApiResult<CommandTagSnapshot> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "command tag editing is not available",
+        ))
+    }
+
+    /// Applies one tag edit and returns the refreshed snapshot.
+    async fn apply_command_tags(&self, _request: CommandTagRequest) -> ApiResult<CommandTagResult> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "command tag editing is not available",
         ))
     }
 

@@ -46,6 +46,8 @@ EXPECTED_OPENAPI_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("/api/camera/screenshot", "post", "screenshot"),
     ("/api/command-history", "get", "command_history"),
     ("/api/command-history/control", "post", "control_command_history"),
+    ("/api/command-tags", "get", "command_tags"),
+    ("/api/command-tags/apply", "post", "apply_command_tags"),
     ("/api/commands/control", "post", "control_command"),
     ("/api/commands/reload", "post", "reload_commands"),
     ("/api/devices/cameras", "get", "get_cameras"),
@@ -73,6 +75,10 @@ REST_ROUTE_PATHS_BY_SOURCE: dict[str, tuple[str, ...]] = {
     "server/rest/command_history.rs": (
         "/api/command-history",
         "/api/command-history/control",
+    ),
+    "server/rest/command_tags.rs": (
+        "/api/command-tags",
+        "/api/command-tags/apply",
     ),
     "server/rest/commands.rs": (
         "/api/commands/control",
@@ -106,6 +112,7 @@ REST_ROUTE_PATHS_BY_SOURCE: dict[str, tuple[str, ...]] = {
 }
 REST_ROUTER_MODULES: tuple[str, ...] = (
     "command_history",
+    "command_tags",
     "commands",
     "devices",
     "dynamic_config",
@@ -123,6 +130,7 @@ REST_ROUTER_MERGES: tuple[str, ...] = (
     "settings",
     "commands",
     "command_history",
+    "command_tags",
     "devices",
     "notifications",
     "dynamic_config",
@@ -199,7 +207,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon/build.rs": "@pokecon/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "be55ab90fc8b1ea6112c6420b24797de59ad9fad1ee93fe93e7c2be65e87577c",
+    "rust/pokecon": "953353dd00abb4f5e7ddfed84a92adb85a3e0d325ab5f462154bdae5809f10a3",
 }
 
 EXPECTED_WORKSPACE_PROVENANCE = tomllib.loads(
@@ -259,6 +267,7 @@ rmp-serde = "1"
 reqwest = { version = "0.13.4", default-features = false, features = ["json", "multipart", "rustls-no-provider"] }
 rumqttc = { version = "0.25.1", default-features = false }
 rustls = { version = "0.23.42", default-features = false, features = ["ring", "std"] }
+rustpython-parser = "0.4"
 tokio-serial = { version = "5.5.0", features = ["libudev"] }
 libftdi1-sys = "1.1.3"
 gilrs = { version = "0.11.2", default-features = false, features = ["xinput"] }
@@ -445,6 +454,7 @@ rfd.workspace = true
 rmp-serde.workspace = true
 rumqttc.workspace = true
 rustls.workspace = true
+rustpython-parser.workspace = true
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -541,6 +551,14 @@ ROUTER_FACTORY_BODIES: dict[str, str] = {
             )
             .route("/api/command-history/control", post(control))
     """,
+    "server/rest/command_tags.rs": """
+        Router::new()
+            .route(
+                "/api/command-tags",
+                on(MethodFilter::GET, snapshot).on(MethodFilter::HEAD, method_not_allowed),
+            )
+            .route("/api/command-tags/apply", post(apply))
+    """,
     "server/rest/commands.rs": """
         Router::new()
             .route("/api/commands/control", post(control))
@@ -569,6 +587,7 @@ ROUTER_FACTORY_BODIES: dict[str, str] = {
             .merge(settings::router())
             .merge(commands::router())
             .merge(command_history::router())
+            .merge(command_tags::router())
             .merge(devices::router())
             .merge(notifications::router())
             .merge(dynamic_config::router())
@@ -1442,7 +1461,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     } == EXPECTED_WORKSPACE_MANIFEST_HASHES
     assert (
         hashlib.sha256(sources[WORKSPACE_LOCK_SOURCE].encode()).hexdigest()
-        == "9492e46e775e3cb93b01867aceb1ce401253797027fe9469becdf38e8fabcc8d"
+        == "3f7b28135ff2ee015464a7be7533f2c272666b67886e71ea7eceded8f9a9b302"
     )
     assert manifests["rust/pokecon"] == EXPECTED_POKECON_MANIFEST
     assert all(
@@ -2197,7 +2216,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "a6e82da417412f5507ab97a13deca227491e3a2475304d4fe290ff658bdc7544"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "63a6fe96d9b010fd8cb85b82d0ba182b1fe5d741a59ed72e53f354abb368a812"
+            "7aaeb387553e6643dcfa95678421b13b4ff48c2b382b1c948e75a14cce76626b"
         ),
         "@rust/pokecon/src/main.rs": (
             "97133ad5fcf7ea3575f09eab2b6e9c43034d378a68ea92ba883d503f9ecb2574"
@@ -2433,7 +2452,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     # this file) and then canonicalFlakeHash again.
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "d98091e86d07e99b291078688b15197a11d9880eda276b93e6fc2b57392d7eee"
+        == "2cb53686c30a6b289cd0de0c22bcf94780a81a8e40bde2150f8c964bc1c1a39b"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2858,14 +2877,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "a62a492f0ef5396ab83420c3990195b61e9cd0ee7223df0cf0755f34c25331ec"
+        == "e849840dc7aff8c541bf8dc4dd348ea2dad3c2080a7750ca7a828172d8eef596"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
         "workspaceTargetBuildDependenciesAreEmpty =",
         "workspaceMemberManifestsAreCanonical =",
         "repositoryCargoConfigInventory =",
-        '== "9492e46e775e3cb93b01867aceb1ce401253797027fe9469becdf38e8fabcc8d"',
+        '== "3f7b28135ff2ee015464a7be7533f2c272666b67886e71ea7eceded8f9a9b302"',
         'memberEntries."Cargo.toml" == "regular"',
         'memberEntries."build.rs" == "regular"',
         "dependency.dependencyName == expectedWorkspacePackageNames.${resolvedPath}",
@@ -3687,7 +3706,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     gate_cargo_vendor_section = flake[gate_cargo_vendor_start:gate_cargo_vendor_end]
     assert (
         hashlib.sha256(gate_cargo_vendor_section.strip().encode()).hexdigest()
-        == "2c564a7c2db72567cd721152fe0c30de4de6d3dca11814ea7ec5f802bee0d2a3"
+        == "06a11ee3f0b7da6eb233c4fedd382b9724f753455baf6fe9cb9b446e03848303"
     )
     canonical_cargo_lock = tomllib.loads(sources[WORKSPACE_LOCK_SOURCE])
     external_cargo_packages = [
@@ -3700,7 +3719,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     if "metadata" in canonical_cargo_lock:
         gate_cargo_vendor_lock["metadata"] = canonical_cargo_lock["metadata"]
     expected_gate_cargo_vendor_identity = (
-        "cf5ed257386f182e928d5856fc4b1aa75c7b646747394ce44a87a38b6b8fb0eb"
+        "53920440ce131467941260c51953476e753b371cbac2852f6db23cf4338d7ad5"
     )
     assert (
         hashlib.sha256(
@@ -5317,6 +5336,7 @@ mod application_backend;
 pub mod binary_entrypoints;
 mod camera;
 mod command_service;
+mod command_tags;
 mod command_usage;
 #[cfg(feature = "compatibility-tool")]
 mod compatibility_tool;
@@ -5381,6 +5401,7 @@ pub use entrypoint::{MainError, run_cli};
         "binary_entrypoints",
         "camera",
         "command_service",
+        "command_tags",
         "command_usage",
         "compatibility_tool",
         "contract_generator",
@@ -6704,6 +6725,10 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
             "use axum::Router;",
             "use axum::routing::{MethodFilter, on, post};",
         ),
+        "server/rest/command_tags.rs": (
+            "use axum::Router;",
+            "use axum::routing::{MethodFilter, on, post};",
+        ),
         "server/rest/commands.rs": (
             "use axum::Router;",
             "use axum::routing::post;",
@@ -7265,6 +7290,7 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
             "/api/devices/cameras"
             | "/api/devices/serial-ports"
             | "/api/command-history"
+            | "/api/command-tags"
             | "/api/run-schedule"
             | "/api/script-creator"
             | "/api/state"
@@ -7276,6 +7302,7 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
             | "/api/dynamic-config/control"
             | "/api/notifications/test"
             | "/api/command-history/control"
+            | "/api/command-tags/apply"
             | "/api/profiles/generate-launcher"
             | "/api/run-schedule/control"
             | "/api/script-creator/create"
@@ -7486,6 +7513,7 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
                 "/api/devices/cameras"
                 | "/api/devices/serial-ports"
                 | "/api/command-history"
+                | "/api/command-tags"
                 | "/api/run-schedule"
                 | "/api/script-creator"
                 | "/api/state" => "GET",
@@ -7496,6 +7524,7 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
                 | "/api/dynamic-config/control"
                 | "/api/notifications/test"
                 | "/api/command-history/control"
+                | "/api/command-tags/apply"
                 | "/api/profiles/generate-launcher"
                 | "/api/run-schedule/control"
                 | "/api/script-creator/create"
@@ -7574,7 +7603,7 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
         for path, _method, _operation_id in EXPECTED_OPENAPI_OPERATIONS
         if path != "/ws"
     }
-    assert len(normative_rest_paths) == len(set(normative_rest_paths)) == 22
+    assert len(normative_rest_paths) == len(set(normative_rest_paths)) == 24
     assert set(normative_rest_paths) == documented_rest_paths
 
     websocket = sources["server/websocket.rs"]
@@ -7649,12 +7678,13 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
     }
     assert actual_merge_calls == {
         "production.rs": 1,
-        "server/rest/mod.rs": 13,
+        "server/rest/mod.rs": 14,
     }
 
     rest_module = sources["server/rest/mod.rs"]
     expected_rest_module_block = """
 mod command_history;
+mod command_tags;
 mod commands;
 mod devices;
 mod dynamic_config;
@@ -7741,6 +7771,7 @@ mod update;
         and method_router_on_pattern.search(source) is not None
     } == {
         "server/rest/command_history.rs": 1,
+        "server/rest/command_tags.rs": 1,
         "server/rest/devices.rs": 2,
         "server/rest/run_lists.rs": 1,
         "server/rest/run_schedule.rs": 1,
@@ -8754,8 +8785,8 @@ def test_openapi_runtime_inventory_is_canonical_complete_and_valid_bash() -> Non
         for method, operation in path_item.items()
     )
     assert operations == list(EXPECTED_OPENAPI_OPERATIONS)
-    assert len(openapi["paths"]) == 23
-    assert len(operations) == 25
+    assert len(openapi["paths"]) == 25
+    assert len(operations) == 27
     assert {method for _path, method, _operation_id in operations} == {
         "get",
         "patch",
@@ -8937,7 +8968,7 @@ def test_openapi_runtime_inventory_is_canonical_complete_and_valid_bash() -> Non
         'error("OpenAPI contains an unsafe public path")',
         'error("OpenAPI path item contains an unsupported or malformed operation")',
         "sort_by([.path, .method])",
-        "length == 25",
+        "length == 27",
         "unique_by([.path, .method])",
         "unique_by(.path)",
         "unique_by(.operation_id)",
@@ -10332,7 +10363,7 @@ def test_ui_gate_matches_openapi_routes_and_methods() -> None:
     final_cors_result_validator = section(
         output,
         "      and ([.api_inventory.cors_preflight_policy.results[]\n"
-        '        | select(.classification == "advertised_pair")] | length) == 25',
+        '        | select(.classification == "advertised_pair")] | length) == 27',
         "\n      and ((.api_inventory.unknown_api_boundary | keys) == [",
     )
     final_advertised_cors_result_keys = (
@@ -10413,23 +10444,23 @@ def test_ui_gate_matches_openapi_routes_and_methods() -> None:
         'options_policy: "advertised-pair-preflight-204-other-preflight-403"',
         'probe_scope: "bidirectional-exact-method-complement-non-mutating"',
         "((.api_inventory | keys)",
-        ".api_inventory.advertised_operation_count == 25",
-        ".api_inventory.advertised_rest_operation_count == 24",
+        ".api_inventory.advertised_operation_count == 27",
+        ".api_inventory.advertised_rest_operation_count == 26",
         ".api_inventory.advertised_websocket_operation_count == 1",
-        ".api_inventory.canonical_path_count == 23",
+        ".api_inventory.canonical_path_count == 25",
         ".api_inventory.standard_method_count == 9",
-        ".api_inventory.method_matrix_probe_count == 207",
-        ".api_inventory.rejected_method_count == 159",
-        ".api_inventory.cors_preflight_count == 23",
-        ".api_inventory.cors_preflight_policy.advertised_pair_count == 25",
+        ".api_inventory.method_matrix_probe_count == 225",
+        ".api_inventory.rejected_method_count == 173",
+        ".api_inventory.cors_preflight_count == 25",
+        ".api_inventory.cors_preflight_policy.advertised_pair_count == 27",
         ".api_inventory.cors_preflight_policy.known_path_wrong_method_count == 6",
         ".api_inventory.cors_preflight_policy.unknown_path_count == 1",
-        ".api_inventory.cors_preflight_policy.probe_count_per_mode == 32",
+        ".api_inventory.cors_preflight_policy.probe_count_per_mode == 34",
         ".api_inventory.cors_preflight_policy.results_sha256",
-        ".api_inventory.bare_options_security_boundary.advertised_path_count == 23",
-        ".api_inventory.bare_options_security_boundary.desktop_probe_count == 23",
-        ".api_inventory.bare_options_security_boundary.rest_path_count == 22",
-        ".api_inventory.bare_options_security_boundary.web_probe_count == 23",
+        ".api_inventory.bare_options_security_boundary.advertised_path_count == 25",
+        ".api_inventory.bare_options_security_boundary.desktop_probe_count == 25",
+        ".api_inventory.bare_options_security_boundary.rest_path_count == 24",
+        ".api_inventory.bare_options_security_boundary.web_probe_count == 25",
         ".api_inventory.bare_options_security_boundary.websocket_path_count == 1",
         'select(.path_kind == "websocket" and .path == "/ws")',
         'select(.path == "/api/settings")',
@@ -10446,8 +10477,8 @@ def test_ui_gate_matches_openapi_routes_and_methods() -> None:
         'select(.classification == "routed_not_found")',
         'select(.classification == "security_rejected_options")',
         'and .request_variant == "complete_preflight"',
-        ".api_inventory.web_method_probe_count == 207",
-        ".api_inventory.desktop_method_probe_count == 207",
+        ".api_inventory.web_method_probe_count == 225",
+        ".api_inventory.desktop_method_probe_count == 225",
         ".api_inventory.mode_results_byte_identical == true",
         ".api_inventory.allow_policy",
         ".api_inventory.bare_options_policy",
@@ -12422,8 +12453,8 @@ fetch_advertised_bare_options_probe() {
     methods_by_path: dict[str, list[str]] = {}
     for path, method, _operation_id in EXPECTED_OPENAPI_OPERATIONS:
         methods_by_path.setdefault(path, []).append(method)
-    assert len(methods_by_path) == 23
-    assert sum(map(len, methods_by_path.values())) == 25
+    assert len(methods_by_path) == 25
+    assert sum(map(len, methods_by_path.values())) == 27
     fixture_operation_lookup_declaration = (
         "readonly -A fixture_advertised_operations=(\n"
         + "".join(
@@ -12437,7 +12468,7 @@ fetch_advertised_bare_options_probe() {
         )
         + ")"
     )
-    assert fixture_operation_lookup_declaration.count("['") == 48
+    assert fixture_operation_lookup_declaration.count("['") == 52
     assert "jq " not in fake_fetch
     assert "$openapi_operation_inventory" not in fake_fetch
     assert fake_fetch.count("${fixture_advertised_operations[") == 2
@@ -12466,10 +12497,10 @@ fetch_advertised_bare_options_probe() {
         'openapi_operation_inventory="$1"\n'
         'mode="$3"\n'
         'probe_scope="$4"\n'
-        "openapi_operation_count=25\nopenapi_path_count=23\n"
-        "openapi_rest_path_count=22\nopenapi_websocket_path_count=1\n"
-        "openapi_method_count=9\nopenapi_method_probe_count=207\n"
-        "openapi_cors_preflight_count=23\nopenapi_rejected_method_count=159\n"
+        "openapi_operation_count=27\nopenapi_path_count=25\n"
+        "openapi_rest_path_count=24\nopenapi_websocket_path_count=1\n"
+        "openapi_method_count=9\nopenapi_method_probe_count=225\n"
+        "openapi_cors_preflight_count=25\nopenapi_rejected_method_count=173\n"
         + fixture_operation_lookup_declaration
         + "\n"
         + cors_success_forbidden_inventory_declaration
@@ -12928,7 +12959,7 @@ fetch_advertised_bare_options_probe() {
         fields = record.split("\t")
         assert len(fields) == 3
         invocations.append((fields[0], fields[1], fields[2]))
-    assert len(invocations) == 250
+    assert len(invocations) == 270
     assert sorted(invocations) == sorted(expected_invocations)
     assert invocations == expected_invocations
     attached_request_headers = (
@@ -12948,7 +12979,7 @@ fetch_advertised_bare_options_probe() {
         (path, "options", "bare", "0", "false", "false")
         for path in expected_advertised_paths
     ]
-    assert len(advertised_bare_options_invocations) == 23
+    assert len(advertised_bare_options_invocations) == 25
     assert (
         sum(
             invocation[0] == "/api/settings"
@@ -12969,11 +13000,11 @@ fetch_advertised_bare_options_probe() {
     assert [result["path"] for result in advertised_bare_options_results] == (
         expected_advertised_paths
     )
-    assert len(advertised_bare_options_results) == 23
-    assert len({result["path"] for result in advertised_bare_options_results}) == 23
+    assert len(advertised_bare_options_results) == 25
+    assert len({result["path"] for result in advertised_bare_options_results}) == 25
     assert (
         sum(result["path_kind"] == "rest" for result in advertised_bare_options_results)
-        == 22
+        == 24
     )
     assert [
         result["path"]
@@ -13142,7 +13173,7 @@ fetch_advertised_bare_options_probe() {
         key=classification_first_cors_preflight_result_sort_key,
     )
     assert classification_first_preflight_results != expected_preflight_results
-    assert len(expected_preflight_results) == 32
+    assert len(expected_preflight_results) == 34
     cors_preflight_policy_raw_by_mode = {
         mode: result_roots[mode]
         .joinpath("cors-preflight-policy-results.json")
@@ -13173,7 +13204,7 @@ fetch_advertised_bare_options_probe() {
         for result in preflight_results
         if result["classification"] != "advertised_pair"
     ]
-    assert len(advertised_preflight_results) == 25
+    assert len(advertised_preflight_results) == 27
     assert len(rejected_preflight_results) == 7
     cors_rejection_artifact_fields = (
         "body_sha256",
@@ -13223,7 +13254,7 @@ fetch_advertised_bare_options_probe() {
         for mode, raw_results in cors_preflight_policy_raw_by_mode.items()
     }
     expected_cors_preflight_policy_results_sha256 = (
-        "08fa04b52f25ebe5021c92422735847ebb0cd174ddec09747f6cfb5f6fce4853"
+        "5807ad5f6a641422ea73cc462bc10dfd3f6f5fb0f8d0524ed16d38cb802c956e"
     )
     assert (
         re.fullmatch(
@@ -14128,8 +14159,8 @@ fetch_advertised_bare_options_probe() {
     assert sum(fault_probe_scope_counts.values()) == 82
 
     results = json.loads((result_root / "openapi-method-results.json").read_text())
-    assert len(results) == 207
-    assert len({(result["path"], result["method"]) for result in results}) == 207
+    assert len(results) == 225
+    assert len({(result["path"], result["method"]) for result in results}) == 225
     assert {result["path"] for result in results} == {
         path for path, _method, _operation_id in EXPECTED_OPENAPI_OPERATIONS
     }
@@ -14144,9 +14175,9 @@ fetch_advertised_bare_options_probe() {
         "trace",
         "connect",
     }
-    assert sum(result["classification"] == "advertised" for result in results) == 25
-    assert sum(result["classification"] == "rejected" for result in results) == 159
-    assert sum(result["classification"] == "cors_preflight" for result in results) == 23
+    assert sum(result["classification"] == "advertised" for result in results) == 27
+    assert sum(result["classification"] == "rejected" for result in results) == 173
+    assert sum(result["classification"] == "cors_preflight" for result in results) == 25
     expected_allow_by_path: dict[str, str] = {}
     for path, method, _operation_id in EXPECTED_OPENAPI_OPERATIONS:
         methods = expected_allow_by_path.setdefault(path, "").split(", ")
@@ -14213,8 +14244,8 @@ def test_rust_routes_override_implicit_head_and_websocket_any() -> None:
     security = (REPOSITORY / "rust/pokecon/src/server/security.rs").read_text()
     assert "normative_rest_routes_accept_exactly_the_advertised_method_matrix" in rest
     assert '"CONNECT"' in rest
-    assert "assert_eq!(advertised_count, 24);" in rest
-    assert "assert_eq!(rejected_count, 174);" in rest
+    assert "assert_eq!(advertised_count, 26);" in rest
+    assert "assert_eq!(rejected_count, 190);" in rest
     inner_unknown_matrix = section(
         rest,
         "async fn unknown_resources_and_methods_have_common_errors() {",

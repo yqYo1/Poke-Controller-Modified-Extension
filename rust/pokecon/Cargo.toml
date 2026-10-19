@@ -158,6 +158,7 @@ rfd.workspace = true
 rmp-serde.workspace = true
 rumqttc.workspace = true
 rustls.workspace = true
+rustpython-parser.workspace = true
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true

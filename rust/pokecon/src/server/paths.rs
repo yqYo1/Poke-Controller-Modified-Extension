@@ -232,6 +232,30 @@ pub fn control_command_history() {}
 
 #[utoipa::path(
     get,
+    path = "/api/command-tags",
+    tag = "command_tags",
+    responses(
+        (status = 200, description = "Every command file with its editable manual tags", body = Success<crate::server::api::CommandTagSnapshot>),
+        (status = 500, description = "Command tag snapshot failure", body = ErrorEnvelope)
+    )
+)]
+pub fn command_tags() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/command-tags/apply",
+    tag = "command_tags",
+    request_body(content = crate::server::api::CommandTagRequest, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Tag edit applied and the refreshed snapshot returned", body = Success<crate::server::api::CommandTagResult>),
+        (status = 422, description = "Tag input is invalid", body = ErrorEnvelope),
+        (status = 500, description = "Tag edit failure", body = ErrorEnvelope)
+    )
+)]
+pub fn apply_command_tags() {}
+
+#[utoipa::path(
+    get,
     path = "/api/script-creator",
     tag = "script_creator",
     responses(

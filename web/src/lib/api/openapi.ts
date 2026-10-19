@@ -68,6 +68,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/command-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["command_tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/command-tags/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["apply_command_tags"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/commands/control": {
         parameters: {
             query?: never;
@@ -514,6 +546,84 @@ export interface components {
         };
         /** @enum {string} */
         CommandState: "running" | "paused" | "stopped" | "error";
+        /** @description One command file with its editable manual tags. */
+        CommandTagCommand: {
+            name: string;
+            module_path: string;
+            class_name: string;
+            /** @description Command file path relative to the command root. */
+            relative_path: string;
+            /** @description SHA-256 of the bytes this tag list was read from; empty on error. */
+            digest: string;
+            /** @description Class-level `TAGS` that the editor may change. */
+            manual_tags: string[];
+            /** @description Directory-derived and dynamic tags that follow other sources. */
+            automatic_tags: string[];
+            /** @description Read or parse failure for this command file. */
+            error?: string | null;
+        };
+        /** @description One digest-guarded per-command tag replacement. */
+        CommandTagEdit: {
+            module_path: string;
+            class_name: string;
+            digest: string;
+            tags: string[];
+        };
+        /** @description One tag with its sources and usage count. */
+        CommandTagInfo: {
+            name: string;
+            manual: boolean;
+            automatic: boolean;
+            /** Format: int64 */
+            count: number;
+        };
+        /** @description One file outcome of a tag edit. */
+        CommandTagOutcome: {
+            module_path: string;
+            class_name: string;
+            relative_path: string;
+            status: components["schemas"]["CommandTagStatus"];
+            message?: string | null;
+        };
+        /** @description One tag edit request. */
+        CommandTagRequest: {
+            edits: components["schemas"]["CommandTagEdit"][];
+            /** @enum {string} */
+            action: "set";
+        } | {
+            from: string;
+            to: string;
+            /** @enum {string} */
+            action: "rename";
+        } | {
+            tag: string;
+            /** @enum {string} */
+            action: "delete";
+        };
+        /** @description Result of a tag edit, including the refreshed snapshot. */
+        CommandTagResult: {
+            results: components["schemas"]["CommandTagOutcome"][];
+            /** Format: int64 */
+            changed: number;
+            /** Format: int64 */
+            conflicts: number;
+            /**
+             * @description Command reload failure after a successful write; the files are already
+             *     updated, so the caller can retry the reload.
+             */
+            reload_error?: string | null;
+            snapshot: components["schemas"]["CommandTagSnapshot"];
+        };
+        /** @description Every command file and the merged tag list. */
+        CommandTagSnapshot: {
+            commands: components["schemas"]["CommandTagCommand"][];
+            tags: components["schemas"]["CommandTagInfo"][];
+        };
+        /**
+         * @description Per-file result of one tag edit.
+         * @enum {string}
+         */
+        CommandTagStatus: "updated" | "unchanged" | "conflict" | "error";
         /**
          * @description An exact non-negative integer wire value that never depends on JavaScript
          *     `Number` precision.
@@ -1771,6 +1881,31 @@ export interface components {
             };
         };
         /** @description Common successful JSON envelope. */
+        Success_CommandTagResult: {
+            /** @description Result of a tag edit, including the refreshed snapshot. */
+            data: {
+                results: components["schemas"]["CommandTagOutcome"][];
+                /** Format: int64 */
+                changed: number;
+                /** Format: int64 */
+                conflicts: number;
+                /**
+                 * @description Command reload failure after a successful write; the files are already
+                 *     updated, so the caller can retry the reload.
+                 */
+                reload_error?: string | null;
+                snapshot: components["schemas"]["CommandTagSnapshot"];
+            };
+        };
+        /** @description Common successful JSON envelope. */
+        Success_CommandTagSnapshot: {
+            /** @description Every command file and the merged tag list. */
+            data: {
+                commands: components["schemas"]["CommandTagCommand"][];
+                tags: components["schemas"]["CommandTagInfo"][];
+            };
+        };
+        /** @description Common successful JSON envelope. */
         Success_DynamicConfigResult: {
             data: {
                 display_path: string;
@@ -2126,6 +2261,77 @@ export interface operations {
                 };
             };
             /** @description Command history update failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    command_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every command file with its editable manual tags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_CommandTagSnapshot"];
+                };
+            };
+            /** @description Command tag snapshot failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    apply_command_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommandTagRequest"];
+            };
+        };
+        responses: {
+            /** @description Tag edit applied and the refreshed snapshot returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_CommandTagResult"];
+                };
+            };
+            /** @description Tag input is invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Tag edit failure */
             500: {
                 headers: {
                     [name: string]: unknown;

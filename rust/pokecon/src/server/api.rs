@@ -1178,6 +1178,102 @@ pub struct CommandHistorySnapshot {
     pub entries: Vec<CommandHistoryEntry>,
 }
 
+/// One command file with its editable manual tags.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommandTagCommand {
+    pub name: String,
+    pub module_path: String,
+    pub class_name: String,
+    /// Command file path relative to the command root.
+    pub relative_path: String,
+    /// SHA-256 of the bytes this tag list was read from; empty on error.
+    pub digest: String,
+    /// Class-level `TAGS` that the editor may change.
+    pub manual_tags: Vec<String>,
+    /// Directory-derived and dynamic tags that follow other sources.
+    pub automatic_tags: Vec<String>,
+    /// Read or parse failure for this command file.
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+/// One tag with its sources and usage count.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommandTagInfo {
+    pub name: String,
+    pub manual: bool,
+    pub automatic: bool,
+    pub count: u64,
+}
+
+/// Every command file and the merged tag list.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommandTagSnapshot {
+    pub commands: Vec<CommandTagCommand>,
+    pub tags: Vec<CommandTagInfo>,
+}
+
+/// One digest-guarded per-command tag replacement.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommandTagEdit {
+    pub module_path: String,
+    pub class_name: String,
+    pub digest: String,
+    pub tags: Vec<String>,
+}
+
+/// One tag edit request.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum CommandTagRequest {
+    /// Replaces the manual tags of the listed commands.
+    Set { edits: Vec<CommandTagEdit> },
+    /// Renames one manual tag across every command that declares it.
+    Rename { from: String, to: String },
+    /// Removes one manual tag from every command that declares it.
+    Delete { tag: String },
+}
+
+/// Per-file result of one tag edit.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CommandTagStatus {
+    Updated,
+    Unchanged,
+    Conflict,
+    Error,
+}
+
+/// One file outcome of a tag edit.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommandTagOutcome {
+    pub module_path: String,
+    pub class_name: String,
+    pub relative_path: String,
+    pub status: CommandTagStatus,
+    #[serde(default)]
+    pub message: Option<String>,
+}
+
+/// Result of a tag edit, including the refreshed snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommandTagResult {
+    pub results: Vec<CommandTagOutcome>,
+    pub changed: u64,
+    pub conflicts: u64,
+    /// Command reload failure after a successful write; the files are already
+    /// updated, so the caller can retry the reload.
+    #[serde(default)]
+    pub reload_error: Option<String>,
+    pub snapshot: CommandTagSnapshot,
+}
+
 /// One run-history control request.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]

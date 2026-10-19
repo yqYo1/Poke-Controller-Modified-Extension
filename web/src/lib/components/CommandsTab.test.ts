@@ -71,6 +71,14 @@ function commandActions() {
     saveRunLists: vi.fn().mockResolvedValue({ lists: [], skipped: [] }),
     commandHistory: vi.fn().mockResolvedValue({ entries: [] }),
     controlCommandHistory: vi.fn().mockResolvedValue({ entries: [] }),
+    commandTags: vi.fn().mockResolvedValue({ commands: [], tags: [] }),
+    applyCommandTags: vi.fn().mockResolvedValue({
+      results: [],
+      changed: 0,
+      conflicts: 0,
+      reload_error: null,
+      snapshot: { commands: [], tags: [] }
+    }),
     runSchedule: vi.fn().mockResolvedValue({
       pending: false,
       has_start: false,

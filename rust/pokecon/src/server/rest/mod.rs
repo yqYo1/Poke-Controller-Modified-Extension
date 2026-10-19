@@ -1,6 +1,7 @@
 //! Closed axum routing and common REST response handling.
 
 mod command_history;
+mod command_tags;
 mod commands;
 mod devices;
 mod dynamic_config;
@@ -42,6 +43,7 @@ pub fn router(backend: Arc<dyn RestBackend>) -> Router {
         .merge(settings::router())
         .merge(commands::router())
         .merge(command_history::router())
+        .merge(command_tags::router())
         .merge(devices::router())
         .merge(notifications::router())
         .merge(dynamic_config::router())
@@ -217,6 +219,7 @@ async fn method_not_allowed(uri: Uri) -> Response {
         "/api/devices/cameras"
         | "/api/devices/serial-ports"
         | "/api/command-history"
+        | "/api/command-tags"
         | "/api/run-schedule"
         | "/api/script-creator"
         | "/api/state" => "GET",
@@ -227,6 +230,7 @@ async fn method_not_allowed(uri: Uri) -> Response {
         | "/api/dynamic-config/control"
         | "/api/notifications/test"
         | "/api/command-history/control"
+        | "/api/command-tags/apply"
         | "/api/profiles/generate-launcher"
         | "/api/run-schedule/control"
         | "/api/script-creator/create"
@@ -269,15 +273,16 @@ mod tests {
     use super::router;
     use crate::server::api::{
         ApiErrorCode, CameraDevice, CameraSelector, CommandControlRequest,
-        CommandHistoryControlRequest, CommandHistorySnapshot, CommandState, DecimalString,
-        DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage, GenerateLauncherRequest,
-        GenerateLauncherResult, ImageFormat, NotificationTestRequest, NotificationTestResult,
-        OperationResult, RunListSnapshot, RunListSpec, RunScheduleControlRequest,
-        RunScheduleSnapshot, SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview,
-        ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec, SerialControlRequest,
-        SerialPort, SerialPortTransport, SettingsChange, SettingsPatchRequest,
-        SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause,
-        StatePatch, StateSnapshot, UpdateCheckResult,
+        CommandHistoryControlRequest, CommandHistorySnapshot, CommandState, CommandTagRequest,
+        CommandTagResult, CommandTagSnapshot, DecimalString, DynamicConfigControlRequest,
+        DynamicConfigResult, DynamicLanguage, GenerateLauncherRequest, GenerateLauncherResult,
+        ImageFormat, NotificationTestRequest, NotificationTestResult, OperationResult,
+        RunListSnapshot, RunListSpec, RunScheduleControlRequest, RunScheduleSnapshot,
+        SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult,
+        ScriptCreatorSnapshot, ScriptCreatorSpec, SerialControlRequest, SerialPort,
+        SerialPortTransport, SettingsChange, SettingsPatchRequest, SettingsReadPatchValues,
+        SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch, StateSnapshot,
+        UpdateCheckResult,
     };
     use crate::server::backend::{
         ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload,
@@ -448,6 +453,29 @@ mod tests {
             Ok(RunListSnapshot {
                 lists: Vec::new(),
                 skipped: Vec::new(),
+            })
+        }
+
+        async fn command_tags(&self) -> ApiResult<CommandTagSnapshot> {
+            Ok(CommandTagSnapshot {
+                commands: Vec::new(),
+                tags: Vec::new(),
+            })
+        }
+
+        async fn apply_command_tags(
+            &self,
+            _request: CommandTagRequest,
+        ) -> ApiResult<CommandTagResult> {
+            Ok(CommandTagResult {
+                results: Vec::new(),
+                changed: 0,
+                conflicts: 0,
+                reload_error: None,
+                snapshot: CommandTagSnapshot {
+                    commands: Vec::new(),
+                    tags: Vec::new(),
+                },
             })
         }
 
@@ -629,11 +657,13 @@ mod tests {
     const STANDARD_METHODS: [&str; 9] = [
         "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT",
     ];
-    const REST_METHOD_MATRIX: [(&str, &[&str]); 22] = [
+    const REST_METHOD_MATRIX: [(&str, &[&str]); 24] = [
         ("/api/camera/retry", &["POST"]),
         ("/api/camera/screenshot", &["POST"]),
         ("/api/command-history", &["GET"]),
         ("/api/command-history/control", &["POST"]),
+        ("/api/command-tags", &["GET"]),
+        ("/api/command-tags/apply", &["POST"]),
         ("/api/commands/control", &["POST"]),
         ("/api/commands/reload", &["POST"]),
         ("/api/devices/cameras", &["GET"]),
@@ -733,8 +763,8 @@ mod tests {
             }
         }
 
-        assert_eq!(advertised_count, 24);
-        assert_eq!(rejected_count, 174);
+        assert_eq!(advertised_count, 26);
+        assert_eq!(rejected_count, 190);
     }
 
     #[tokio::test]

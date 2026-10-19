@@ -1,6 +1,6 @@
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::time::Duration;
 
 use thiserror::Error;
@@ -101,6 +101,8 @@ struct ManagerInner {
     send_monitor: Arc<SerialMonitor>,
     connection_events: watch::Sender<bool>,
     reconnect_policy: ReconnectPolicy,
+    send_failures: SendFailureStreak,
+    send_failure_events: broadcast::Sender<SendFailureEvent>,
 }
 
 impl std::fmt::Debug for ManagerInner {
@@ -111,6 +113,48 @@ impl std::fmt::Debug for ManagerInner {
             .field("reconnecting", &self.reconnecting)
             .field("reconnect_policy", &self.reconnect_policy)
             .finish_non_exhaustive()
+    }
+}
+
+/// Consecutive send failures that trigger one [`SendFailureEvent`] (upstream
+/// `SEND_FAILURE_LIMIT`).
+pub const SEND_FAILURE_LIMIT: u32 = 5;
+
+/// One consecutive-send-failure report (upstream `on_send_failures` callback).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SendFailureEvent {
+    pub count: u32,
+    pub error: SerialError,
+}
+
+/// Counts consecutive send failures and reports the limit exactly once until
+/// a success resets the streak (upstream `Sender._sendFailed`).
+#[derive(Debug, Default)]
+pub(crate) struct SendFailureStreak {
+    failures: AtomicU32,
+    reported: AtomicBool,
+}
+
+impl SendFailureStreak {
+    /// Records one successful send; any streak resets.
+    pub(crate) fn success(&self) {
+        if self.failures.swap(0, Ordering::AcqRel) != 0 {
+            self.reported.store(false, Ordering::Release);
+        }
+    }
+
+    /// Records one failed send; returns the one report at the limit.
+    pub(crate) fn failure(&self, error: SerialError) -> Option<SendFailureEvent> {
+        let count = self.failures.fetch_add(1, Ordering::AcqRel) + 1;
+        if count < SEND_FAILURE_LIMIT || self.reported.swap(true, Ordering::AcqRel) {
+            return None;
+        }
+        Some(SendFailureEvent { count, error })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn failures(&self) -> u32 {
+        self.failures.load(Ordering::Acquire)
     }
 }
 
@@ -158,6 +202,7 @@ impl SerialManager {
         let (receive_events, _) = broadcast::channel(64);
         let send_monitor = Arc::new(SerialMonitor::default());
         let (connection_events, _) = watch::channel(false);
+        let (send_failure_events, _) = broadcast::channel(4);
         Self {
             inner: Arc::new(ManagerInner {
                 backend,
@@ -179,6 +224,8 @@ impl SerialManager {
                 send_monitor,
                 connection_events,
                 reconnect_policy,
+                send_failures: SendFailureStreak::default(),
+                send_failure_events,
             }),
         }
     }
@@ -438,20 +485,27 @@ impl SerialManager {
         }
         let (io, frame, connection_id, skip) = {
             let state = self.inner.state.lock().await;
-            let io = state.io.clone().ok_or(SerialError::Disconnected)?;
             let frame = state.codec.encode(controller);
             let skip = state.codec.format().skip_unchanged()
                 && state.last_frame.as_deref() == Some(frame.as_slice());
-            (io, frame, state.connection_id, skip)
+            (state.io.clone(), frame, state.connection_id, skip)
+        };
+        let Some(io) = io else {
+            self.note_disconnected_send(connection_id);
+            return Err(SerialError::Disconnected);
         };
         if skip {
+            // An unchanged-frame skip proves nothing about the cable: it
+            // neither counts as a failure nor resets the streak.
             return Ok(());
         }
         if write_all(&io, &frame).await.is_err() {
             drop(write_guard);
+            self.note_send_failure(SerialError::WriteFailed);
             self.handle_io_failure(io, connection_id).await;
             return Err(SerialError::WriteFailed);
         }
+        self.note_send_success();
         let format = self.data_format().await;
         record_send(&self.inner.send_monitor, format, &frame);
         let mut state = self.inner.state.lock().await;
@@ -482,16 +536,19 @@ impl SerialManager {
             // re-send.
             state.codec.reset();
             state.last_frame = None;
-            (
-                state.io.clone().ok_or(SerialError::Disconnected)?,
-                state.connection_id,
-            )
+            (state.io.clone(), state.connection_id)
+        };
+        let Some(io) = io else {
+            self.note_disconnected_send(connection_id);
+            return Err(SerialError::Disconnected);
         };
         if write_all(&io, frame).await.is_err() {
             drop(write_guard);
+            self.note_send_failure(SerialError::WriteFailed);
             self.handle_io_failure(io, connection_id).await;
             return Err(SerialError::WriteFailed);
         }
+        self.note_send_success();
         let format = self.data_format().await;
         record_raw_send(&self.inner.send_monitor, format, frame);
         Ok(())
@@ -607,6 +664,32 @@ impl SerialManager {
 
     pub fn subscribe_connection_status(&self) -> watch::Receiver<bool> {
         self.inner.connection_events.subscribe()
+    }
+
+    /// Subscribes to consecutive send-failure reports (upstream
+    /// `on_send_failures`): one event when the streak reaches the limit, then
+    /// silence until a successful send resets it.
+    #[must_use]
+    pub fn subscribe_send_failures(&self) -> broadcast::Receiver<SendFailureEvent> {
+        self.inner.send_failure_events.subscribe()
+    }
+
+    fn note_send_success(&self) {
+        self.inner.send_failures.success();
+    }
+
+    fn note_send_failure(&self, error: SerialError) {
+        if let Some(event) = self.inner.send_failures.failure(error) {
+            let _ = self.inner.send_failure_events.send(event);
+        }
+    }
+
+    /// A never-opened port and an explicit disconnect are not cable failures
+    /// (upstream: writes without an open port are not counted).
+    fn note_disconnected_send(&self, connection_id: u64) {
+        if connection_id != 0 && !self.inner.explicit_disconnect.load(Ordering::Acquire) {
+            self.note_send_failure(SerialError::Disconnected);
+        }
     }
 
     /// Returns the shared send monitor that records every successful write
@@ -780,9 +863,13 @@ pub enum SerialError {
 mod tests {
     use std::io;
     use std::sync::Arc;
+    use std::sync::atomic::Ordering;
     use std::time::Duration;
 
-    use super::{ReconnectPolicy, SerialConfig, SerialError, SerialManager};
+    use super::{
+        ReconnectPolicy, SEND_FAILURE_LIMIT, SendFailureStreak, SerialConfig, SerialError,
+        SerialManager,
+    };
     use crate::device::controller::{Button, ControllerState};
     use crate::device::serial::{
         ControllerFormat, VirtualOpenPlan, VirtualSerialBackend, VirtualSerialEndpoint,
@@ -1293,5 +1380,158 @@ mod tests {
         manager.reconnect().await.unwrap();
         assert!(manager.is_connected().await);
         assert_eq!(backend.attempt_count(), 2);
+    }
+    #[test]
+    fn the_send_failure_limit_is_small_enough_to_stop_soon() {
+        assert!((2..=10).contains(&SEND_FAILURE_LIMIT));
+    }
+
+    #[test]
+    fn send_failure_streak_reports_once_and_resets_on_success() {
+        let streak = SendFailureStreak::default();
+        for _ in 0..(SEND_FAILURE_LIMIT - 1) {
+            assert_eq!(streak.failure(SerialError::WriteFailed), None);
+        }
+        let event = streak
+            .failure(SerialError::WriteFailed)
+            .expect("limit report");
+        assert_eq!(event.count, SEND_FAILURE_LIMIT);
+        assert_eq!(event.error, SerialError::WriteFailed);
+        // 続いている間は、もう知らせない。
+        for _ in 0..(SEND_FAILURE_LIMIT * 4) {
+            assert_eq!(streak.failure(SerialError::WriteFailed), None);
+        }
+        streak.success();
+        assert_eq!(streak.failures(), 0);
+        // 成功のあとは、また知らせる。
+        for _ in 0..(SEND_FAILURE_LIMIT - 1) {
+            assert_eq!(streak.failure(SerialError::WriteFailed), None);
+        }
+        assert!(streak.failure(SerialError::WriteFailed).is_some());
+    }
+
+    #[test]
+    fn send_failure_streak_reports_once_across_threads() {
+        let streak = Arc::new(SendFailureStreak::default());
+        let reported = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                let streak = Arc::clone(&streak);
+                let reported = Arc::clone(&reported);
+                std::thread::spawn(move || {
+                    for _ in 0..50 {
+                        if streak.failure(SerialError::WriteFailed).is_some() {
+                            reported.fetch_add(1, Ordering::AcqRel);
+                        }
+                    }
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().expect("worker thread");
+        }
+        assert_eq!(reported.load(Ordering::Acquire), 1);
+    }
+
+    #[tokio::test]
+    async fn send_failure_gate_counts_a_write_failure() {
+        let backend = VirtualSerialBackend::default();
+        let endpoint = VirtualSerialEndpoint::new();
+        backend
+            .push_plan(VirtualOpenPlan::Success(endpoint.clone()))
+            .await;
+        let manager = SerialManager::new(Arc::new(backend.clone()));
+        manager.apply_config(config("virtual")).await.unwrap();
+
+        endpoint.fail_next_write(io::ErrorKind::Other).await;
+        assert_eq!(
+            manager
+                .send_controller_state(ControllerState::NEUTRAL)
+                .await
+                .unwrap_err(),
+            SerialError::WriteFailed
+        );
+        assert_eq!(manager.inner.send_failures.failures(), 1);
+    }
+
+    #[tokio::test]
+    async fn send_failure_gate_reports_the_limit_once_for_lost_sessions() {
+        let manager = SerialManager::new(Arc::new(VirtualSerialBackend::default()));
+        let mut events = manager.subscribe_send_failures();
+        {
+            // A session existed and was lost (cable yanked): the port stays
+            // closed while the script keeps sending.
+            let mut state = manager.inner.state.lock().await;
+            state.connection_id = 7;
+        }
+        for _ in 0..SEND_FAILURE_LIMIT {
+            assert_eq!(
+                manager
+                    .send_controller_state(ControllerState::NEUTRAL)
+                    .await
+                    .unwrap_err(),
+                SerialError::Disconnected
+            );
+        }
+        let event = events.try_recv().expect("one report at the limit");
+        assert_eq!(event.count, SEND_FAILURE_LIMIT);
+        assert_eq!(event.error, SerialError::Disconnected);
+        assert_eq!(
+            manager
+                .send_controller_state(ControllerState::NEUTRAL)
+                .await
+                .unwrap_err(),
+            SerialError::Disconnected
+        );
+        assert!(
+            events.try_recv().is_err(),
+            "reported once while the streak continues"
+        );
+    }
+
+    #[tokio::test]
+    async fn send_failure_gate_counts_raw_writes() {
+        let manager = SerialManager::new(Arc::new(VirtualSerialBackend::default()));
+        {
+            let mut state = manager.inner.state.lock().await;
+            state.connection_id = 7;
+        }
+        assert_eq!(
+            manager.send_raw(&[0x01, 0x02]).await.unwrap_err(),
+            SerialError::Disconnected
+        );
+        assert_eq!(manager.inner.send_failures.failures(), 1);
+    }
+
+    #[tokio::test]
+    async fn send_failure_gate_ignores_explicit_disconnects_and_unopened_ports() {
+        // 接続せずにスクリプトを試す場合(ポートを開いていない)は、止めない。
+        let manager = SerialManager::new(Arc::new(VirtualSerialBackend::default()));
+        assert_eq!(
+            manager
+                .send_controller_state(ControllerState::NEUTRAL)
+                .await
+                .unwrap_err(),
+            SerialError::Disconnected
+        );
+        assert_eq!(manager.inner.send_failures.failures(), 0);
+
+        let backend = VirtualSerialBackend::default();
+        backend
+            .push_plan(VirtualOpenPlan::Success(VirtualSerialEndpoint::new()))
+            .await;
+        let manager = SerialManager::new(Arc::new(backend.clone()));
+        manager.apply_config(config("virtual")).await.unwrap();
+        manager.disconnect().await.unwrap();
+        // An explicit disconnect cancels the write epoch first, so the send
+        // reports SendCancelled; either way it must not count as a failure.
+        assert_eq!(
+            manager
+                .send_controller_state(ControllerState::NEUTRAL)
+                .await
+                .unwrap_err(),
+            SerialError::SendCancelled
+        );
+        assert_eq!(manager.inner.send_failures.failures(), 0);
     }
 }

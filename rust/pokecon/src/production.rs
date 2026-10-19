@@ -56,6 +56,7 @@ use crate::settings_runtime::{
     NotificationSettingsApplier, RealtimeSettingsApplier, SerialSettingsApplier,
     WebSocketSettingsApplier, notification_config, reconcile_desktop_settings,
 };
+use crate::sleep_watch::{self, SleepWatch};
 
 const STATE_HISTORY_CAPACITY: usize = 256;
 const SERVICE_STOP_TIMEOUT: Duration = Duration::from_secs(2);
@@ -454,6 +455,10 @@ impl ProductionRuntime {
             backend.run_schedule_handle(),
             Arc::clone(&commands),
         ));
+        cleanup.tasks.push(spawn_sleep_watch(Arc::clone(&commands)));
+        cleanup
+            .tasks
+            .push(spawn_send_failure_guard(&serial, Arc::clone(&commands)));
 
         Ok(Self {
             router,
@@ -998,6 +1003,75 @@ fn spawn_command_recompute(
 /// Milliseconds between scheduler ticks: the upstream UI calls `tick` a few
 /// times per second.
 const RUN_SCHEDULE_TICK: Duration = Duration::from_millis(250);
+
+/// Watches the wall clock for PC suspensions (upstream `services/sleep_watch.py`)
+/// and stops the running command when the PC was away: the console kept
+/// operating while the PC was suspended, so continuing would desync it.
+fn spawn_sleep_watch(commands: Arc<CommandService>) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut watch = SleepWatch::new();
+        let mut ticker =
+            tokio::time::interval(Duration::from_secs_f64(sleep_watch::CHECK_INTERVAL));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            ticker.tick().await;
+            let gap = watch.check(sleep_watch::wall_clock_seconds());
+            if gap <= 0.0 {
+                continue;
+            }
+            if !matches!(
+                commands.status().await,
+                CommandStatus::Running | CommandStatus::Paused
+            ) {
+                // 実行中のコマンドがなければ、何もしない(上流と同じく無言)。
+                continue;
+            }
+            tracing::info!(
+                "[スリープ] PC が約 {}、止まっていました(スリープなど)。実行中のコマンドを止めます。",
+                crate::run_schedule::format_remaining(gap)
+            );
+            tracing::info!(
+                "[スリープ] シリアルの接続が切れている場合は、ポートをつなぎ直してください。"
+            );
+            let _ = commands.stop().await;
+        }
+    })
+}
+
+/// Stops the running command after consecutive serial send failures (upstream
+/// `on_send_failures`): the cable is probably unplugged, and the script must
+/// not keep advancing while nothing reaches the console.
+fn spawn_send_failure_guard(
+    serial: &SerialManager,
+    commands: Arc<CommandService>,
+) -> JoinHandle<()> {
+    let mut events = serial.subscribe_send_failures();
+    tokio::spawn(async move {
+        loop {
+            match events.recv().await {
+                Ok(event) => {
+                    tracing::warn!(
+                        "[シリアル] 送信に {} 回続けて失敗しました。接続が切れている可能性があります。({})",
+                        event.count,
+                        event.error
+                    );
+                    if matches!(
+                        commands.status().await,
+                        CommandStatus::Running | CommandStatus::Paused
+                    ) {
+                        tracing::warn!("[シリアル] 実行中のコマンドを止めます。");
+                        let _ = commands.stop().await;
+                    }
+                    tracing::warn!("[シリアル] ケーブルを確かめて、ポートをつなぎ直してください。");
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
+                    tracing::warn!(count, "serial send-failure reports dropped lagged events");
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    })
+}
 
 /// Bridges [`crate::run_schedule::ScheduleIo`] onto the command service.
 struct CommandScheduleIo {
@@ -5281,5 +5355,14 @@ mod tests {
             "synthetic p95 1ms must stay within the 500ms recognition budget"
         );
         assert_eq!(composition_root_overall_result(exceeded), "pass");
+    }
+    #[test]
+    fn guard_tasks_wire_sleep_watch_and_send_failure_reporting() {
+        let source = include_str!("production.rs");
+        assert!(source.contains("spawn_sleep_watch("));
+        assert!(source.contains("spawn_send_failure_guard("));
+        assert!(source.contains("serial.subscribe_send_failures()"));
+        assert!(source.contains("SleepWatch::new()"));
+        assert!(source.contains("sleep_watch::CHECK_INTERVAL"));
     }
 }

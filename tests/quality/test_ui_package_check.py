@@ -2180,7 +2180,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "a6e82da417412f5507ab97a13deca227491e3a2475304d4fe290ff658bdc7544"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "2b0c5eaaffdd539e7943149d5862334642621e6183ff0eafe8fa13f4393e2416"
+            "63a6fe96d9b010fd8cb85b82d0ba182b1fe5d741a59ed72e53f354abb368a812"
         ),
         "@rust/pokecon/src/main.rs": (
             "97133ad5fcf7ea3575f09eab2b6e9c43034d378a68ea92ba883d503f9ecb2574"
@@ -5345,6 +5345,7 @@ mod script_runtime;
 mod server;
 mod settings;
 mod settings_runtime;
+mod sleep_watch;
 mod worker;
 #[cfg(feature = "worker-binary")]
 mod worker_binary;
@@ -5390,6 +5391,7 @@ pub use entrypoint::{MainError, run_cli};
         "server",
         "settings",
         "settings_runtime",
+        "sleep_watch",
         "worker",
         "worker_binary",
     )

@@ -283,6 +283,10 @@
     ],
     [
       "production",
+      "sleep_watch"
+    ],
+    [
+      "production",
       "worker"
     ],
     [

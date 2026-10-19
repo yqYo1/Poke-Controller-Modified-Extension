@@ -50,6 +50,7 @@ mod script_runtime;
 mod server;
 mod settings;
 mod settings_runtime;
+mod sleep_watch;
 mod worker;
 #[cfg(feature = "worker-binary")]
 mod worker_binary;

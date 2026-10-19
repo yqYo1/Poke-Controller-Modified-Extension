@@ -148,6 +148,86 @@
         }
       }
     },
+    "/api/command-history": {
+      "get": {
+        "tags": [
+          "command_history"
+        ],
+        "operationId": "command_history",
+        "responses": {
+          "200": {
+            "description": "Retained run history, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_CommandHistorySnapshot"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Command history read failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/command-history/control": {
+      "post": {
+        "tags": [
+          "command_history"
+        ],
+        "operationId": "control_command_history",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandHistoryControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "History updated and the snapshot returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_CommandHistorySnapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "History control input is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Command history update failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/commands/control": {
       "post": {
         "tags": [
@@ -1657,6 +1737,88 @@
               "string",
               "null"
             ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandHistoryControlRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Removes one entry by (type, name).",
+            "required": [
+              "type",
+              "name",
+              "action"
+            ],
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "remove"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Removes every entry.",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "clear"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "One run-history control request."
+      },
+      "CommandHistoryEntry": {
+        "type": "object",
+        "description": "One run-history row on the wire (upstream `command_history` entry).",
+        "required": [
+          "type",
+          "name",
+          "last_run"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "last_run": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandHistorySnapshot": {
+        "type": "object",
+        "description": "The retained run history, newest first.",
+        "required": [
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommandHistoryEntry"
+            }
           }
         },
         "additionalProperties": false
@@ -6944,6 +7106,32 @@
         },
         "additionalProperties": false
       },
+      "Success_CommandHistorySnapshot": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "The retained run history, newest first.",
+            "required": [
+              "entries"
+            ],
+            "properties": {
+              "entries": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CommandHistoryEntry"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
       "Success_DynamicConfigResult": {
         "type": "object",
         "description": "Common successful JSON envelope.",
@@ -7713,6 +7901,10 @@
     {
       "name": "run_schedule",
       "description": "Command start and stop reservations"
+    },
+    {
+      "name": "command_history",
+      "description": "Recent command run history"
     }
   ]
 }

@@ -36,6 +36,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/command-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["command_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/command-history/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["control_command_history"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/commands/control": {
         parameters: {
             query?: never;
@@ -434,6 +466,26 @@ export interface components {
         });
         CommandDisplaySeparator: {
             label: string | null;
+        };
+        /** @description One run-history control request. */
+        CommandHistoryControlRequest: {
+            type: string;
+            name: string;
+            /** @enum {string} */
+            action: "remove";
+        } | {
+            /** @enum {string} */
+            action: "clear";
+        };
+        /** @description One run-history row on the wire (upstream `command_history` entry). */
+        CommandHistoryEntry: {
+            type: string;
+            name: string;
+            last_run: string;
+        };
+        /** @description The retained run history, newest first. */
+        CommandHistorySnapshot: {
+            entries: components["schemas"]["CommandHistoryEntry"][];
         };
         CommandIdentity: {
             module_path: string;
@@ -1712,6 +1764,13 @@ export interface components {
             y: number;
         };
         /** @description Common successful JSON envelope. */
+        Success_CommandHistorySnapshot: {
+            /** @description The retained run history, newest first. */
+            data: {
+                entries: components["schemas"]["CommandHistoryEntry"][];
+            };
+        };
+        /** @description Common successful JSON envelope. */
         Success_DynamicConfigResult: {
             data: {
                 display_path: string;
@@ -1996,6 +2055,77 @@ export interface operations {
                 };
             };
             /** @description Screenshot failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    command_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retained run history, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_CommandHistorySnapshot"];
+                };
+            };
+            /** @description Command history read failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    control_command_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommandHistoryControlRequest"];
+            };
+        };
+        responses: {
+            /** @description History updated and the snapshot returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_CommandHistorySnapshot"];
+                };
+            };
+            /** @description History control input is invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Command history update failure */
             500: {
                 headers: {
                     [name: string]: unknown;

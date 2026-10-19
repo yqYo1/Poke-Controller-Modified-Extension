@@ -44,6 +44,8 @@ RETIRED_DESKTOP_PRODUCT_FEATURE = "tauri" + "-shell"
 EXPECTED_OPENAPI_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("/api/camera/retry", "post", "retry_camera"),
     ("/api/camera/screenshot", "post", "screenshot"),
+    ("/api/command-history", "get", "command_history"),
+    ("/api/command-history/control", "post", "control_command_history"),
     ("/api/commands/control", "post", "control_command"),
     ("/api/commands/reload", "post", "reload_commands"),
     ("/api/devices/cameras", "get", "get_cameras"),
@@ -68,6 +70,10 @@ EXPECTED_OPENAPI_OPERATIONS: tuple[tuple[str, str, str], ...] = (
 )
 
 REST_ROUTE_PATHS_BY_SOURCE: dict[str, tuple[str, ...]] = {
+    "server/rest/command_history.rs": (
+        "/api/command-history",
+        "/api/command-history/control",
+    ),
     "server/rest/commands.rs": (
         "/api/commands/control",
         "/api/commands/reload",
@@ -99,6 +105,7 @@ REST_ROUTE_PATHS_BY_SOURCE: dict[str, tuple[str, ...]] = {
     "server/rest/update.rs": ("/api/update/check",),
 }
 REST_ROUTER_MODULES: tuple[str, ...] = (
+    "command_history",
     "commands",
     "devices",
     "dynamic_config",
@@ -115,6 +122,7 @@ REST_ROUTER_MODULES: tuple[str, ...] = (
 REST_ROUTER_MERGES: tuple[str, ...] = (
     "settings",
     "commands",
+    "command_history",
     "devices",
     "notifications",
     "dynamic_config",
@@ -525,6 +533,14 @@ ROUTER_FACTORY_SIGNATURES |= {
     ),
 }
 ROUTER_FACTORY_BODIES: dict[str, str] = {
+    "server/rest/command_history.rs": """
+        Router::new()
+            .route(
+                "/api/command-history",
+                on(MethodFilter::GET, snapshot).on(MethodFilter::HEAD, method_not_allowed),
+            )
+            .route("/api/command-history/control", post(control))
+    """,
     "server/rest/commands.rs": """
         Router::new()
             .route("/api/commands/control", post(control))
@@ -552,6 +568,7 @@ ROUTER_FACTORY_BODIES: dict[str, str] = {
         Router::<RestState>::new()
             .merge(settings::router())
             .merge(commands::router())
+            .merge(command_history::router())
             .merge(devices::router())
             .merge(notifications::router())
             .merge(dynamic_config::router())
@@ -6683,6 +6700,10 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
         "lib.rs": ("use axum::Router;",),
         "production.rs": ("use axum::Router;",),
         "server/mod.rs": ("use axum::Router;",),
+        "server/rest/command_history.rs": (
+            "use axum::Router;",
+            "use axum::routing::{MethodFilter, on, post};",
+        ),
         "server/rest/commands.rs": (
             "use axum::Router;",
             "use axum::routing::post;",
@@ -7243,6 +7264,7 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
             "/api/run-lists" => requested_method == Method::GET || requested_method == Method::PUT,
             "/api/devices/cameras"
             | "/api/devices/serial-ports"
+            | "/api/command-history"
             | "/api/run-schedule"
             | "/api/script-creator"
             | "/api/state"
@@ -7253,6 +7275,7 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
             | "/api/commands/reload"
             | "/api/dynamic-config/control"
             | "/api/notifications/test"
+            | "/api/command-history/control"
             | "/api/profiles/generate-launcher"
             | "/api/run-schedule/control"
             | "/api/script-creator/create"
@@ -7462,6 +7485,7 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
                 "/api/run-lists" => "GET, PUT",
                 "/api/devices/cameras"
                 | "/api/devices/serial-ports"
+                | "/api/command-history"
                 | "/api/run-schedule"
                 | "/api/script-creator"
                 | "/api/state" => "GET",
@@ -7471,6 +7495,7 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
                 | "/api/commands/reload"
                 | "/api/dynamic-config/control"
                 | "/api/notifications/test"
+                | "/api/command-history/control"
                 | "/api/profiles/generate-launcher"
                 | "/api/run-schedule/control"
                 | "/api/script-creator/create"
@@ -7549,7 +7574,7 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
         for path, _method, _operation_id in EXPECTED_OPENAPI_OPERATIONS
         if path != "/ws"
     }
-    assert len(normative_rest_paths) == len(set(normative_rest_paths)) == 20
+    assert len(normative_rest_paths) == len(set(normative_rest_paths)) == 22
     assert set(normative_rest_paths) == documented_rest_paths
 
     websocket = sources["server/websocket.rs"]
@@ -7624,11 +7649,12 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
     }
     assert actual_merge_calls == {
         "production.rs": 1,
-        "server/rest/mod.rs": 12,
+        "server/rest/mod.rs": 13,
     }
 
     rest_module = sources["server/rest/mod.rs"]
     expected_rest_module_block = """
+mod command_history;
 mod commands;
 mod devices;
 mod dynamic_config;
@@ -7714,6 +7740,7 @@ mod update;
         if source_name in route_builder_sources
         and method_router_on_pattern.search(source) is not None
     } == {
+        "server/rest/command_history.rs": 1,
         "server/rest/devices.rs": 2,
         "server/rest/run_lists.rs": 1,
         "server/rest/run_schedule.rs": 1,
@@ -8727,8 +8754,8 @@ def test_openapi_runtime_inventory_is_canonical_complete_and_valid_bash() -> Non
         for method, operation in path_item.items()
     )
     assert operations == list(EXPECTED_OPENAPI_OPERATIONS)
-    assert len(openapi["paths"]) == 21
-    assert len(operations) == 23
+    assert len(openapi["paths"]) == 23
+    assert len(operations) == 25
     assert {method for _path, method, _operation_id in operations} == {
         "get",
         "patch",
@@ -8910,7 +8937,7 @@ def test_openapi_runtime_inventory_is_canonical_complete_and_valid_bash() -> Non
         'error("OpenAPI contains an unsafe public path")',
         'error("OpenAPI path item contains an unsupported or malformed operation")',
         "sort_by([.path, .method])",
-        "length == 23",
+        "length == 25",
         "unique_by([.path, .method])",
         "unique_by(.path)",
         "unique_by(.operation_id)",
@@ -10305,7 +10332,7 @@ def test_ui_gate_matches_openapi_routes_and_methods() -> None:
     final_cors_result_validator = section(
         output,
         "      and ([.api_inventory.cors_preflight_policy.results[]\n"
-        '        | select(.classification == "advertised_pair")] | length) == 23',
+        '        | select(.classification == "advertised_pair")] | length) == 25',
         "\n      and ((.api_inventory.unknown_api_boundary | keys) == [",
     )
     final_advertised_cors_result_keys = (
@@ -10386,23 +10413,23 @@ def test_ui_gate_matches_openapi_routes_and_methods() -> None:
         'options_policy: "advertised-pair-preflight-204-other-preflight-403"',
         'probe_scope: "bidirectional-exact-method-complement-non-mutating"',
         "((.api_inventory | keys)",
-        ".api_inventory.advertised_operation_count == 23",
-        ".api_inventory.advertised_rest_operation_count == 22",
+        ".api_inventory.advertised_operation_count == 25",
+        ".api_inventory.advertised_rest_operation_count == 24",
         ".api_inventory.advertised_websocket_operation_count == 1",
-        ".api_inventory.canonical_path_count == 21",
+        ".api_inventory.canonical_path_count == 23",
         ".api_inventory.standard_method_count == 9",
-        ".api_inventory.method_matrix_probe_count == 189",
-        ".api_inventory.rejected_method_count == 145",
-        ".api_inventory.cors_preflight_count == 21",
-        ".api_inventory.cors_preflight_policy.advertised_pair_count == 23",
+        ".api_inventory.method_matrix_probe_count == 207",
+        ".api_inventory.rejected_method_count == 159",
+        ".api_inventory.cors_preflight_count == 23",
+        ".api_inventory.cors_preflight_policy.advertised_pair_count == 25",
         ".api_inventory.cors_preflight_policy.known_path_wrong_method_count == 6",
         ".api_inventory.cors_preflight_policy.unknown_path_count == 1",
-        ".api_inventory.cors_preflight_policy.probe_count_per_mode == 30",
+        ".api_inventory.cors_preflight_policy.probe_count_per_mode == 32",
         ".api_inventory.cors_preflight_policy.results_sha256",
-        ".api_inventory.bare_options_security_boundary.advertised_path_count == 21",
-        ".api_inventory.bare_options_security_boundary.desktop_probe_count == 21",
-        ".api_inventory.bare_options_security_boundary.rest_path_count == 20",
-        ".api_inventory.bare_options_security_boundary.web_probe_count == 21",
+        ".api_inventory.bare_options_security_boundary.advertised_path_count == 23",
+        ".api_inventory.bare_options_security_boundary.desktop_probe_count == 23",
+        ".api_inventory.bare_options_security_boundary.rest_path_count == 22",
+        ".api_inventory.bare_options_security_boundary.web_probe_count == 23",
         ".api_inventory.bare_options_security_boundary.websocket_path_count == 1",
         'select(.path_kind == "websocket" and .path == "/ws")',
         'select(.path == "/api/settings")',
@@ -10419,8 +10446,8 @@ def test_ui_gate_matches_openapi_routes_and_methods() -> None:
         'select(.classification == "routed_not_found")',
         'select(.classification == "security_rejected_options")',
         'and .request_variant == "complete_preflight"',
-        ".api_inventory.web_method_probe_count == 189",
-        ".api_inventory.desktop_method_probe_count == 189",
+        ".api_inventory.web_method_probe_count == 207",
+        ".api_inventory.desktop_method_probe_count == 207",
         ".api_inventory.mode_results_byte_identical == true",
         ".api_inventory.allow_policy",
         ".api_inventory.bare_options_policy",
@@ -12395,8 +12422,8 @@ fetch_advertised_bare_options_probe() {
     methods_by_path: dict[str, list[str]] = {}
     for path, method, _operation_id in EXPECTED_OPENAPI_OPERATIONS:
         methods_by_path.setdefault(path, []).append(method)
-    assert len(methods_by_path) == 21
-    assert sum(map(len, methods_by_path.values())) == 23
+    assert len(methods_by_path) == 23
+    assert sum(map(len, methods_by_path.values())) == 25
     fixture_operation_lookup_declaration = (
         "readonly -A fixture_advertised_operations=(\n"
         + "".join(
@@ -12410,7 +12437,7 @@ fetch_advertised_bare_options_probe() {
         )
         + ")"
     )
-    assert fixture_operation_lookup_declaration.count("['") == 44
+    assert fixture_operation_lookup_declaration.count("['") == 48
     assert "jq " not in fake_fetch
     assert "$openapi_operation_inventory" not in fake_fetch
     assert fake_fetch.count("${fixture_advertised_operations[") == 2
@@ -12439,10 +12466,10 @@ fetch_advertised_bare_options_probe() {
         'openapi_operation_inventory="$1"\n'
         'mode="$3"\n'
         'probe_scope="$4"\n'
-        "openapi_operation_count=23\nopenapi_path_count=21\n"
-        "openapi_rest_path_count=20\nopenapi_websocket_path_count=1\n"
-        "openapi_method_count=9\nopenapi_method_probe_count=189\n"
-        "openapi_cors_preflight_count=21\nopenapi_rejected_method_count=145\n"
+        "openapi_operation_count=25\nopenapi_path_count=23\n"
+        "openapi_rest_path_count=22\nopenapi_websocket_path_count=1\n"
+        "openapi_method_count=9\nopenapi_method_probe_count=207\n"
+        "openapi_cors_preflight_count=23\nopenapi_rejected_method_count=159\n"
         + fixture_operation_lookup_declaration
         + "\n"
         + cors_success_forbidden_inventory_declaration
@@ -12901,7 +12928,7 @@ fetch_advertised_bare_options_probe() {
         fields = record.split("\t")
         assert len(fields) == 3
         invocations.append((fields[0], fields[1], fields[2]))
-    assert len(invocations) == 230
+    assert len(invocations) == 250
     assert sorted(invocations) == sorted(expected_invocations)
     assert invocations == expected_invocations
     attached_request_headers = (
@@ -12921,7 +12948,7 @@ fetch_advertised_bare_options_probe() {
         (path, "options", "bare", "0", "false", "false")
         for path in expected_advertised_paths
     ]
-    assert len(advertised_bare_options_invocations) == 21
+    assert len(advertised_bare_options_invocations) == 23
     assert (
         sum(
             invocation[0] == "/api/settings"
@@ -12942,11 +12969,11 @@ fetch_advertised_bare_options_probe() {
     assert [result["path"] for result in advertised_bare_options_results] == (
         expected_advertised_paths
     )
-    assert len(advertised_bare_options_results) == 21
-    assert len({result["path"] for result in advertised_bare_options_results}) == 21
+    assert len(advertised_bare_options_results) == 23
+    assert len({result["path"] for result in advertised_bare_options_results}) == 23
     assert (
         sum(result["path_kind"] == "rest" for result in advertised_bare_options_results)
-        == 20
+        == 22
     )
     assert [
         result["path"]
@@ -13115,7 +13142,7 @@ fetch_advertised_bare_options_probe() {
         key=classification_first_cors_preflight_result_sort_key,
     )
     assert classification_first_preflight_results != expected_preflight_results
-    assert len(expected_preflight_results) == 30
+    assert len(expected_preflight_results) == 32
     cors_preflight_policy_raw_by_mode = {
         mode: result_roots[mode]
         .joinpath("cors-preflight-policy-results.json")
@@ -13146,7 +13173,7 @@ fetch_advertised_bare_options_probe() {
         for result in preflight_results
         if result["classification"] != "advertised_pair"
     ]
-    assert len(advertised_preflight_results) == 23
+    assert len(advertised_preflight_results) == 25
     assert len(rejected_preflight_results) == 7
     cors_rejection_artifact_fields = (
         "body_sha256",
@@ -13196,7 +13223,7 @@ fetch_advertised_bare_options_probe() {
         for mode, raw_results in cors_preflight_policy_raw_by_mode.items()
     }
     expected_cors_preflight_policy_results_sha256 = (
-        "aabcce83548d5a6421d221e070915112e2ad8d2761921ec8c26912d84e157c35"
+        "08fa04b52f25ebe5021c92422735847ebb0cd174ddec09747f6cfb5f6fce4853"
     )
     assert (
         re.fullmatch(
@@ -14101,8 +14128,8 @@ fetch_advertised_bare_options_probe() {
     assert sum(fault_probe_scope_counts.values()) == 82
 
     results = json.loads((result_root / "openapi-method-results.json").read_text())
-    assert len(results) == 189
-    assert len({(result["path"], result["method"]) for result in results}) == 189
+    assert len(results) == 207
+    assert len({(result["path"], result["method"]) for result in results}) == 207
     assert {result["path"] for result in results} == {
         path for path, _method, _operation_id in EXPECTED_OPENAPI_OPERATIONS
     }
@@ -14117,9 +14144,9 @@ fetch_advertised_bare_options_probe() {
         "trace",
         "connect",
     }
-    assert sum(result["classification"] == "advertised" for result in results) == 23
-    assert sum(result["classification"] == "rejected" for result in results) == 145
-    assert sum(result["classification"] == "cors_preflight" for result in results) == 21
+    assert sum(result["classification"] == "advertised" for result in results) == 25
+    assert sum(result["classification"] == "rejected" for result in results) == 159
+    assert sum(result["classification"] == "cors_preflight" for result in results) == 23
     expected_allow_by_path: dict[str, str] = {}
     for path, method, _operation_id in EXPECTED_OPENAPI_OPERATIONS:
         methods = expected_allow_by_path.setdefault(path, "").split(", ")
@@ -14186,8 +14213,8 @@ def test_rust_routes_override_implicit_head_and_websocket_any() -> None:
     security = (REPOSITORY / "rust/pokecon/src/server/security.rs").read_text()
     assert "normative_rest_routes_accept_exactly_the_advertised_method_matrix" in rest
     assert '"CONNECT"' in rest
-    assert "assert_eq!(advertised_count, 22);" in rest
-    assert "assert_eq!(rejected_count, 158);" in rest
+    assert "assert_eq!(advertised_count, 24);" in rest
+    assert "assert_eq!(rejected_count, 174);" in rest
     inner_unknown_matrix = section(
         rest,
         "async fn unknown_resources_and_methods_have_common_errors() {",

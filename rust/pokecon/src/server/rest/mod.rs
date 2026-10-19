@@ -1,5 +1,6 @@
 //! Closed axum routing and common REST response handling.
 
+mod command_history;
 mod commands;
 mod devices;
 mod dynamic_config;
@@ -40,6 +41,7 @@ pub fn router(backend: Arc<dyn RestBackend>) -> Router {
     Router::<RestState>::new()
         .merge(settings::router())
         .merge(commands::router())
+        .merge(command_history::router())
         .merge(devices::router())
         .merge(notifications::router())
         .merge(dynamic_config::router())
@@ -214,6 +216,7 @@ async fn method_not_allowed(uri: Uri) -> Response {
         "/api/run-lists" => "GET, PUT",
         "/api/devices/cameras"
         | "/api/devices/serial-ports"
+        | "/api/command-history"
         | "/api/run-schedule"
         | "/api/script-creator"
         | "/api/state" => "GET",
@@ -223,6 +226,7 @@ async fn method_not_allowed(uri: Uri) -> Response {
         | "/api/commands/reload"
         | "/api/dynamic-config/control"
         | "/api/notifications/test"
+        | "/api/command-history/control"
         | "/api/profiles/generate-launcher"
         | "/api/run-schedule/control"
         | "/api/script-creator/create"
@@ -264,15 +268,16 @@ mod tests {
 
     use super::router;
     use crate::server::api::{
-        ApiErrorCode, CameraDevice, CameraSelector, CommandControlRequest, CommandState,
-        DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
-        GenerateLauncherRequest, GenerateLauncherResult, ImageFormat, NotificationTestRequest,
-        NotificationTestResult, OperationResult, RunListSnapshot, RunListSpec,
-        RunScheduleControlRequest, RunScheduleSnapshot, SavedScreenshot, ScreenshotRequest,
-        ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec,
-        SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange,
-        SettingsPatchRequest, SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot,
-        StateChangeCause, StatePatch, StateSnapshot, UpdateCheckResult,
+        ApiErrorCode, CameraDevice, CameraSelector, CommandControlRequest,
+        CommandHistoryControlRequest, CommandHistorySnapshot, CommandState, DecimalString,
+        DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage, GenerateLauncherRequest,
+        GenerateLauncherResult, ImageFormat, NotificationTestRequest, NotificationTestResult,
+        OperationResult, RunListSnapshot, RunListSpec, RunScheduleControlRequest,
+        RunScheduleSnapshot, SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview,
+        ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec, SerialControlRequest,
+        SerialPort, SerialPortTransport, SettingsChange, SettingsPatchRequest,
+        SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause,
+        StatePatch, StateSnapshot, UpdateCheckResult,
     };
     use crate::server::backend::{
         ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload,
@@ -422,6 +427,21 @@ mod tests {
             _request: RunScheduleControlRequest,
         ) -> ApiResult<RunScheduleSnapshot> {
             Ok(schedule_snapshot())
+        }
+
+        async fn command_history(&self) -> ApiResult<CommandHistorySnapshot> {
+            Ok(CommandHistorySnapshot {
+                entries: Vec::new(),
+            })
+        }
+
+        async fn control_command_history(
+            &self,
+            _request: CommandHistoryControlRequest,
+        ) -> ApiResult<CommandHistorySnapshot> {
+            Ok(CommandHistorySnapshot {
+                entries: Vec::new(),
+            })
         }
 
         async fn save_run_lists(&self, _lists: Vec<RunListSpec>) -> ApiResult<RunListSnapshot> {
@@ -609,9 +629,11 @@ mod tests {
     const STANDARD_METHODS: [&str; 9] = [
         "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT",
     ];
-    const REST_METHOD_MATRIX: [(&str, &[&str]); 20] = [
+    const REST_METHOD_MATRIX: [(&str, &[&str]); 22] = [
         ("/api/camera/retry", &["POST"]),
         ("/api/camera/screenshot", &["POST"]),
+        ("/api/command-history", &["GET"]),
+        ("/api/command-history/control", &["POST"]),
         ("/api/commands/control", &["POST"]),
         ("/api/commands/reload", &["POST"]),
         ("/api/devices/cameras", &["GET"]),
@@ -711,8 +733,8 @@ mod tests {
             }
         }
 
-        assert_eq!(advertised_count, 22);
-        assert_eq!(rejected_count, 158);
+        assert_eq!(advertised_count, 24);
+        assert_eq!(rejected_count, 174);
     }
 
     #[tokio::test]

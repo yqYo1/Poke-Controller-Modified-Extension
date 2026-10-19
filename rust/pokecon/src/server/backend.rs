@@ -5,9 +5,10 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 
 use crate::server::api::{
-    ApiError, ApiErrorCode, CameraDevice, CommandControlRequest, DynamicConfigControlRequest,
-    DynamicConfigResult, GenerateLauncherRequest, GenerateLauncherResult, ImageFormat,
-    NotificationTestRequest, NotificationTestResult, OperationResult, RunListSnapshot, RunListSpec,
+    ApiError, ApiErrorCode, CameraDevice, CommandControlRequest, CommandHistoryControlRequest,
+    CommandHistorySnapshot, DynamicConfigControlRequest, DynamicConfigResult,
+    GenerateLauncherRequest, GenerateLauncherResult, ImageFormat, NotificationTestRequest,
+    NotificationTestResult, OperationResult, RunListSnapshot, RunListSpec,
     RunScheduleControlRequest, RunScheduleSnapshot, SavedScreenshot, ScreenshotRequest,
     ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec,
     ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort, SettingsPatchRequest,
@@ -213,6 +214,27 @@ pub trait RestBackend: Send + Sync + 'static {
             ApiFailureStatus::NotFound,
             ApiErrorCode::ResourceNotFound,
             "run schedule is not available",
+        ))
+    }
+
+    /// The retained run history, newest first.
+    async fn command_history(&self) -> ApiResult<CommandHistorySnapshot> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "command history is not available",
+        ))
+    }
+
+    /// Removes one history entry or clears the history.
+    async fn control_command_history(
+        &self,
+        _request: CommandHistoryControlRequest,
+    ) -> ApiResult<CommandHistorySnapshot> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "command history is not available",
         ))
     }
 

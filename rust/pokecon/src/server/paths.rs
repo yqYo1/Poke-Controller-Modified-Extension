@@ -208,6 +208,30 @@ pub fn control_run_schedule() {}
 
 #[utoipa::path(
     get,
+    path = "/api/command-history",
+    tag = "command_history",
+    responses(
+        (status = 200, description = "Retained run history, newest first", body = Success<crate::server::api::CommandHistorySnapshot>),
+        (status = 500, description = "Command history read failure", body = ErrorEnvelope)
+    )
+)]
+pub fn command_history() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/command-history/control",
+    tag = "command_history",
+    request_body(content = crate::server::api::CommandHistoryControlRequest, content_type = "application/json"),
+    responses(
+        (status = 200, description = "History updated and the snapshot returned", body = Success<crate::server::api::CommandHistorySnapshot>),
+        (status = 422, description = "History control input is invalid", body = ErrorEnvelope),
+        (status = 500, description = "Command history update failure", body = ErrorEnvelope)
+    )
+)]
+pub fn control_command_history() {}
+
+#[utoipa::path(
+    get,
     path = "/api/script-creator",
     tag = "script_creator",
     responses(

@@ -69,6 +69,8 @@ function commandActions() {
     reloadCommands: vi.fn().mockResolvedValue({ changed: true, revision: '2' }),
     runLists: vi.fn().mockResolvedValue({ lists: [], skipped: [] }),
     saveRunLists: vi.fn().mockResolvedValue({ lists: [], skipped: [] }),
+    commandHistory: vi.fn().mockResolvedValue({ entries: [] }),
+    controlCommandHistory: vi.fn().mockResolvedValue({ entries: [] }),
     runSchedule: vi.fn().mockResolvedValue({
       pending: false,
       has_start: false,
@@ -274,5 +276,28 @@ describe('CommandsTab', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Run lists' }));
     await waitFor(() => expect(actions.runLists).toHaveBeenCalled());
     expect(await screen.findByRole('heading', { name: 'Run list editor' })).toBeTruthy();
+  });
+
+  it('runs a command from the History tab', async () => {
+    const { runtime, view } = runtimeView();
+    const actions = commandActions();
+    actions.commandHistory.mockResolvedValue({
+      entries: [{ type: 'Python', name: 'First', last_run: '2026-10-19 10:00:00' }]
+    });
+    render(CommandsTab, { actions, runtime, view });
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    await waitFor(() => expect(actions.commandHistory).toHaveBeenCalled());
+    await fireEvent.click(await screen.findByRole('button', { name: 'Run First' }));
+
+    await waitFor(() =>
+      expect(actions.controlCommand).toHaveBeenCalledWith({
+        action: 'start',
+        command: {
+          class_name: 'First',
+          module_path: 'Commands.PythonCommands.samples.first'
+        }
+      })
+    );
   });
 });

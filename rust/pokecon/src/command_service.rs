@@ -501,6 +501,12 @@ impl CommandService {
         }
     }
 
+    /// The attached usage store, when the production runtime provides one.
+    #[must_use]
+    pub fn usage_store(&self) -> Option<Arc<crate::command_usage::CommandUsageStore>> {
+        self.usage.as_ref().map(Arc::clone)
+    }
+
     /// Attaches the command usage store; recordings stay best-effort and
     /// never block or fail a command start.
     #[must_use]

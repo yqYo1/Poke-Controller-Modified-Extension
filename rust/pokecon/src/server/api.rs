@@ -1161,6 +1161,33 @@ pub struct RunListSnapshot {
     pub skipped: Vec<String>,
 }
 
+/// One run-history row on the wire (upstream `command_history` entry).
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommandHistoryEntry {
+    #[serde(rename = "type")]
+    pub command_type: String,
+    pub name: String,
+    pub last_run: String,
+}
+
+/// The retained run history, newest first.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommandHistorySnapshot {
+    pub entries: Vec<CommandHistoryEntry>,
+}
+
+/// One run-history control request.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum CommandHistoryControlRequest {
+    /// Removes one entry by (type, name).
+    Remove { r#type: String, name: String },
+    /// Removes every entry.
+    Clear,
+}
+
 /// One scheduled start target on the wire (run lists use an empty module path).
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]

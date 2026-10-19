@@ -23,15 +23,16 @@ use crate::dynamic::{DynamicConfigControl, DynamicConfigLanguage};
 use crate::script_creator::ScriptSpec as CreatorSpec;
 use crate::server::api::{
     ApiErrorCode, CameraDevice, CameraSelector, ClientMessage, CommandControlRequest,
-    DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
-    GamepadButton, GamepadHat, GamepadInput, GenerateLauncherRequest, GenerateLauncherResult,
-    ImageFormat, InputApplied, InputGeneration, LauncherDestination, NotificationTestRequest,
-    NotificationTestResult, OperationResult, RunListItem, RunListSnapshot, RunListSpec,
-    RunScheduleControlRequest, RunScheduleSnapshot, ScriptCreatorPreview, ScriptCreatorResult,
-    ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult,
-    SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange, SettingsPatchRequest,
-    SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch,
-    StateSnapshot, UpdateCheckResult,
+    CommandHistoryControlRequest, CommandHistoryEntry, CommandHistorySnapshot, DecimalString,
+    DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage, GamepadButton, GamepadHat,
+    GamepadInput, GenerateLauncherRequest, GenerateLauncherResult, ImageFormat, InputApplied,
+    InputGeneration, LauncherDestination, NotificationTestRequest, NotificationTestResult,
+    OperationResult, RunListItem, RunListSnapshot, RunListSpec, RunScheduleControlRequest,
+    RunScheduleSnapshot, ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot,
+    ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort,
+    SerialPortTransport, SettingsChange, SettingsPatchRequest, SettingsReadPatchValues,
+    SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch, StateSnapshot,
+    UpdateCheckResult,
 };
 use crate::server::backend::{
     ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload, LauncherOutput,
@@ -430,6 +431,16 @@ impl ApplicationBackend {
             .ok_or_else(|| internal_failure("command service is unavailable"))
     }
 
+    fn usage(&self) -> ApiResult<Arc<crate::command_usage::CommandUsageStore>> {
+        self.commands()?.usage_store().ok_or_else(|| {
+            ApiFailure::new(
+                ApiFailureStatus::InternalServerError,
+                ApiErrorCode::InternalError,
+                "command history store is unavailable",
+            )
+        })
+    }
+
     fn profiles(&self) -> ApiResult<&Arc<ProfileService>> {
         self.profiles
             .get()
@@ -514,6 +525,20 @@ fn to_creator_spec(spec: &ScriptCreatorSpec) -> CreatorSpec {
         template_folder: spec.template_folder.clone(),
         template_location: spec.template_location.clone(),
         author: spec.author.clone(),
+    }
+}
+
+fn history_snapshot(usage: &crate::command_usage::CommandUsageStore) -> CommandHistorySnapshot {
+    CommandHistorySnapshot {
+        entries: usage
+            .history()
+            .into_iter()
+            .map(|entry| CommandHistoryEntry {
+                command_type: entry.command_type,
+                name: entry.name,
+                last_run: entry.last_run,
+            })
+            .collect(),
     }
 }
 
@@ -708,6 +733,31 @@ impl RestBackend for ApplicationBackend {
         let mut schedule = self.run_schedule.lock().await;
         apply_schedule_control(&mut schedule, request, running, now)?;
         Ok(schedule_snapshot(&schedule, now))
+    }
+
+    async fn command_history(&self) -> ApiResult<CommandHistorySnapshot> {
+        Ok(history_snapshot(self.usage()?.as_ref()))
+    }
+
+    async fn control_command_history(
+        &self,
+        request: CommandHistoryControlRequest,
+    ) -> ApiResult<CommandHistorySnapshot> {
+        let usage = self.usage()?;
+        match request {
+            CommandHistoryControlRequest::Remove { r#type, name } => {
+                if r#type.trim().is_empty() || name.trim().is_empty() {
+                    return Err(invalid_reservation(
+                        "履歴の種別と名前を指定してください。".to_owned(),
+                    ));
+                }
+                let _ = usage.remove_history(&r#type, &name);
+            }
+            CommandHistoryControlRequest::Clear => {
+                let _ = usage.clear_history();
+            }
+        }
+        Ok(history_snapshot(usage.as_ref()))
     }
 
     async fn script_creator_snapshot(&self) -> ApiResult<ScriptCreatorSnapshot> {

@@ -187,6 +187,7 @@ fn validate_preflight(path: &str, headers: &HeaderMap) -> Result<(), SecurityErr
         "/api/run-lists" => requested_method == Method::GET || requested_method == Method::PUT,
         "/api/devices/cameras"
         | "/api/devices/serial-ports"
+        | "/api/command-history"
         | "/api/run-schedule"
         | "/api/script-creator"
         | "/api/state"
@@ -197,6 +198,7 @@ fn validate_preflight(path: &str, headers: &HeaderMap) -> Result<(), SecurityErr
         | "/api/commands/reload"
         | "/api/dynamic-config/control"
         | "/api/notifications/test"
+        | "/api/command-history/control"
         | "/api/profiles/generate-launcher"
         | "/api/run-schedule/control"
         | "/api/script-creator/create"
@@ -641,7 +643,7 @@ mod tests {
     #[tokio::test]
     async fn preflights_match_the_openapi_surface() {
         let app = secure_router(Router::new().route("/ws", get(|| async {})), policy());
-        let preflight_policy: [(&str, &[&str]); 18] = [
+        let preflight_policy: [(&str, &[&str]); 20] = [
             ("/api/camera/retry", &["POST"]),
             ("/api/camera/screenshot", &["POST"]),
             ("/api/commands/control", &["POST"]),
@@ -652,6 +654,8 @@ mod tests {
             ("/api/notifications/test", &["POST"]),
             ("/api/profiles/generate-launcher", &["POST"]),
             ("/api/run-lists", &["GET", "PUT"]),
+            ("/api/command-history", &["GET"]),
+            ("/api/command-history/control", &["POST"]),
             ("/api/run-schedule", &["GET"]),
             ("/api/run-schedule/control", &["POST"]),
             ("/api/script-ui/action", &["POST"]),

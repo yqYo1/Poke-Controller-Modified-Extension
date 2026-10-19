@@ -3,6 +3,9 @@
 
   import type {
     CommandControlRequest,
+    CommandHistoryControlRequest,
+    CommandHistoryEntry,
+    CommandHistorySnapshot,
     OperationResult,
     RunListSaveRequest,
     RunListSnapshot,
@@ -24,10 +27,14 @@
   type CommandIdentity = components['schemas']['CommandIdentity'];
   type ShortcutIndex = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
   type ShortcutSetting = `shortcuts.button_${ShortcutIndex}`;
-  type Subtab = 'python' | 'mcu' | 'shortcuts';
+  type Subtab = 'python' | 'mcu' | 'shortcuts' | 'history';
 
   interface CommandActions {
+    commandHistory(): Promise<CommandHistorySnapshot>;
     controlCommand(request: CommandControlRequest): Promise<OperationResult>;
+    controlCommandHistory(
+      request: CommandHistoryControlRequest
+    ): Promise<CommandHistorySnapshot>;
     createScript(request: ScriptCreatorSpec): Promise<ScriptCreatorResult>;
     previewScriptCreation(request: ScriptCreatorSpec): Promise<ScriptCreatorPreview>;
     reloadCommands(): Promise<OperationResult>;
@@ -48,7 +55,8 @@
   const subtabs: readonly { readonly id: Subtab; readonly label: string }[] = [
     { id: 'python', label: 'Python Command' },
     { id: 'mcu', label: 'Mcu Command' },
-    { id: 'shortcuts', label: 'Shortcut' }
+    { id: 'shortcuts', label: 'Shortcut' },
+    { id: 'history', label: 'History' }
   ];
 
   let { actions, runtime, view }: Props = $props();
@@ -63,6 +71,10 @@
   let selectedIdentity = $state<string | null>(null);
   let selectedTag = $state('-');
   let commandMenu = $state<{ x: number; y: number; command: CommandInfo } | null>(null);
+  let historyEntries = $state<CommandHistoryEntry[]>([]);
+  let historyDescending = $state(true);
+  let historySelected = $state<string | null>(null);
+  let historyBusy = $state(false);
   let commandMenuCopied = $state(false);
   // List ordering, mirroring the upstream Command-column sorts. Name sorts
   // are frontend derivations over the immutable display list; the sorted view
@@ -184,6 +196,100 @@
   function detectedMcu(command: CommandInfo): boolean {
     const searchable = `${command.module_path}.${command.class_name}`.toLowerCase();
     return searchable.includes('mcu');
+  }
+
+  const sortedHistory = $derived.by(() => {
+    const rows = [...historyEntries];
+    rows.sort((left, right) =>
+      historyDescending
+        ? right.last_run.localeCompare(left.last_run)
+        : left.last_run.localeCompare(right.last_run)
+    );
+    return rows;
+  });
+
+  $effect(() => {
+    if (activeSubtab !== 'history') return;
+    void refreshHistory();
+  });
+
+  async function refreshHistory(): Promise<void> {
+    historyBusy = true;
+    try {
+      historyEntries = (await actions.commandHistory()).entries;
+    } catch (reason: unknown) {
+      error = reason instanceof Error ? reason.message : 'Command history load failed';
+    } finally {
+      historyBusy = false;
+    }
+  }
+
+  function commandForHistory(entry: CommandHistoryEntry): CommandInfo | null {
+    const candidates = backendState?.command_candidates ?? [];
+    return (
+      candidates.find(
+        (command) => command.name === entry.name && command.class_name === entry.name
+      ) ??
+      candidates.find((command) => command.name === entry.name) ??
+      null
+    );
+  }
+
+  async function applyHistory(
+    request: CommandHistoryControlRequest
+  ): Promise<void> {
+    historyBusy = true;
+    try {
+      historyEntries = (await actions.controlCommandHistory(request)).entries;
+      historySelected = null;
+    } catch (reason: unknown) {
+      error = reason instanceof Error ? reason.message : 'Command history update failed';
+    } finally {
+      historyBusy = false;
+    }
+  }
+
+  async function runHistoryEntry(entry: CommandHistoryEntry): Promise<void> {
+    const command = commandForHistory(entry);
+    if (command === null) {
+      error = 'Command is no longer available.';
+      return;
+    }
+    await start(command);
+    await refreshHistory();
+  }
+
+  function historyKey(entry: CommandHistoryEntry): string {
+    return entry.type + '\u0000' + entry.name;
+  }
+
+  async function removeSelectedHistory(): Promise<void> {
+    if (historySelected === null) return;
+    const entry = historyEntries.find(
+      (candidate) => historyKey(candidate) === historySelected
+    );
+    if (entry === undefined) return;
+    await applyHistory({ action: 'remove', type: entry.type, name: entry.name });
+  }
+
+  async function clearHistory(): Promise<void> {
+    if (historyEntries.length === 0) return;
+    if (!window.confirm(`すべての履歴(${String(historyEntries.length)}件)を削除しますか？`)) return;
+    await applyHistory({ action: 'clear' });
+  }
+
+  async function selectHistoryShortcut(entry: CommandHistoryEntry, event: Event): Promise<void> {
+    const select = event.currentTarget as HTMLSelectElement;
+    const value = select.value;
+    select.value = '';
+    if (value.length === 0) return;
+    const command = commandForHistory(entry);
+    if (command === null) {
+      error = 'Command is no longer available.';
+      return;
+    }
+    assigningSlot = Number(value) as ShortcutIndex;
+    await assignShortcut(command);
   }
 
   function filterForSubtab(
@@ -437,6 +543,36 @@
         </section>
       {/if}
     </div>
+  {:else if activeSubtab === 'history'}
+    <div id="command-panel-history" role="tabpanel" aria-labelledby="command-tab-history" class="space-y-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <button type="button" class="rounded-lg bg-text/5 px-3 py-1 text-xs text-subtext1" onclick={() => (historyDescending = !historyDescending)}>
+          Last Run {historyDescending ? '▼' : '▲'}
+        </button>
+        <button type="button" class="rounded-lg bg-red/10 px-3 py-1 text-xs text-red disabled:opacity-40" disabled={historyBusy || historySelected === null} onclick={() => void removeSelectedHistory()}>Delete</button>
+        <button type="button" class="rounded-lg bg-red/10 px-3 py-1 text-xs text-red disabled:opacity-40" disabled={historyBusy || historyEntries.length === 0} onclick={() => void clearHistory()}>Delete all</button>
+        <span class="ml-auto text-xs text-subtext0">{historyEntries.length} / 10</span>
+      </div>
+      <div class="max-h-[26rem] space-y-1 overflow-auto rounded-lg border border-text/10 bg-crust/20 p-2">
+        {#if sortedHistory.length === 0}
+          <p class="p-2 text-xs text-subtext0">No command runs recorded yet.</p>
+        {/if}
+        {#each sortedHistory as entry (historyKey(entry))}
+          {@const key = historyKey(entry)}
+          <div class={`flex flex-wrap items-center gap-2 rounded-lg border px-2 py-1 ${historySelected === key ? 'border-blue/40 bg-blue/10' : 'border-transparent bg-text/[0.025]'}`}>
+            <button type="button" class="min-w-0 flex-1 text-left" aria-label={`Run ${entry.name}`} onclick={() => void runHistoryEntry(entry)}>
+              <span class="block truncate text-sm font-medium text-text">{entry.name}</span>
+              <span class="block text-[11px] text-subtext0">{entry.last_run} · {entry.type}</span>
+            </button>
+            <select class="rounded-md border border-text/15 bg-crust/40 px-1 py-0.5 text-[11px] text-subtext1" aria-label={`Shortcut for ${entry.name}`} value="" onchange={(event) => void selectHistoryShortcut(entry, event)}>
+              <option value="">Shortcut…</option>
+              {#each shortcutIndexes as index (index)}<option value={String(index)}>#{String(index)}</option>{/each}
+            </select>
+            <button type="button" class="rounded-md bg-text/5 px-2 py-0.5 text-[11px] text-subtext1" aria-label={`Select ${entry.name} in history`} onclick={() => (historySelected = key)}>Select</button>
+          </div>
+        {/each}
+      </div>
+    </div>
   {:else}
     <div id={`command-panel-${activeSubtab}`} role="tabpanel" aria-labelledby={`command-tab-${activeSubtab}`} class="space-y-3">
       <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
@@ -501,7 +637,7 @@
   {/if}
 
   <div class="flex flex-wrap items-center gap-2 rounded-lg border border-text/10 bg-crust/20 p-3">
-    <button type="button" class="rounded-lg bg-green/15 px-3 py-2 text-sm font-medium text-green disabled:opacity-40" disabled={busy || selectedCommand === null || backendState?.command_state === 'running' || backendState?.command_state === 'paused'} onclick={() => void start()}>Start</button>
+    <button type="button" class="rounded-lg bg-green/15 px-3 py-2 text-sm font-medium text-green disabled:opacity-40" disabled={busy || selectedCommand === null || activeSubtab === 'shortcuts' || activeSubtab === 'history' || backendState?.command_state === 'running' || backendState?.command_state === 'paused'} onclick={() => void start()}>Start</button>
     <button type="button" class="rounded-lg bg-yellow/10 px-3 py-2 text-sm text-yellow disabled:opacity-40" disabled={busy || backendState?.command_state !== 'running'} onclick={() => void control({ action: 'pause' })}>Pause</button>
     <button type="button" class="rounded-lg bg-blue/10 px-3 py-2 text-sm text-blue disabled:opacity-40" disabled={busy || backendState?.command_state !== 'paused'} onclick={() => void control({ action: 'resume' })}>Resume</button>
     <button type="button" class="rounded-lg bg-red/10 px-3 py-2 text-sm text-red disabled:opacity-40" disabled={busy || (backendState?.command_state !== 'running' && backendState?.command_state !== 'paused')} onclick={() => void control({ action: 'stop' })}>Stop</button>

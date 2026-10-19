@@ -3,6 +3,9 @@ import type { components } from './api/openapi';
 
 export type CameraDevice = components['schemas']['CameraDevice'];
 export type CommandControlRequest = components['schemas']['CommandControlRequest'];
+export type CommandHistoryControlRequest = components['schemas']['CommandHistoryControlRequest'];
+export type CommandHistoryEntry = components['schemas']['CommandHistoryEntry'];
+export type CommandHistorySnapshot = components['schemas']['CommandHistorySnapshot'];
 export type DynamicConfigControlRequest = components['schemas']['DynamicConfigControlRequest'];
 export type DynamicConfigResult = components['schemas']['DynamicConfigResult'];
 export type GenerateLauncherRequest = components['schemas']['GenerateLauncherRequest'];
@@ -92,6 +95,19 @@ export class BackendActions {
       blob: result.data,
       contentDisposition: result.response.headers.get('Content-Disposition')
     };
+  }
+
+  async commandHistory(): Promise<CommandHistorySnapshot> {
+    return unwrap(await this.client.GET('/api/command-history'), 'command history load failed');
+  }
+
+  async controlCommandHistory(
+    request: CommandHistoryControlRequest
+  ): Promise<CommandHistorySnapshot> {
+    return unwrap(
+      await this.client.POST('/api/command-history/control', { body: request }),
+      'command history update failed'
+    );
   }
 
   async controlCommand(request: CommandControlRequest): Promise<OperationResult> {

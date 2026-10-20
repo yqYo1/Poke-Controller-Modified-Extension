@@ -39,4 +39,18 @@ describe('InputSafety', () => {
     expect(setKeyboardKey).toHaveBeenCalledTimes(1);
     unmount();
   });
+
+  it('leaves keys to focused menus and composite widgets', async () => {
+    const { runtime, view } = runtimeView();
+    const setKeyboardKey = vi.spyOn(runtime, 'setKeyboardKey');
+    const { container, unmount } = render(InputSafety, { runtime, view });
+    const menu = document.createElement('div');
+    menu.setAttribute('role', 'menuitem');
+    menu.tabIndex = 0;
+    container.appendChild(menu);
+
+    await fireEvent.keyDown(menu, { code: 'KeyA', key: 'a' });
+    expect(setKeyboardKey).not.toHaveBeenCalled();
+    unmount();
+  });
 });

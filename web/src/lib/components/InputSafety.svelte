@@ -13,10 +13,18 @@
   const keyboardEnabled = $derived(view.settings?.values['input.keyboard_enabled'] ?? true);
 
   function interactiveTarget(target: EventTarget | null): boolean {
-    return (
+    if (!(target instanceof Element)) return false;
+    if (
       target instanceof HTMLElement &&
       (target.isContentEditable ||
         ['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName))
+    ) {
+      return true;
+    }
+    return (
+      target.closest(
+        'a[href], [role="menu"], [role="menuitem"], [role="dialog"], [aria-modal="true"], [data-keyboard-ignore]'
+      ) !== null
     );
   }
 

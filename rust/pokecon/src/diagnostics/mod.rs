@@ -71,24 +71,7 @@ pub fn init_tracing(
     let filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter));
     let file_writer = match log_file {
-        Some(path) => {
-            if let Some(parent) = path.parent()
-                && !parent.as_os_str().is_empty()
-                && !parent.exists()
-            {
-                std::fs::create_dir_all(parent).map_err(|error| {
-                    TracingInitError::File(std::io::Error::new(
-                        error.kind(),
-                        format!(
-                            "failed to create log directory {}: {error}",
-                            parent.display()
-                        ),
-                    ))
-                })?;
-            }
-            let file = std::fs::File::create(path).map_err(TracingInitError::File)?;
-            Some(std::sync::Arc::new(file))
-        }
+        Some(path) => Some(std::sync::Arc::new(create_log_file(path)?)),
         None => None,
     };
     let subscriber = tracing_subscriber::registry()
@@ -101,6 +84,24 @@ pub fn init_tracing(
             .map_err(TracingInitError::Subscriber),
         None => subscriber.try_init().map_err(TracingInitError::Subscriber),
     }
+}
+
+fn create_log_file(path: &std::path::Path) -> Result<std::fs::File, TracingInitError> {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+        && !parent.exists()
+    {
+        std::fs::create_dir_all(parent).map_err(|error| {
+            TracingInitError::File(std::io::Error::new(
+                error.kind(),
+                format!(
+                    "failed to create log directory {}: {error}",
+                    parent.display()
+                ),
+            ))
+        })?;
+    }
+    std::fs::File::create(path).map_err(TracingInitError::File)
 }
 
 /// Installs structured JSON logging on stderr.
@@ -128,6 +129,14 @@ pub fn init_tracing_to_stderr(default_filter: &str) -> Result<(), TracingInitErr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn missing_log_directory_is_created_with_the_log_file() {
+        let directory = tempfile::TempDir::new().expect("temporary directory must exist");
+        let path = directory.path().join("log").join("log_default.log");
+        create_log_file(&path).expect("log file must be created");
+        assert!(path.is_file());
+    }
 
     #[test]
     fn log_file_name_follows_the_upstream_shape() {

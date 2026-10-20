@@ -2172,6 +2172,8 @@ class Images(ImageProcPythonCommand):
         assert cv2.imwrite(scene_path, second)
         loaded = self.openImage("template.png")
         assert loaded is not None and loaded.shape == (20, 30, 3)
+        outside_captures = self.openImage(scene_path)
+        assert outside_captures is not None and outside_captures.shape == second.shape
 
         assert self.isContainTemplate(
             "template.png",
@@ -3098,5 +3100,44 @@ class FailingSave(ImageProcPythonCommand):
         .expect("failing capture still completes");
     assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
     assert_capture_failure_outputs(&host);
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn stop_interrupts_a_long_wait_within_the_check_interval() {
+    const SOURCE: &str = r"
+from Commands.PythonCommandBase import PythonCommand
+
+
+class Waiting(PythonCommand):
+    def do(self):
+        self.wait(10.0)
+";
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("waiting.py"), SOURCE).expect("wait fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let execution_client = client.clone();
+    let execution = tokio::spawn(async move {
+        execution_client
+            .execute(&ScriptExecuteRequest {
+                path: "waiting.py".into(),
+                class_name: "Waiting".to_owned(),
+                tags: Vec::new(),
+            })
+            .await
+    });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    client.stop().await.expect("stop succeeds during wait");
+
+    let result = tokio::time::timeout(Duration::from_secs(2), execution)
+        .await
+        .expect("a stopped wait must return within the check interval")
+        .expect("execution joins")
+        .expect("execution request succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Stopped);
     stop_worker(&worker).await;
 }

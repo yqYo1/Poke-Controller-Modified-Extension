@@ -964,7 +964,17 @@ UI・表示系:
   - [x] macOSカメラ列挙（`camera/selector.rs`）: 配布対象はLinuxとWindowsのため現行スコープ外と整理（macOS配布追加時の要対応として記録）。実装: `SPECIFICATION_BACKEND.md`のカメラ注記へ、macOSはネイティブ列挙を行わず設定済みセレクターのみ返す旨と整数インデックス指定は継続利用できる旨を明記。
   - [x] シリアルopen失敗の案内（`manager.rs:326-332`＋UI）: 抜き差し・Scan Device・Reload Portの案内文を表示。実装: `b24d1651`（`SerialError::OpenFailed`の表示文言へケーブル確認・Scan Device・Reload Portの案内を追加、UIのエラー表示へ反映）。
   - [x] open失敗原因詳細（`manager.rs`／`application_backend.rs:644-652`）: ioエラー詳細を保全してログ／APIへ残す。実装: `b24d1651`（open失敗時に`tracing::warn!(error=...)`でioエラー詳細をログへ保全し、公開APIは固定文言のまま秘匿性を維持）。
-- [ ] **6.5b 要検証（回帰テストで確定）— 10件**: 空設定ファイル読込のfallbackは`ccd29985`で回帰テスト追加（空・空白のみのTOMLが空テーブルとして読める）。 初回スクリプト読込のLoading表示／Webhook URLのHTTP詳細ログ抑制／空設定ファイル読込のfallback／logフォルダ不在時の起動／Captures以外のフォルダopen／カメラ名取得失敗時の番号fallback／設定系Cancelの挙動／Web終了ボタン配線／Windowsメニュー・部品フォーカス中のキー遮断粒度／wait停止の期限。
+- [x] **6.5b 要検証（回帰テストで確定）— 10件**: 全10件を確定。
+  - 初回スクリプト読込のLoading表示: 既存の`command_display_cache_loading`表示と`dynamic_host`の状態テストで確認（変更不要）。
+  - Webhook URLのHTTP詳細ログ抑制: `DiscordWebhookUrl`の`Debug`は`<redacted>`、配送失敗ログはURL・本文を出さず`diagnostic_id`のみ（コード確認、変更不要）。
+  - 空設定ファイル読込のfallback: `ccd29985`で回帰テスト追加（空・空白のみのTOMLが空テーブル）。
+  - logフォルダ不在時の起動: `create_log_file`へ抽出し、不在の`log/`を作成してファイルを開ける回帰テストを追加（`8806349`の予防修正を明示検証）。
+  - Captures以外のフォルダopen: `openImage`の絶対パス解決を回帰テストで確認（テンプレートフォルダの画像を`Captures`外としてopen）。
+  - カメラ名取得失敗時の番号fallback: `nonempty_label`が空名を`Camera <index>`へ落とす回帰テストを追加。
+  - 設定系Cancelの挙動: Web設定は即時適用でOK/Cancelの保留状態を持たないためN/A（変更なし）。
+  - Web終了ボタン配線: Webクライアントはバックエンドのライフサイクルを所有しない設計。デスクトップのウィンドウ終了と`ui.desktop.close_behavior`（ask/shutdown/keep_backend）で代替済みのためN/A。
+  - Windowsメニュー・部品フォーカス中のキー遮断粒度: `InputSafety`の対象判定を`a[href]`・`role=menu/menuitem/dialog`・`aria-modal`・`data-keyboard-ignore`へ拡張し、メニュー項目フォーカス中はキーを奪わない回帰テストを追加。
+  - wait停止の期限: 10秒wait中にstopすると2秒以内に`Stopped`で戻る回帰テストを追加。
 - 等価・N/A（記録の要約）: 入力種別分離hold、マスクリスト分岐、GPUスタブ、`saveCapture`のimg優先、baud指定・冪等切断、socket port反映、COM番号なし列挙、git非依存起動、失敗識別コード等は等価を確認した。サンプル整理・転写表示等の未移植概念はN/A。
 
 ### 6.6 仕様・文書・検証

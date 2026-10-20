@@ -371,7 +371,10 @@ pub enum CameraEnumerationError {
 
 #[cfg(test)]
 mod tests {
-    use super::{CameraDevice, CameraSelector, WindowsCameraDescriptor, select_windows_candidates};
+    use super::{
+        CameraDevice, CameraSelector, WindowsCameraDescriptor, nonempty_label,
+        select_windows_candidates,
+    };
 
     #[test]
     fn selector_wire_type_and_raw_native_spelling_are_preserved() {
@@ -387,6 +390,12 @@ mod tests {
         assert!(serde_json::from_str::<CameraSelector>("-1").is_err());
         assert!(serde_json::from_str::<CameraSelector>("\"\"").is_err());
         assert!(serde_json::from_str::<CameraSelector>("\"bad\\u0000id\"").is_err());
+    }
+
+    #[test]
+    fn empty_windows_camera_names_fall_back_to_the_index() {
+        assert_eq!(nonempty_label(String::new(), 3), "Camera 3");
+        assert_eq!(nonempty_label("Capture Card".to_owned(), 0), "Capture Card");
     }
 
     #[test]

@@ -1472,7 +1472,7 @@ def _capture_pause_now():
 def _checkpoint():
     # Pause applies to the running command body, never to module import or
     # class construction.
-    if _active_command is None:
+    if _active_command is None or _pause_defer_depth > 0:
         return _api.is_alive()
     return _api.execution_checkpoint()
 
@@ -2699,9 +2699,16 @@ class PythonCommand(Command):
                 self._logger.exception("command postProcess callback failed")
 
     def press(self, buttons, duration=0.1, wait=0.1):
-        self.keys.input(buttons)
-        self.wait(duration)
-        self.keys.inputEnd(buttons)
+        global _pause_defer_depth
+        # Keep the button press atomic: a pause requested mid-press suspends
+        # only after the button has been released.
+        _pause_defer_depth += 1
+        try:
+            self.keys.input(buttons)
+            self.wait(duration)
+            self.keys.inputEnd(buttons)
+        finally:
+            _pause_defer_depth -= 1
         self.wait(wait)
 
     def pressRep(self, buttons, repeat, duration=0.1, interval=0.1, wait=0.1):
@@ -4300,6 +4307,7 @@ class ImageProcPythonCommand(PythonCommand):
         show_image=False,
         color=None,
     ):
+        _checkpoint()
         template = self._template_image(template_path)
         mask = None if mask_path is None else self._template_image(mask_path, binary=True)
         matched, location, width, height, score = _match_template(
@@ -4350,6 +4358,7 @@ class ImageProcPythonCommand(PythonCommand):
         show_image=False,
         color=None,
     ):
+        _checkpoint()
         if not isinstance(template_path_list, list) or not template_path_list:
             raise ValueError("template_path_list must be a non-empty list")
         if mask_path_list is None or mask_path_list == []:
@@ -4417,6 +4426,7 @@ class ImageProcPythonCommand(PythonCommand):
         show_image=False,
         color=None,
     ):
+        _checkpoint()
         return self.isContainTemplate(
             template_path,
             threshold,
@@ -4455,6 +4465,7 @@ class ImageProcPythonCommand(PythonCommand):
         show_image=False,
         color=None,
     ):
+        _checkpoint()
         image = self._template_image(image_path)
         mask = None if mask_path is None else self._template_image(mask_path, binary=True)
         matched, location, width, height, score = _match_template(
@@ -4587,6 +4598,7 @@ class McuCommand(Command):
 
 _current = _threading.local()
 _active_command = None
+_pause_defer_depth = 0
 
 
 def _command():

@@ -2939,3 +2939,55 @@ class Pausable(PythonCommand):
         .expect("execution task joins");
     stop_worker(&worker).await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn pause_during_press_releases_the_button_before_suspending() {
+    const SOURCE: &str = r"
+from Commands.Keys import Button
+from Commands.PythonCommandBase import PythonCommand
+
+
+class Pressing(PythonCommand):
+    def do(self):
+        self.press(Button.A, 0.6, 0.0)
+        self.wait(1.0)
+";
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("pressing.py"), SOURCE).expect("press fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let execution_client = client.clone();
+    let execution = tokio::spawn(async move {
+        execution_client
+            .execute(&ScriptExecuteRequest {
+                path: "pressing.py".into(),
+                class_name: "Pressing".to_owned(),
+                tags: Vec::new(),
+            })
+            .await
+    });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let paused = client.pause().await.expect("pause request succeeds");
+    assert!(paused.changed);
+    tokio::time::sleep(Duration::from_millis(900)).await;
+
+    let inputs = host.controller_inputs.lock().unwrap().clone();
+    assert!(
+        inputs
+            .iter()
+            .any(|request| request.action == ScriptInputAction::Release),
+        "press must release before the pause suspends: {inputs:?}"
+    );
+
+    client.resume().await.expect("resume succeeds");
+    client.stop().await.expect("stop succeeds");
+    let _result = tokio::time::timeout(Duration::from_secs(5), execution)
+        .await
+        .expect("execution waiter joins")
+        .expect("execution task joins");
+    stop_worker(&worker).await;
+}

@@ -25,7 +25,18 @@
       "platforms": ["windows"],
       "unsupported_behavior": { "linux": "409_conflict" }
     },
-    { "method": "POST", "path": "/api/update/check", "platforms": ["linux", "windows"] }
+    { "method": "POST", "path": "/api/update/check", "platforms": ["linux", "windows"] },
+    { "method": "GET", "path": "/api/run-lists", "platforms": ["linux", "windows"] },
+    { "method": "PUT", "path": "/api/run-lists", "platforms": ["linux", "windows"] },
+    { "method": "GET", "path": "/api/run-schedule", "platforms": ["linux", "windows"] },
+    { "method": "POST", "path": "/api/run-schedule/control", "platforms": ["linux", "windows"] },
+    { "method": "GET", "path": "/api/command-history", "platforms": ["linux", "windows"] },
+    { "method": "POST", "path": "/api/command-history/control", "platforms": ["linux", "windows"] },
+    { "method": "GET", "path": "/api/command-pause", "platforms": ["linux", "windows"] },
+    { "method": "GET", "path": "/api/command-tags", "platforms": ["linux", "windows"] },
+    { "method": "POST", "path": "/api/command-tags/apply", "platforms": ["linux", "windows"] },
+    { "method": "GET", "path": "/api/input-record", "platforms": ["linux", "windows"] },
+    { "method": "POST", "path": "/api/input-record/control", "platforms": ["linux", "windows"] }
   ],
   "websocket": {
     "endpoint": "/ws",

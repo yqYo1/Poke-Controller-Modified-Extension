@@ -263,7 +263,7 @@ profile切替は旧script workerの停止、新profileの検証、設定適用�
 | `report_ignored_profile_global_settings` | `true` | profile TOML内のglobal keyを診断する | I | なし |
 | `active_profile` | `default` | 安全なprofile名 | I | あり |
 | `camera.capture_fps` | `60` | 1以上 | I | あり |
-| `camera.capture_resolution` | `1280x720` | `640x360`、`1280x720`、`1920x1080` | I | あり |
+| `camera.capture_resolution` | `1280x720` | `640x360`、`720x480`、`400x480`、`256x384`、`1280x720`、`1920x1080` | I | あり |
 | `camera.device` | `0` | 0以上のintegerまたは空でないnative selector | I | あり |
 | `camera.flip_mode` | `none` | `none`、`vertical`、`horizontal`、`both` | I | あり |
 | `serial.port` | 空文字 | 空文字は未選択、その他はnative selector | I | あり |

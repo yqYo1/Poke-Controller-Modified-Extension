@@ -364,7 +364,7 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 | **カメラデバイス選択** | コンボボックス | `GET /api/devices/cameras`（[連携定義書](SPECIFICATION_INTEGRATION.md) §7.4）の列挙結果を表示する。設定値は`camera.device`の整数（番号）または文字列（udevデバイスパス/Windowsネイティブ識別子）。整数0はデフォルトのカメラ0。変更時は`PATCH /api/settings`を介して§6.1.2のデバイス切替トランザクションで反映 |
 | **UI表示FPS** | コンボボックス | UI表示用フレームレート（`ui.fps`、選択肢は`ui.fps_options`から生成）。カメラ取得FPSとは独立 |
 | **カメラ取得FPS** | 正整数入力／コンボボックス | `camera.capture_fps`。デフォルト60。設定時点でアクティブなカメラへ即時適用 |
-| **カメラ取得解像度** | コンボボックス | `camera.capture_resolution`。640x360／1280x720／1920x1080。設定時点でアクティブなカメラへ即時適用 |
+| **カメラ取得解像度** | コンボボックス | `camera.capture_resolution`。640x360／720x480／400x480／256x384／1280x720／1920x1080。設定時点でアクティブなカメラへ即時適用 |
 | **フリップモード** | Combobox | `camera.flip_mode`。閉じたenum `none`／`vertical`／`horizontal`／`both`。表示ラベルは None／Vertical／Horizontal／Both を正準値とは別に表示。変更時は即座にライブフレーム処理へ反映。旧 `set_flip()` は大文字小文字不問の文字列を受け付け、`flip`／`flip_mode` の両方へマッピング |
 | **スクリーンショット形式** | Combobox | `camera.screenshot_format`。閉じたenum `png`（デフォルト）／`jpeg`。UI Combobox は PNG／JPEG の表示ラベルを正準値とは別に表示。現在のプロファイルへ永続化し、変更は即座に以降の保存へ反映する。UI保存ダイアログでの一回限りの上書きとは独立。[連携定義書](SPECIFICATION_INTEGRATION.md) §6.1.5参照 |
 

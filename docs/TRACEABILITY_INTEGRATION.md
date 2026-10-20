@@ -104,7 +104,7 @@
 | 7.2-12 | 連続値は最新優先・旧値上書き禁止（同世代sequence） | ✅ | 同上、queue分離 `websocket.rs:492-499,675-679` | — |
 | 7.2-13 | ログ順序維持・入力とqueue分離・HOL禁止、切断越完全配送不保証 | ✅ | input/log queue分離、DataChannel単一HOL禁止構成 | — |
 | 7.2-14 | 切替時は世代付き全状態snapshot→原子置換確認後増分再開、経路なしはRust強制解放 | ✅ | snapshot-ack promotion（`realtime.rs:280-297`）、force-release（`application_backend.rs:1024-1033`、`162`、`device/input.rs:468-469`） | — |
-| 7.2-15 | 解像度envelope：初期SDPで640x360/1280x720/1920x1080包含、範囲内は再ネゴなし、範囲外はOffer/Answer再試行＋commit後確定・失敗rollback、MJPEG即時追従 | ⚠️ | カメラトランザクション・MJPEG即時性は実装。SDP envelope合意の明示的検証は未了 | **要検証**：SDP内envelope・replaceTrack相当・拒否時rollbackの個別証拠 |
+| 7.2-15 | 解像度envelope：初期SDPで640x360/720x480/400x480/256x384/1280x720/1920x1080包含、範囲内は再ネゴなし、範囲外はOffer/Answer再試行＋commit後確定・失敗rollback、MJPEG即時追従 | ⚠️ | カメラトランザクション・MJPEG即時性は実装。SDP envelope合意の明示的検証は未了 | **要検証**：SDP内envelope・replaceTrack相当・拒否時rollbackの個別証拠 |
 
 ## §7.3.1 映像フォールバック — Motion JPEG
 

@@ -1508,7 +1508,7 @@ fn specification_rest_endpoints() -> BTreeSet<String> {
         .lines()
         .filter_map(|line| {
             let columns = split_markdown_row(line);
-            (columns.len() >= 2 && matches!(columns[0].as_str(), "GET" | "PATCH" | "POST"))
+            (columns.len() >= 2 && matches!(columns[0].as_str(), "GET" | "PATCH" | "POST" | "PUT"))
                 .then(|| format!("{} {}", columns[0], columns[1]))
         })
         .collect()

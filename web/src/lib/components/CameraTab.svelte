@@ -293,7 +293,7 @@
     <label>
       <span class="text-xs text-subtext1">Resolution</span>
       <select class="mt-1 w-full rounded-lg border border-text/10 bg-surface1 px-3 py-2 text-sm text-text" value={values?.['camera.capture_resolution'] ?? '1280x720'} onchange={(event) => void changeTextSetting(event, 'camera.capture_resolution')}>
-        <option value="640x360">640 × 360</option><option value="1280x720">1280 × 720</option><option value="1920x1080">1920 × 1080</option>
+        <option value="640x360">640 × 360</option><option value="720x480">720 × 480</option><option value="400x480">400 × 480</option><option value="256x384">256 × 384</option><option value="1280x720">1280 × 720</option><option value="1920x1080">1920 × 1080</option>
       </select>
     </label>
 

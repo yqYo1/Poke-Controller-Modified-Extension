@@ -15,6 +15,12 @@ pub const MAX_FRAME_BYTES: usize =
 pub enum CaptureResolution {
     #[serde(rename = "640x360")]
     R640x360,
+    #[serde(rename = "720x480")]
+    R720x480,
+    #[serde(rename = "400x480")]
+    R400x480,
+    #[serde(rename = "256x384")]
+    R256x384,
     #[serde(rename = "1280x720")]
     R1280x720,
     #[serde(rename = "1920x1080")]
@@ -22,7 +28,14 @@ pub enum CaptureResolution {
 }
 
 impl CaptureResolution {
-    pub const ALL: [Self; 3] = [Self::R640x360, Self::R1280x720, Self::R1920x1080];
+    pub const ALL: [Self; 6] = [
+        Self::R640x360,
+        Self::R720x480,
+        Self::R400x480,
+        Self::R256x384,
+        Self::R1280x720,
+        Self::R1920x1080,
+    ];
 
     #[must_use]
     pub const fn size(self) -> FrameSize {
@@ -30,6 +43,18 @@ impl CaptureResolution {
             Self::R640x360 => FrameSize {
                 width: 640,
                 height: 360,
+            },
+            Self::R720x480 => FrameSize {
+                width: 720,
+                height: 480,
+            },
+            Self::R400x480 => FrameSize {
+                width: 400,
+                height: 480,
+            },
+            Self::R256x384 => FrameSize {
+                width: 256,
+                height: 384,
             },
             Self::R1280x720 => FrameSize {
                 width: 1280,
@@ -46,6 +71,9 @@ impl CaptureResolution {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::R640x360 => "640x360",
+            Self::R720x480 => "720x480",
+            Self::R400x480 => "400x480",
+            Self::R256x384 => "256x384",
             Self::R1280x720 => "1280x720",
             Self::R1920x1080 => "1920x1080",
         }
@@ -58,6 +86,12 @@ impl FromStr for CaptureResolution {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         if value.eq_ignore_ascii_case("640x360") {
             Ok(Self::R640x360)
+        } else if value.eq_ignore_ascii_case("720x480") {
+            Ok(Self::R720x480)
+        } else if value.eq_ignore_ascii_case("400x480") {
+            Ok(Self::R400x480)
+        } else if value.eq_ignore_ascii_case("256x384") {
+            Ok(Self::R256x384)
         } else if value.eq_ignore_ascii_case("1280x720") {
             Ok(Self::R1280x720)
         } else if value.eq_ignore_ascii_case("1920x1080") {
@@ -412,6 +446,25 @@ mod tests {
     use super::{
         BgrFrame, CaptureResolution, FlipMode, FrameError, FrameSize, NormalizedRegion, PixelRegion,
     };
+
+    #[test]
+    fn added_capture_resolutions_parse_and_map_to_their_sizes() {
+        for (text, width, height) in [
+            ("640x360", 640, 360),
+            ("720x480", 720, 480),
+            ("400x480", 400, 480),
+            ("256x384", 256, 384),
+            ("1280x720", 1280, 720),
+            ("1920x1080", 1920, 1080),
+        ] {
+            let resolution = text
+                .parse::<CaptureResolution>()
+                .expect("resolution parses");
+            assert_eq!(resolution.size().width(), width);
+            assert_eq!(resolution.size().height(), height);
+        }
+        assert_eq!(CaptureResolution::ALL.len(), 6);
+    }
 
     #[test]
     fn capture_resolution_and_region_wire_shapes_are_closed() {

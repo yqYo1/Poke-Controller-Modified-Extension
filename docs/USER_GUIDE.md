@@ -193,6 +193,60 @@ slotを右clickするか、`Shift`を押しながらclickすると割当を解�
 
 shortcutは現在のプロファイルへ保存されます。
 
+## 実行履歴を使う
+
+Commands tabの「History」を開くと、最近実行したcommandが新しい順に表示されます。
+
+「Last Run」の見出しを押すと、最終実行日時の昇順と降順を切り替えます。
+
+行を押すとそのcommandを実行します。実行中は「Start」が無効になります。
+
+不要な行は選択して「Delete」、すべて消す場合は「Delete all」を押します。
+
+行の右側の選択欄からshortcutへ割り当てることもできます。
+
+## commandのtagを編集する
+
+Commands tabの「Tags」を押すとtag編集dialogが開きます。
+
+「commands」ではcommandごとの手動tagを追加・削除し、「tags」ではtag名の変更や削除を行います。
+
+tagは50文字までです。空のtagと、同じcommand内での重複は保存できません。
+
+編集中にcommand fileが別の場所で変更された場合は競合として表示され、そのfileへの上書きは行いません。内容を確認してから再度編集してください。
+
+「Apply」で保存するとcommand一覧が再読み込みされます。
+
+## 入力記録からscriptを作る
+
+Commands tabの「Record」を押すとcontroller入力の記録を開始します。
+
+記録中は件数と経過秒数、上限件数が表示されます。もう一度押すと停止します。
+
+名前を入力して「Save CSV」でCSVを保存するか、「Generate script」で`PythonCommands/Record/`へ再生用scriptを生成します。
+
+「Discard」は記録を破棄します。生成したscriptは「Reload」後にcommand一覧へ現れます。
+
+## 実行リストと開始・停止予約を使う
+
+Commands tabの「Run lists」を押すと実行リスト編集dialogが開きます。
+
+「Run lists」tabでは、複数commandの並び、間隔秒、繰り返し回数、error時の動作を設定して保存します。
+
+「Schedule」tabでは開始と停止を、時計時刻または開始からの分数で予約します。時刻は`23:30`のように入力します。
+
+予約を取消す場合は同じtabの取消操作を使います。
+
+## Pythonライブラリを管理する
+
+Other tabの「Pythonライブラリ」では、script workerへ同期するpackageを追加・削除できます。
+
+名前、必要ならversion、comma区切りのextrasを入力して保存します。
+
+空の名前と重複した名前は保存できません。
+
+変更は次回worker生成時に同期されます。保存結果は同じsectionに表示されます。
+
 ## 通知を設定して試験する
 
 Notifications tabではWindows通知とDiscord通知を別々に設定します。

@@ -37,6 +37,9 @@ type Language = Literal[
 ]
 type CameraCaptureResolution = Literal[
     "640x360",
+    "720x480",
+    "400x480",
+    "256x384",
     "1280x720",
     "1920x1080",
 ]

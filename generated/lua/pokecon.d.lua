@@ -28,7 +28,7 @@
 ---@alias Callback fun(): false|nil
 
 ---@alias Language "ja"|"en"
----@alias CameraCaptureResolution "640x360"|"1280x720"|"1920x1080"
+---@alias CameraCaptureResolution "640x360"|"720x480"|"400x480"|"256x384"|"1280x720"|"1920x1080"
 ---@alias CameraFlipMode "none"|"vertical"|"horizontal"|"both"
 ---@alias CameraScreenshotFormat "png"|"jpeg"
 ---@alias SerialDataFormat "default"|"nx"|"qingpi"|"3ds_x4"|"3ds_x3"|"ds_ft_rev3"|"ds_ft_rev2"|"ds_ft_rev1"

@@ -25,7 +25,28 @@ impl SafeComponent {
         if value.is_empty()
             || value == "."
             || value == ".."
-            || value.contains(['/', '\\', '\0', ':'])
+            || value.len() > 64
+            || value.contains(['/', '\\', '\0', ':', '<', '>', '"', '|', '?', '*'])
+            || value.chars().any(char::is_control)
+            || value.ends_with(' ')
+            || value.ends_with('.')
+        {
+            return Err(RootError::UnsafeComponent);
+        }
+        // Windows device names are reserved with or without an extension and
+        // regardless of case; reject them on every platform so a profile name
+        // stays portable.
+        let stem = value
+            .split('.')
+            .next()
+            .unwrap_or(value.as_str())
+            .trim_end_matches([' ', '.'])
+            .to_ascii_lowercase();
+        if [
+            "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7",
+            "com8", "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+        ]
+        .contains(&stem.as_str())
         {
             return Err(RootError::UnsafeComponent);
         }
@@ -342,10 +363,18 @@ mod tests {
             "C:drive",
             "\\\\server",
             "nul\0byte",
+            "CON",
+            "con.txt",
+            "Lpt9",
+            "bad<name",
+            "bad|name",
+            "trailing ",
+            "trailing.",
+            "with\ttab",
         ] {
             assert!(SafeComponent::new(invalid).is_err(), "accepted {invalid:?}");
         }
-        for valid in ["pokecon", "Foo", " leading", "trailing ", "日本語"] {
+        for valid in ["pokecon", "Foo", " leading", "日本語", "profile-1"] {
             assert_eq!(
                 SafeComponent::new(valid)
                     .expect("component must be valid")

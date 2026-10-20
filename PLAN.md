@@ -956,7 +956,7 @@ UI・表示系:
 
 上流v0.2.0のバグ修正43件・更新1件、v0.1.9の2件、キーボード素通し等を全48行でマッピングした。要修正・要検証の全項目を列挙し、等価・N/Aは変更なしとして記録する。3DS関連は6.3bで扱う。
 
-- [x] **6.5a 要修正（高）— 7件**: 全7件を修正または既存実装の検証でクローズ（`dfda0b65`・`b24d1651`・`3b9430dd`、ダイアログCancel/矩形起点は既存実装を回帰テストで確認）。`script_runtime` 33件を3回連続で全合格。
+- [x] **6.5a 要修正（高）— 7件**: 全7件を修正または既存実装の検証でクローズ（`dfda0b65`・`b24d1651`・`3b9430dd`、ダイアログCancel/矩形起点は既存実装を回帰テストで確認）。`script_runtime` 33件を3回連続で全合格。 検証: `nix run .#rust-ci-core` exit 0（`target/logs/rust-ci-core-65a.log`）、変異監査395件・8シャード exit 0（`target/logs/mutations-65a.log`）、`script_runtime` 33件×3回全合格。CI: `ccd29985` required充足（Normal push attempt2 `39491390052`／PR attempt2 `39491396396`、Package push attempt3 `39491390045`。Debian再現性は試行2回失敗後にattempt3で成功。`gh pr checks 27 --required` 全pass）。
   - [x] 保存失敗時表示・無名`saveImage`（`python.rs:2376-2406`）: 失敗時に`capture succeeded`と表示／無名が例外となる現状を、上流（Capture Failed表示・無名は失敗）へ合わせる。実装: `3b9430dd`（Camera.saveCaptureの保存呼び出しをtry/exceptで包み、失敗時は`Capture Failed: <detail>`を表示してスクリプトを継続。成功時のみ`capture succeeded`。回帰テスト`save_capture_failure_prints_and_continues`）。
   - [x] `holdEnd`未押下（`python.rs:1441-1471`）: 保持なしholdEndは警告＋skip、hold重複は警告し二重送信なし（型込み比較）。実装: `dfda0b65`（KeyPressに保持リストを導入し、holdの重複は警告して送信せず、holdEndは一致する保持がない場合に警告＋skip、neutral/endでクリア。回帰テスト3/3）。
   - [x] ダイアログCancel（`_legacy_result`）: Cancel時にfinish／StopThreadで正常終了扱いへ。確認: 既存実装が`aborted`状態で`_api.abort()`＋`StopThread`を送出し、実行結果は`Stopped`（失敗ではない）、ダイアログ全掃除・neutralizeも行うことを`abnormal_dialog_close_stops_the_script_and_cleans_all_dialogs`で検証済み（追加変更不要）。
@@ -964,7 +964,7 @@ UI・表示系:
   - [x] macOSカメラ列挙（`camera/selector.rs`）: 配布対象はLinuxとWindowsのため現行スコープ外と整理（macOS配布追加時の要対応として記録）。実装: `SPECIFICATION_BACKEND.md`のカメラ注記へ、macOSはネイティブ列挙を行わず設定済みセレクターのみ返す旨と整数インデックス指定は継続利用できる旨を明記。
   - [x] シリアルopen失敗の案内（`manager.rs:326-332`＋UI）: 抜き差し・Scan Device・Reload Portの案内文を表示。実装: `b24d1651`（`SerialError::OpenFailed`の表示文言へケーブル確認・Scan Device・Reload Portの案内を追加、UIのエラー表示へ反映）。
   - [x] open失敗原因詳細（`manager.rs`／`application_backend.rs:644-652`）: ioエラー詳細を保全してログ／APIへ残す。実装: `b24d1651`（open失敗時に`tracing::warn!(error=...)`でioエラー詳細をログへ保全し、公開APIは固定文言のまま秘匿性を維持）。
-- [ ] **6.5b 要検証（回帰テストで確定）— 10件**: 初回スクリプト読込のLoading表示／Webhook URLのHTTP詳細ログ抑制／空設定ファイル読込のfallback／logフォルダ不在時の起動／Captures以外のフォルダopen／カメラ名取得失敗時の番号fallback／設定系Cancelの挙動／Web終了ボタン配線／Windowsメニュー・部品フォーカス中のキー遮断粒度／wait停止の期限。
+- [ ] **6.5b 要検証（回帰テストで確定）— 10件**: 空設定ファイル読込のfallbackは`ccd29985`で回帰テスト追加（空・空白のみのTOMLが空テーブルとして読める）。 初回スクリプト読込のLoading表示／Webhook URLのHTTP詳細ログ抑制／空設定ファイル読込のfallback／logフォルダ不在時の起動／Captures以外のフォルダopen／カメラ名取得失敗時の番号fallback／設定系Cancelの挙動／Web終了ボタン配線／Windowsメニュー・部品フォーカス中のキー遮断粒度／wait停止の期限。
 - 等価・N/A（記録の要約）: 入力種別分離hold、マスクリスト分岐、GPUスタブ、`saveCapture`のimg優先、baud指定・冪等切断、socket port反映、COM番号なし列挙、git非依存起動、失敗識別コード等は等価を確認した。サンプル整理・転写表示等の未移植概念はN/A。
 
 ### 6.6 仕様・文書・検証

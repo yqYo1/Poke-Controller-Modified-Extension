@@ -354,6 +354,32 @@ HTTP APIはWeb browserと外部clientの公開契約です。GPUI nativeが既�
   - 更新確認要求本文は`{}`とし、成功時は現在バージョン、最新バージョン、更新有無、配布ページURLを返す。確認失敗は現在アプリの動作へ影響させない
   - 公開リリースのタグが意味論的バージョンとして解釈できない場合は更新確認の失敗として扱い（更新なしを表示）、アプリの現在の動作へ影響させない
   - GitHub／ガイド／質問テンプレート／LICENSEは既定ブラウザで静的URLを開き、バージョン表示／更新履歴はバンドル済みメタデータを表示し、画面サイズのリセットはTauriまたはGPUIのnative window、もしくは現行SPAのローカル表示状態だけを変更する。これらにはREST APIを設けない
+- **実行支援API（run-lists／run-schedule／command-history／command-pause／command-tags／input-record）**:
+
+  本6群は既存REST契約への追加であり、新たな認証・Origin規則・第二の状態所有者を追加しない。要求・応答の型は`rust/pokecon/src/server/api.rs`のRust型を正本とし、OpenAPI文書はutoipa生成（`api/openapi.json`）に従う。共通の成功・失敗外形と状態コード規則は本節の応答形式に従う。メソッド行列と`Allow`応答は`rust/pokecon/src/server/rest/mod.rs`、CORS preflight許可は`rust/pokecon/src/server/security.rs`どおりであり、`PUT`は本APIでは`/api/run-lists`だけが使用する。
+
+  | メソッド | パス | 動作 |
+  |----------|------|------|
+  | `GET` | `/api/run-lists` | 保存済み実行リストの一覧取得 |
+  | `PUT` | `/api/run-lists` | 実行リストの一括保存 |
+  | `GET` | `/api/run-schedule` | 開始／停止予約の現在値取得 |
+  | `POST` | `/api/run-schedule/control` | 開始／停止予約の予約／取消 |
+  | `GET` | `/api/command-history` | 実行履歴の取得 |
+  | `POST` | `/api/command-history/control` | 履歴の個別削除／全消去 |
+  | `GET` | `/api/command-pause` | 一時停止中コマンドの位置・変数取得 |
+  | `GET` | `/api/command-tags` | タグ編集用スナップショットの取得 |
+  | `POST` | `/api/command-tags/apply` | 手動タグの置換／改名／削除 |
+  | `GET` | `/api/input-record` | 入力録画状態の取得 |
+  | `POST` | `/api/input-record/control` | 録画の開始／停止／破棄／保存／生成 |
+
+  - 実行リスト: `PUT`要求は`{"lists": [...]}`（`RunListSaveRequest`）とする。`RunListSpec`は`name`、`items`（既定空配列）、`interval_seconds`（既定`1.0`）、`on_error`（既定`"stop"`）、`loops`（既定`1`）を持ち、`RunListItem`は`type`、`name`、`repeat`（既定`1`）、省略可の`limit_minutes`を持つ。応答は`{"lists": [...], "skipped": [...]}`（`RunListSnapshot`）とする
+  - 実行リストの検証と保存: `GET`は保存内容の無効リストを除外し理由文を`skipped`へ入れる。`PUT`は全件を先に検証し、1件でも無効なら何も保存せず`422`とし、成功応答の`skipped`は空配列とする。`type`は`"Python"`／`"Mcu"`のみ、実行リストの入れ子不可、`repeat`は1〜9999、`Mcu`行は`limit_minutes`（0超〜10080分以下）必須、`interval_seconds`は0〜3600秒、`on_error`は`"stop"`／`"next"`のみ、`loops`は0〜9999、名前は50文字以内・重複不可・制御文字不可、空リスト不可。保存は現プロファイル配下の`run_lists.json`へ原子的に行い、共通`revision`を進めない
+  - 実行予約: 要求は`action`を判別子とするunionで、`reserve_start`は`target`（`module_path`、`class_name`、`name`。実行リスト起点では`module_path`は空文字）と`clock`／`after_minutes`、`cancel_start`、`reserve_stop`は`clock`／`after_minutes`、`cancel_stop`を受理する。`clock`と`after_minutes`はちょうど一方だけ指定し、両方または両方なしは`422`とする。`clock`は`"時:分"`／`"時:分:秒"`（全角コロン可、現在以前は翌日扱い）、`after_minutes`は0超〜10080分以下とする。応答は`{pending, has_start, has_stop, start_display, stop_display, message, sleep_warning}`（`RunScheduleSnapshot`）とする。予約の登録／取消はインメモリ状態を変更するが、共通`revision`を進めない
+  - 実行履歴: 要求は`action`を判別子とするunionで、`remove`は`type`と`name`、`clear`は全消去とする。`type`または`name`が空・空白のみの場合は`422`とし、存在しない項目の`remove`は成功扱いで現在値を返す。応答は`{"entries": [{"type", "name", "last_run"}]}`（`CommandHistorySnapshot`、新しい順）とする。履歴保存の変更であるが、共通`revision`を進めない
+  - 一時停止位置: `GET`のみで要求本文を持たない。応答は`{paused, frames, variables}`（`CommandPauseSnapshot`）とし、`frames`は`{file, line, function}`を外側先頭順、`variables`は`{name, value}`を持つ。停止中でない場合（完了・未実行・未検出）は`paused: false`の空値を返し、ポーリングをエラーにしない。その他の取得失敗はコマンド操作系の共通エラーへ写像する。ランタイム状態を変更しない
+  - コマンドタグ: 要求は`action`を判別子とするunionで、`set`は`edits`（`module_path`、`class_name`、`digest`、`tags`）、`rename`は`from`と`to`、`delete`は`tag`を受理する。応答は`{results, changed, conflicts, reload_error, snapshot}`（`CommandTagResult`）とし、`results`の各要素は`{module_path, class_name, relative_path, status, message}`（`status`は`updated`／`unchanged`／`conflict`／`error`）、`snapshot`は`{commands: [{name, module_path, class_name, relative_path, digest, manual_tags, automatic_tags, error}], tags: [{name, manual, automatic, count}]}`（`CommandTagSnapshot`）とする
+  - コマンドタグの検証と適用: `digest`不一致はHTTPエラーにせず当該ファイルの`status`を`conflict`として`conflicts`へ計上し、対象不在は`status`を`error`とする。タグ形式違反は`422`、読取・解析・入出力失敗は`500`とする。`changed`が0より大きい場合はコマンド再読込と共通`revision`の更新（`cause="commands"`）を行い、再読込失敗時はファイル更新を維持したまま理由を`reload_error`へ格納する
+  - 入力録画: 要求は`action`を判別子とするunionで、`start`、`stop`、`discard`、`save`（`name`）、`generate`（`name`）を受理する。応答は`{snapshot, saved_path, script_path}`（`InputRecordResult`）とし、`snapshot`は`{recording, samples, elapsed_ms, limit}`（`InputRecordSnapshot`）を持つ。`save`は`Controller_Log/<name>.csv`、`generate`は`Commands/PythonCommands/Record/<name>.py`（クラス名`Recorded_<name>`）へ既存名と衝突しない一意名で書き出し、それぞれ`saved_path`／`script_path`に設定する。`name`は1〜64文字のASCII英数字／`-`／`_`のみとし、違反は`422`とする。二重開始・未録画停止・上限到達は`409`、入出力失敗は`500`とする。`discard`は録画中なら停止して破棄する。録画器とファイル出力を変更するが、共通`revision`を進めない
 - **出力クリア**: 「出力をクリア」は各SPAクライアントが保持する出力#1／出力#2の表示バッファだけを消去するクライアントローカル操作とし、REST要求や他クライアントへの通知を行わない。バックエンドのログ履歴・永続ログは削除しない
 - **応答形式**:
   - 成功応答は`{"data": <エンドポイント固有の型>}`、失敗応答は`{"error":{"code":"<安定した機械可読コード>","message":"<秘匿化済み表示文>","fields":<フィールド別診断またはnull>}}`を共通外形とする

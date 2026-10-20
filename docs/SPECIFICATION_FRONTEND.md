@@ -129,16 +129,16 @@ controller入力遅延とUI応答性は各frontendの該当経路で検証しま
 メニューバーはタブ領域・右側パネルと同じトップレベルUI要素として扱う。
 具体的なメニュー構成は§11.5.7.1に定義する。
 
-### 5.2 タブ構造（6メインタブ + 3サブタブ）
+### 5.2 タブ構造（6メインタブ + 4サブタブ）
 
-> **タブ数に関する注記**: トップレベルに**6つのメインタブ**、Commandsタブ内に**3つのサブタブ**（Python Command、Mcu Command、Shortcut）を持つ。合計9つのタブ付きインターフェース。
+> **タブ数に関する注記**: トップレベルに**6つのメインタブ**、Commandsタブ内に**4つのサブタブ**（Python Command、Mcu Command、Shortcut、History）を持つ。合計10のタブ付きインターフェース。
 
 | # | タブ名 | 説明 |
 |---|--------|-------------|
 | 1 | **カメラ** | 映像表示（Canvas/CaptureArea）、デバイス選択、FPS、フリップ、表示モード切替、マウスベースのスティック制御、スクリーンショット |
 | 2 | **シリアル** | COMポート選択、ボーレート、データ形式（5種類）、接続/切断、シリアルモニター |
 | 3 | **手動制御** | ソフトウェア制御（キーボード、マウススティックエミュレーション）、ハードウェア制御（ProController/Xinput、録画 ※現バージョンでは非表示）、完全なJoy-ConレイアウトのSwitch Controller Simulator |
-| 4 | **コマンド** | 3サブタブ（Python Command、Mcu Command、Shortcut）、タグフィルター付きコマンドリスト、10ショートカットボタン、実行制御（開始/一時停止/再開/停止/再読み込み） |
+| 4 | **コマンド** | 4サブタブ（Python Command、Mcu Command、Shortcut、History）、タグフィルター付きコマンドリスト、10ショートカットボタン、実行制御（開始/一時停止/再開/停止/再読み込み）、タグ編集・入力記録・実行リスト・予約 |
 | 5 | **通知** | Windows通知設定、Discord Webhook（URL、ユーザー名、アバター）、LINE UIは完全に削除 |
 | 6 | **その他** | 出力サイズ調整、stdout出力先、ウィジェットモード選択、ソフトウェアコントローラー位置、ダイアログボタン位置、出力クリア |
 
@@ -186,13 +186,14 @@ WebRTC DataChannelからWebSocketへ切り替えるログtransportはWeb browser
 
 ### 5.4 サブタブ構造（Commandsタブ）
 
-Commandsタブには3つのサブタブがあります:
+Commandsタブには4つのサブタブがあります:
 
 | # | サブタブ | 説明 |
 |---|---------|-------------|
 | 1 | **Python Command** | 利用可能なPythonコマンドスクリプトのリスト/ツリー |
 | 2 | **Mcu Command** | 利用可能なMCUコマンドスクリプトのリスト/ツリー |
 | 3 | **Shortcut** | 10ショートカットボタン割り当てグリッド |
+| 4 | **History** | 実行履歴の一覧・ソート・行実行・削除・ショートカット割当 |
 
 ### 5.5 ウィジェットモード（7種類）
 
@@ -621,6 +622,32 @@ Commands/
 | **コマンドリスト再読み込み** | `POST /api/commands/reload`でファイルシステムからコマンドリストを再読み込み |
 
 - **状態表示**: 実行中 / 一時停止中 / 停止 / エラー。
+
+#### 6.4.4 実行履歴（History）
+
+- **表示**: Commandsタブ内のHistoryサブタブに、実行履歴（新しい順、最大10件）を表示する。各行はコマンド種別・名前・最終実行日時を持つ。
+- **操作**: 行クリックで当該コマンドを実行する。`Last Run`列の▲／▼で最終実行日時の昇順・降順を切り替える。削除は行単位、`Delete all`は全件削除。ショートカットへの割当も可能とする。
+- **実行制約**: コマンド実行中は`Start`を無効化する。
+- **API**: `GET /api/command-history`で履歴を取得し、`POST /api/command-history/control`の`{"action":"remove","type":...,"name":...}`または`{"action":"clear"}`で更新する。応答は更新後の`CommandHistorySnapshot`。
+
+#### 6.4.5 タグ編集
+
+- **起動**: Commandsタブの`Tags`ボタンでタグ編集ダイアログを開く。`commands`タブでコマンドごとの手動タグ、`tags`タブでタグ全体の rename／delete を行う。
+- **制約**: 手動タグは最大50文字。同一コマンド内の重複と空文字を拒否する。編集対象のコマンドファイルが開いた時点の内容から変化している場合（digest不一致）は競合として扱い、上書きしない。
+- **API**: `GET /api/command-tags`で編集用スナップショット、`POST /api/command-tags/apply`で`set`／`rename`／`delete`を送信する。応答の`conflicts`は競合件数、`reload_error`は書き込み後の再読み込み失敗を表し、失敗時もファイル更新自体は完了している。
+
+#### 6.4.6 入力記録とスクリプト生成
+
+- **表示**: Commandsタブの`Record`ボタンで記録を開始し、記録中は`入力記録中: N 件 / M 秒（上限 L 件）`を表示する。
+- **操作**: 停止後にCSV保存またはリプレイスクリプト生成を行う。CSVはコントローラーログディレクトリ、生成スクリプトは`PythonCommands/Record/`へ保存する。破棄も可能とする。
+- **API**: `GET /api/input-record`で`recording`／`samples`／`elapsed_ms`／`limit`を取得し、`POST /api/input-record/control`へ`start`／`stop`／`discard`／`{"action":"save","name":...}`／`{"action":"generate","name":...}`を送信する。`save`／`generate`の応答は`saved_path`／`script_path`を返す。
+
+#### 6.4.7 実行リストと開始・停止予約
+
+- **実行リスト編集**: 複数の実行リスト（名前、コマンド項目、間隔秒、ループ回数、エラー時動作）を編集する。`GET /api/run-lists`で取得し、`PUT /api/run-lists`で全量を保存する。無効なリストは保存時にスキップされ、理由が`skipped`へ返る。
+- **開始・停止予約**: `Schedule`タブで開始／停止を時計時刻または開始からの分数で予約する。開始・停止はそれぞれ`clock`と`after_minutes`のちょうど一方を指定する。スリープ復帰時の挙動に関する警告を`sleep_warning`として表示する。
+- **API**: `GET /api/run-schedule`で予約状態、`POST /api/run-schedule/control`で`reserve_start`／`cancel_start`／`reserve_stop`／`cancel_stop`を送信する。
+
 ### 6.5 通知タブ
 
 #### 6.5.1 Windows通知
@@ -682,6 +709,7 @@ Commands/
 | **動的設定の自動リロード** | グローバル`init.py`／`init.lua`のファイル監視を有効化するチェックボックス。正準ID: `auto_reload_config`。変更は単一のグローバルファイルウォッチャーへ即時反映し、グローバル`settings.toml`へ保存する | Checkbox |
 | **最終ウィンドウを閉じる動作** | 正準値`ask`／`shutdown`／`keep_backend`を選択するコンボボックス。表示ラベルは「毎回確認」／「すべて終了」／「バックエンドを継続」。正準ID: `ui.desktop.close_behavior`。変更は以後のウィンドウ閉じる操作へ即時反映し、グローバル`settings.toml`へ保存する | Combobox |
 | **デスクトップコンポジット無効化** (`disable_compositing`) | デスクトップモード（Tauri/WebView）のウィンドウ合成を無効化するチェックボックス。正準ID: `ui.desktop.disable_compositing`。グローバル専用、再起動必須（startup-only/restart-required）。変更時はチェック状態をグローバル`settings.toml`へ保存するが現在のプロセスには適用せず、「再起動後に反映」する旨をUI上に表示する。Webモードでは値を保持するが効果を持たない | Checkbox |
+| **Pythonライブラリ** | `python.script.packages.list`へ宣言済みライブラリを追加・削除するセクション。名前・バージョン（任意）・extras（カンマ区切り）を編集し、重複名と空名を拒否する。保存は次回ワーカー生成時の同期として扱い、保存結果を表示する | リスト編集＋追加/削除/保存 |
 | **表示言語** | 日本語／英語を選択するコンボボックス。正準ID: `language`。表示ラベルは「日本語」／「English」、保存値は`ja`／`en`。変更は全UIへ即時反映し、グローバル`settings.toml`へ保存する | Combobox |
 
 ---

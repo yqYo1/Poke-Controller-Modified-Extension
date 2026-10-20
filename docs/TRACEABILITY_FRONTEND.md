@@ -281,6 +281,38 @@
 | 再読み込み（`POST /api/commands/reload`） | 実装済 | `CommandsTab.svelte:197-209,393`; `actions.ts:96` |
 | 状態表示（実行中/一時停止中/停止/エラー） | 実装済 | `CommandsTab.svelte:271-272`（`running/paused/error/stopped` バッジ） |
 
+#### 6.4.4 実行履歴
+
+| 要求 | 判定 | 直接証拠 | ギャップ・備考 |
+|------|------|----------|----------------|
+| 履歴一覧（新しい順・最大10件）と最終実行日時 | 実装済 | `CommandsTab.svelte` の `historyEntries`／`sortedHistory`、History subtab | 保持件数・並びは backend 応答順 |
+| 行クリック実行・Last Run ソート・削除・全削除・ショートカット割当 | 実装済 | `CommandsTab.svelte` の `runHistoryEntry`／`sortedHistory`／`removeHistory`／`clearHistory`／`assignShortcut` | Start 無効化は実行状態と連動 |
+| `GET /api/command-history`／`POST /api/command-history/control` | 実装済 | `actions.ts` の `commandHistory`／`controlCommandHistory`; `CommandsTab.svelte` の `refreshHistory` | — |
+
+#### 6.4.5 タグ編集
+
+| 要求 | 判定 | 直接証拠 | ギャップ・備考 |
+|------|------|----------|----------------|
+| Tags ボタン・commands／tags タブ・rename／delete | 実装済 | `TagEditorDialog.svelte`; `CommandsTab.svelte` の Tags ボタン | — |
+| 50文字上限・重複/空拒否・digest競合 | 実装済 | `TagEditorDialog.svelte` の入力検証と `Apply` 送信; `actions.ts` の `CommandTagEdit` | 競合判定・再読込は backend 所有 |
+| `GET /api/command-tags`／`POST /api/command-tags/apply` | 実装済 | `actions.ts` の `commandTags`／`applyCommandTags` | — |
+
+#### 6.4.6 入力記録とスクリプト生成
+
+| 要求 | 判定 | 直接証拠 | ギャップ・備考 |
+|------|------|----------|----------------|
+| Record 開始/停止・記録中件数/経過/上限表示 | 実装済 | `CommandsTab.svelte` の Record ボタンと記録中パネル | — |
+| CSV保存・リプレイスクリプト生成・破棄 | 実装済 | `CommandsTab.svelte` の記録操作; `actions.ts` の `controlInputRecord` | 保存先は backend が決定 |
+| `GET /api/input-record`／`POST /api/input-record/control` | 実装済 | `actions.ts` の `inputRecord`／`controlInputRecord` | — |
+
+#### 6.4.7 実行リストと開始・停止予約
+
+| 要求 | 判定 | 直接証拠 | ギャップ・備考 |
+|------|------|----------|----------------|
+| 実行リスト編集（項目・間隔・ループ・エラー時動作） | 実装済 | `RunListEditorDialog.svelte` の Run lists タブ | 無効リストのスキップ理由は `skipped` |
+| 開始/停止予約（clock／after_minutes、キャンセル、sleep警告） | 実装済 | `RunListEditorDialog.svelte` の Schedule タブ; `actions.ts` の `runSchedule`／`controlRunSchedule` | ちょうど一方の検証は backend 所有 |
+| `GET/PUT /api/run-lists`、`GET /api/run-schedule`／`POST /api/run-schedule/control` | 実装済 | `actions.ts` | — |
+
 ### 6.5 通知タブ
 
 #### 6.5.1 Windows 通知
@@ -324,6 +356,7 @@
 | 10 | compositing 無効 checkbox（Tauri 専用・再起動必須・Web では保持のみ） | 実装済 | `OtherTab.svelte:30-35,332-356`（保存値/現在値表示＋再起動バッジ＋Web 無効注記） | — |
 | 11 | 表示言語 combobox（`ja`/`en`、即時反映・グローバル保存） | 実装済 | `OtherTab.svelte:101-103,250-263`（日本語/English、即時 `t()` 切替：`66-68`） | — |
 | 12 | サーバー設定群（§6.7。注: 仕様の表は11行＋§6.7 で計12項目相当） | 実装済 | §6.7 参照 | — |
+| 13 | Pythonライブラリ（追加/削除/保存・重複/空名拒否・次回同期表示） | 実装済 | `OtherTab.svelte` の Python libraries セクション; `OtherTab.test.ts` の保存テスト | 実際のuv同期は backend 所有 |
 
 ### 6.7 サーバー設定
 

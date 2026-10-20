@@ -1967,7 +1967,7 @@ _hat_names = {
 }
 
 
-def _controls(value):
+def _control_items(value):
     values = value if isinstance(value, list) else [value]
     result = []
     for item in values:
@@ -1995,7 +1995,11 @@ def _controls(value):
             result.append({"kind": "touchscreen", "x": item.x, "y": item.y})
         else:
             raise TypeError(f"unsupported controller input {type(item).__name__}")
-    return _json.dumps(result, separators=(",", ":"))
+    return result
+
+
+def _controls(value):
+    return _json.dumps(_control_items(value), separators=(",", ":"))
 
 
 class _CompatTransport:
@@ -2178,6 +2182,7 @@ class KeyPress:
     def __init__(self, ser, source=InputSource.COMMAND):
         self.ser = ser
         self.source = source
+        self._held_controls = []
 
     def init_hat(self):
         """何もしない(以前の版との互換のために残してある)"""
@@ -2213,10 +2218,29 @@ class KeyPress:
         )
 
     def hold(self, btns):
-        self.input(btns)
+        controls = _control_items(btns)
+        for control in controls:
+            if control in self._held_controls:
+                label = (
+                    control.get("button") or control.get("direction") or control
+                    if isinstance(control, dict)
+                    else control
+                )
+                print(f"Warning: {label} is already in holding state")
+                return
+        for control in controls:
+            self._held_controls.append(control)
+        _api.controller_input("press", _json.dumps(controls), True, True)
 
     def holdEnd(self, btns):
-        self.inputEnd(btns)
+        controls = _control_items(btns)
+        held = [control for control in controls if control in self._held_controls]
+        if not held:
+            print("Warning: holdEnd called without a matching hold; skipped")
+            return
+        _api.controller_input("release", _json.dumps(controls), True, True)
+        for control in held:
+            self._held_controls.remove(control)
 
     def holdChange(self, btns):
         _api.controller_input("press", _controls(btns), False, False)
@@ -2227,6 +2251,7 @@ class KeyPress:
         上流v0.2.0はhold()で保持した入力のみを対象とするが、本実装ではhold()がinput()と
         同一(保持リストを区別しない)ため、入力源単位で解放する。終了行は送らない。
         """
+        self._held_controls = []
         _api.controller_neutral()
 
     def end(self):

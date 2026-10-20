@@ -2991,3 +2991,41 @@ class Pressing(PythonCommand):
         .expect("execution task joins");
     stop_worker(&worker).await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn hold_warns_on_duplicates_and_skips_unmatched_hold_end() {
+    const SOURCE: &str = r"
+from Commands.Keys import Button
+from Commands.PythonCommandBase import PythonCommand
+
+
+class Holds(PythonCommand):
+    def do(self):
+        self.hold(Button.A, wait=0)
+        self.hold(Button.A, wait=0)
+        self.holdEnd(Button.B)
+        self.holdEnd(Button.A)
+";
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("holds.py"), SOURCE).expect("hold fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "holds.py".into(),
+            class_name: "Holds".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("hold script executes");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+
+    let inputs = host.controller_inputs.lock().unwrap().clone();
+    assert_eq!(inputs.len(), 2, "{inputs:?}");
+    assert_eq!(inputs[0].action, ScriptInputAction::Press);
+    assert_eq!(inputs[1].action, ScriptInputAction::Release);
+    stop_worker(&worker).await;
+}

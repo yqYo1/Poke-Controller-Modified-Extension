@@ -768,9 +768,9 @@ self.displayText([10, 10], "HP: 100/100", ms=3000, color="green")
 - クラス自体を新規スクリプト向けのトップレベルAPIとして推奨しないが、互換性のため`PythonCommand`／`ImageProcPythonCommand`の`self.keys`属性から次の既存サブセットへ直接アクセスできる
 - `self.keys.input(btns: GamepadInput, ifPrint: bool = True) -> None`: 指定入力を押下状態として送信する。`ifPrint`は互換引数として受理する
 - `self.keys.inputEnd(btns: GamepadInput, ifPrint: bool = True, unset_hat: bool = True, unset_Touchscreen: bool = True) -> None`: 指定入力を解放する。既存のcamelCaseキーワード`ifPrint`／`unset_Touchscreen`を変更しない
-- `self.keys.hold(btns: GamepadInput) -> None`／`self.keys.holdEnd(btns: GamepadInput) -> None`: 保持集合を更新して押下／解放する
-- `self.keys.holdChange(btns: GamepadInput) -> None`: 保持中のスティックの向き・倒し量、Hatの向き、タッチ位置を離さずに切り替える（`holdEnd`→`hold`では一度ニュートラルが送信されるため）。同じスティック・Hat・タッチを保持していない場合は`hold`と同じ
-- `self.keys.neutral() -> None`: この入力源（スクリプト）の入力をすべて離し、合成後の状態を送信する。終了行は送らない。上流v0.2.0は`hold()`で保持した入力のみを対象とするが、本実装では`hold()`が`input()`と同一（保持リストを区別しない）ため入力源単位で解放する
+- `self.keys.hold(btns: GamepadInput) -> None`／`self.keys.holdEnd(btns: GamepadInput) -> None`: 保持集合を更新して押下／解放する。`hold`で既に保持中の要素を再度指定した場合は警告を表示し、二重送信しない（要素の型込みで比較する）。`holdEnd`で保持していない要素だけを指定した場合は警告を表示して送信しない
+- `self.keys.holdChange(btns: GamepadInput) -> None`: 新しい要素を保持集合へ追加し、既存の保持を解放せずに押下する。同じスティック・Hat・タッチを保持していない場合は`hold`と同じ
+- `self.keys.neutral() -> None`: この入力源（スクリプト）の入力をすべて離し、保持集合を空にして合成後の状態を送信する。終了行は送らない
 - `self.keys.end() -> None`: この入力源の入力をすべて離し、送信方式が定める終了行を送る（Default形式は`"end"`、他の形式は`None`のため送らない。v0.2.0準拠）
 - `self.keys.ser.write()` で生シリアル書き込みが可能（IPCプロキシ経由）。公開型は `bytes | bytearray | memoryview | list[int]`
 - `self.keys.ser.writeRow()` でシリアル行書き込み（末尾に改行自動追加）

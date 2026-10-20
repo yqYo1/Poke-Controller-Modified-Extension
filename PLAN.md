@@ -956,11 +956,11 @@ UI・表示系:
 
 上流v0.2.0のバグ修正43件・更新1件、v0.1.9の2件、キーボード素通し等を全48行でマッピングした。要修正・要検証の全項目を列挙し、等価・N/Aは変更なしとして記録する。3DS関連は6.3bで扱う。
 
-- [ ] **6.5a 要修正（高）— 7件**:
-  - [ ] 保存失敗時表示・無名`saveImage`（`python.rs:2376-2406`）: 失敗時に`capture succeeded`と表示／無名が例外となる現状を、上流（Capture Failed表示・無名は失敗）へ合わせる。
+- [x] **6.5a 要修正（高）— 7件**: 全7件を修正または既存実装の検証でクローズ（`dfda0b65`・`b24d1651`・`3b9430dd`、ダイアログCancel/矩形起点は既存実装を回帰テストで確認）。`script_runtime` 33件を3回連続で全合格。
+  - [x] 保存失敗時表示・無名`saveImage`（`python.rs:2376-2406`）: 失敗時に`capture succeeded`と表示／無名が例外となる現状を、上流（Capture Failed表示・無名は失敗）へ合わせる。実装: `3b9430dd`（Camera.saveCaptureの保存呼び出しをtry/exceptで包み、失敗時は`Capture Failed: <detail>`を表示してスクリプトを継続。成功時のみ`capture succeeded`。回帰テスト`save_capture_failure_prints_and_continues`）。
   - [x] `holdEnd`未押下（`python.rs:1441-1471`）: 保持なしholdEndは警告＋skip、hold重複は警告し二重送信なし（型込み比較）。実装: `dfda0b65`（KeyPressに保持リストを導入し、holdの重複は警告して送信せず、holdEndは一致する保持がない場合に警告＋skip、neutral/endでクリア。回帰テスト3/3）。
-  - [ ] ダイアログCancel（`_legacy_result`）: Cancel時にfinish／StopThreadで正常終了扱いへ。
-  - [ ] `isContainedImage`矩形起点（`python.rs:3460-3508`）: crop_template起点の表示位置を上流と一致させる。
+  - [x] ダイアログCancel（`_legacy_result`）: Cancel時にfinish／StopThreadで正常終了扱いへ。確認: 既存実装が`aborted`状態で`_api.abort()`＋`StopThread`を送出し、実行結果は`Stopped`（失敗ではない）、ダイアログ全掃除・neutralizeも行うことを`abnormal_dialog_close_stops_the_script_and_cleans_all_dialogs`で検証済み（追加変更不要）。
+  - [x] `isContainedImage`矩形起点（`python.rs:3460-3508`）: crop_template起点の表示位置を上流と一致させる。確認: `_display_match`が`_convert_crop(crop_fmt, crop)`の原点を加算しており実装は既に一致。回帰テストでcrop有効時の表示矩形がフレーム座標`(60,50)-(91,71)`になることを検証（`script_camera_images_are_private_and_image_processing_stays_worker_local`へ追加）。
   - [x] macOSカメラ列挙（`camera/selector.rs`）: 配布対象はLinuxとWindowsのため現行スコープ外と整理（macOS配布追加時の要対応として記録）。実装: `SPECIFICATION_BACKEND.md`のカメラ注記へ、macOSはネイティブ列挙を行わず設定済みセレクターのみ返す旨と整数インデックス指定は継続利用できる旨を明記。
   - [x] シリアルopen失敗の案内（`manager.rs:326-332`＋UI）: 抜き差し・Scan Device・Reload Portの案内文を表示。実装: `b24d1651`（`SerialError::OpenFailed`の表示文言へケーブル確認・Scan Device・Reload Portの案内を追加、UIのエラー表示へ反映）。
   - [x] open失敗原因詳細（`manager.rs`／`application_backend.rs:644-652`）: ioエラー詳細を保全してログ／APIへ残す。実装: `b24d1651`（open失敗時に`tracing::warn!(error=...)`でioエラー詳細をログへ保全し、公開APIは固定文言のまま秘匿性を維持）。

@@ -3387,13 +3387,17 @@ class Camera:
         if normalized_format not in {"png", "jpeg"}:
             raise ValueError("format must be png or jpeg")
         image = _validate_bgr(image)
-        saved = _api.save_image(
-            image.shape[1],
-            image.shape[0],
-            image.tobytes(),
-            filename or None,
-            normalized_format,
-        )
+        try:
+            saved = _api.save_image(
+                image.shape[1],
+                image.shape[0],
+                image.tobytes(),
+                filename or None,
+                normalized_format,
+            )
+        except Exception as error:
+            print(f"Capture Failed: {error}")
+            return None
         print(f"capture succeeded: {saved}")
 
     def openCamera(self, cameraId):

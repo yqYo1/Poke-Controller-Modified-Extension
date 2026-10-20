@@ -2197,6 +2197,15 @@ class Images(ImageProcPythonCommand):
             crop_template=[60, 50, 90, 70],
             show_position=False,
         )
+        assert self.isContainedImage(
+            "scene.png",
+            threshold=0.99,
+            crop_fmt="1",
+            crop=[40, 40, 120, 100],
+            crop_template=[60, 50, 90, 70],
+            show_position=True,
+            ms=25,
+        )
 
         self.camera.saveCapture(
             "camera-layer", crop=1, crop_ax=[60, 50, 90, 70]
@@ -2292,6 +2301,17 @@ class Images(ImageProcPythonCommand):
             overlays
                 .iter()
                 .any(|request| matches!(request, HostOverlayRequest::Rectangle { .. }))
+        );
+        let rectangles = overlays
+            .iter()
+            .filter_map(|request| match request {
+                HostOverlayRequest::Rectangle { x1, y1, x2, y2, .. } => Some((*x1, *y1, *x2, *y2)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            rectangles.contains(&(60, 50, 91, 71)),
+            "the cropped template match draws its rectangle in frame coordinates: {rectangles:?}"
         );
         assert!(
             overlays
@@ -3027,5 +3047,56 @@ class Holds(PythonCommand):
     assert_eq!(inputs.len(), 2, "{inputs:?}");
     assert_eq!(inputs[0].action, ScriptInputAction::Press);
     assert_eq!(inputs[1].action, ScriptInputAction::Release);
+    stop_worker(&worker).await;
+}
+
+fn assert_capture_failure_outputs(host: &RecordingScriptHost) {
+    let outputs = host.outputs.lock().unwrap();
+    let messages = outputs
+        .iter()
+        .map(|output| output.message.clone())
+        .collect::<Vec<_>>();
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("Capture Failed")),
+        "{messages:?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("after failed capture"))
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn save_capture_failure_prints_and_continues() {
+    const SOURCE: &str = r"
+from Commands.PythonCommandBase import ImageProcPythonCommand
+
+
+class FailingSave(ImageProcPythonCommand):
+    def do(self):
+        self.saveCapture('/')
+        print('after failed capture')
+";
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("failing_save.py"), SOURCE)
+        .expect("capture fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "failing_save.py".into(),
+            class_name: "FailingSave".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("failing capture still completes");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+    assert_capture_failure_outputs(&host);
     stop_worker(&worker).await;
 }

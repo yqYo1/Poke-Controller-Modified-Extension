@@ -427,7 +427,10 @@ impl SerialManager {
         let io = backend
             .open(&config.selector, effective_baud)
             .await
-            .map_err(|_| SerialError::OpenFailed)?;
+            .map_err(|error| {
+                tracing::warn!(error = %error, "serial port open failed");
+                SerialError::OpenFailed
+            })?;
         let codec = ControllerCodec::new(config.data_format);
         let neutral = codec.encode(ControllerState::NEUTRAL);
         if write_all(&io, &neutral).await.is_err() {
@@ -837,7 +840,7 @@ pub enum SerialError {
     Disconnected,
     #[error("queued serial send was cancelled")]
     SendCancelled,
-    #[error("serial port open failed")]
+    #[error("serial port open failed; check the cable, then use Scan Device or Reload Port")]
     OpenFailed,
     #[error("serial frame write failed")]
     WriteFailed,

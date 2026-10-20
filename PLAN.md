@@ -915,7 +915,7 @@ UI・表示系:
 - [ ] **ヘルプ/マニュアル**: Instruction Manual・機能紹介のビューワ（スクロール・今後は表示しない・URLリンク化）、Discord通知設定／ハードウェア設定項の追記。
 
 カメラ・映像・音声:
-- [ ] **Capture Size追加**: 720x480・400x480・256x384（`camera/frame.rs`・`SETTINGS.md`・FRONTEND §6.1.2・`CameraTab`）＋Show Size候補の連動。
+- [x] **Capture Size追加**: 720x480・400x480・256x384（`camera/frame.rs`・`SETTINGS.md`・FRONTEND §6.1.2・`CameraTab`）＋Show Size候補の連動。実装: `1b5e5d94`（`CaptureResolution`へ3値追加、`ALL`6値、parse/size/serde、registry enum、CameraTabの選択肢、BACKEND/FRONTEND/INTEGRATION/SETTINGS/TRACEABILITYの列挙更新、`protocol.json`へ実行支援API 11件追加、`contract_sync`のPUT認識。frame test 3 passed、contract_sync 27 passed、web-check 145 passed）。Show Sizeは選択解像度から候補を導出する既存挙動で連動。
 - [ ] **MJPG**: カメラ設定にMJPGトグルを追加（native backendの優先取得ロジックは既存）。
 - [ ] **ウィンドウ取り込み**: Windows限定の他アプリウィンドウ取り込み（`Window:`候補、非対応OSのフォールバック表示）。
 - [ ] **Audioタブ**: 音声デバイス選択・取込・再生（新規仕様節＋backend＋UI）。

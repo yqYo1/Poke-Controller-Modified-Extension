@@ -40,6 +40,7 @@ struct LayerResolution {
 }
 
 struct BootstrapResolution {
+    auto_profile: Option<String>,
     roots: EffectiveRoots,
     global: SettingsDocument,
     global_settings_path: PathBuf,
@@ -640,6 +641,16 @@ impl SettingsPipeline {
             .and_then(|resolved| resolved.value.as_str())
             .ok_or_else(|| PipelineError::TypedLookup("active_profile".to_owned()))?;
         let mut active_profile = SafeComponent::new(active_profile)?;
+        if let Some(auto) = &bootstrap.auto_profile {
+            active_profile = SafeComponent::new(auto)?;
+            resolution.values.insert(
+                "active_profile".to_owned(),
+                ResolvedValue {
+                    value: Value::String(auto.clone()),
+                    source: SettingSource::CommandLine,
+                },
+            );
+        }
         if active_profile != bootstrap.active_profile {
             let final_profile =
                 store.read(&bootstrap.roots.profile_settings(active_profile.as_str())?)?;
@@ -756,6 +767,7 @@ impl ResolutionRecipe {
 struct ParsedCli {
     assignments: BTreeMap<String, OsString>,
     remaining: Vec<OsString>,
+    auto_profile: bool,
 }
 
 impl fmt::Debug for ParsedCli {
@@ -766,6 +778,7 @@ impl fmt::Debug for ParsedCli {
             .field("assignments", &"<redacted>")
             .field("remaining_argument_count", &self.remaining.len())
             .field("remaining", &"<redacted>")
+            .field("auto_profile", &self.auto_profile)
             .finish()
     }
 }
@@ -786,6 +799,7 @@ impl ParsedCli {
             .collect::<BTreeMap<_, _>>();
         let mut assignments = BTreeMap::new();
         let mut remaining = Vec::new();
+        let mut auto_profile = false;
         if let Some(program) = arguments.first() {
             remaining.push(program.clone());
         }
@@ -801,6 +815,11 @@ impl ParsedCli {
             if argument == "--" {
                 remaining.extend(arguments[cursor..].iter().cloned());
                 break;
+            }
+            if argument == "--auto" {
+                auto_profile = true;
+                cursor += 1;
+                continue;
             }
             let (flag, inline_value) = argument
                 .split_once('=')
@@ -825,6 +844,7 @@ impl ParsedCli {
         Ok(Self {
             assignments,
             remaining,
+            auto_profile,
         })
     }
 }
@@ -924,6 +944,30 @@ fn push_insecure_permission_warning(warnings: &mut Vec<ConfigurationWarning>, pa
 #[cfg(not(unix))]
 fn push_insecure_permission_warning(_warnings: &mut Vec<ConfigurationWarning>, _path: &Path) {}
 
+fn priority_profile(roots: &EffectiveRoots) -> Result<Option<String>, PipelineError> {
+    let path = roots.config.join("priority.txt");
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Ok(None);
+    };
+    for line in text.lines() {
+        let name = line.trim();
+        if name.is_empty() || name.starts_with('#') {
+            continue;
+        }
+        let Ok(component) = SafeComponent::new(name) else {
+            continue;
+        };
+        let profile_dir = roots
+            .profile_settings(component.as_str())?
+            .parent()
+            .map(std::path::Path::to_path_buf);
+        if profile_dir.is_some_and(|directory| directory.is_dir()) {
+            return Ok(Some(component.as_str().to_owned()));
+        }
+    }
+    Ok(None)
+}
+
 fn resolve_bootstrap(
     registry: &SettingsRegistry,
     parsed_cli: &ParsedCli,
@@ -989,11 +1033,29 @@ fn resolve_bootstrap(
         &mut values,
         None,
     )?;
+    let mut auto_profile = None;
+    if parsed_cli.auto_profile
+        && values.get("active_profile").map(|resolved| resolved.source)
+            != Some(SettingSource::CommandLine)
+        && values.get("active_profile").map(|resolved| resolved.source)
+            != Some(SettingSource::Environment)
+        && let Some(profile) = priority_profile(&roots)?
+    {
+        values.insert(
+            "active_profile".to_owned(),
+            ResolvedValue {
+                value: Value::String(profile.clone()),
+                source: SettingSource::CommandLine,
+            },
+        );
+        auto_profile = Some(profile);
+    }
     let active_profile = values
         .get("active_profile")
         .and_then(|resolved| resolved.value.as_str())
         .ok_or_else(|| PipelineError::TypedLookup("active_profile".to_owned()))?;
     Ok(BootstrapResolution {
+        auto_profile,
         roots,
         global,
         global_settings_path,
@@ -1884,6 +1946,40 @@ mod tests {
                 .ignored_profile_global_settings
                 .contains(&"language".to_owned())
         );
+    }
+
+    #[test]
+    fn auto_profile_uses_priority_file_order_and_explicit_profile_wins() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let config = temp.path().join("config/pokecon");
+        fs::create_dir_all(config.join("profiles/AutoTarget")).expect("profile dirs must exist");
+        fs::create_dir_all(config.join("profiles/Other")).expect("profile dirs must exist");
+        fs::write(
+            config.join("profiles/AutoTarget/settings.toml"),
+            "[ui]\nfps = 60\nfps_options = [5, 15, 30, 60]\n",
+        )
+        .expect("profile fixture must be writable");
+        fs::write(
+            config.join("profiles/Other/settings.toml"),
+            "[ui]\nfps = 15\nfps_options = [5, 15, 30, 60]\n",
+        )
+        .expect("profile fixture must be writable");
+        fs::write(config.join("priority.txt"), "Missing\nAutoTarget\nOther\n")
+            .expect("priority fixture must be writable");
+
+        let auto = SettingsPipeline::new(request(&temp, &["pokecon", "--auto"], &[]))
+            .load()
+            .expect("auto profile must resolve");
+        assert_eq!(auto.active_profile.as_str(), "AutoTarget");
+
+        let explicit = SettingsPipeline::new(request(
+            &temp,
+            &["pokecon", "--auto", "--profile", "Other"],
+            &[],
+        ))
+        .load()
+        .expect("explicit profile must resolve");
+        assert_eq!(explicit.active_profile.as_str(), "Other");
     }
 
     #[test]

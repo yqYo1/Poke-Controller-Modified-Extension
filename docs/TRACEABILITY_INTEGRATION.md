@@ -176,6 +176,12 @@
 | 7.4-35 | 応答外形 data/error{code,message,fields}・fieldsはID→診断配列・null規則・型付schema・400/422/409/404/500＋具体優先 | ✅ | `ApiFailureStatus`/`ApiErrorCode`（`application_backend.rs:247-248` RevisionConflict他）、envelope共通 | — |
 | 7.4-36 | 静的配信：`server.web_dir`・既定 `web/dist`・起動時決定・差替なし（詳細§15.9） | ✅ | `static_files.rs`、§15.9 | — |
 | 7.4-37 | WS/DataChannel名は内部protocol・別名変更禁止 | ✅ | wire名固定（`api.rs` rename群）、旧名なし | — |
+| 7.4-38 | run-lists：GET/PUTのみ・PUTは全件事前検証し1件でも無効なら422・成功時skipped空・プロファイル別`run_lists.json`原子保存・revision非更新 | ✅ | `rest/run_lists.rs`、`application_backend.rs` の `save_run_lists`、`run_list.rs` の `check_list`／`save_lists` | — |
+| 7.4-39 | run-schedule：GET＋control union（reserve_start/cancel_start/reserve_stop/cancel_stop）・clock/after_minutesはちょうど一方・不正422・メモリ状態のみ | ✅ | `rest/run_schedule.rs`、`server/api.rs` の `RunScheduleControlRequest`、`run_schedule.rs` の `parse_clock`／`validate_minutes` | — |
+| 7.4-40 | command-history：GET＋control union（remove/clear）・空type/nameは422・不在removeは成功no-op・最大10件を新しい順 | ✅ | `rest/command_history.rs`、`command_usage.rs` の `HISTORY_MAX`／`history`／`remove_history` | — |
+| 7.4-41 | command-pause：GETのみ・停止中のみ位置と変数を返し非停止は`paused:false`の空snapshot・ポーリングをエラーにしない | ✅ | `rest/command_pause.rs`、`command_service.rs` の `pause_info` | — |
+| 7.4-42 | command-tags：GET＋apply union（set/rename/delete）・digest不一致はconflict集計・成功時のみ再読込とrevision更新・再読込失敗は`reload_error` | ✅ | `rest/command_tags.rs`、`command_tags.rs`、`server/api.rs` の `CommandTagStatus` | — |
+| 7.4-43 | input-record：GET＋control union（start/stop/discard/save/generate）・nameは1〜64文字のASCII英数字/-/_・二重開始等409・CSV/scriptを一意名で保存 | ✅ | `rest/input_record.rs`、`application_backend.rs` の `control_input_record`／`record_file_stem`、`input_recorder.rs` | — |
 
 ## §7.5 キーボード入力API
 

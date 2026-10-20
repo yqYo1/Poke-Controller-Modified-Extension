@@ -979,7 +979,7 @@ UI・表示系:
 
 ### 6.6 仕様・文書・検証
 
-- [ ] **6.6a SPEC更新**: BACKEND §10（6.2の各API）・§10.5・§6.1.6（capture sizeはFRONTEND）・§11（serial値、通知画像）・§4.6.2（機構変更時の記述更新）。FRONTEND §5・§6（タブ構成・通知・プレビュー）と§9（テーマ記述の整合）。INTEGRATION §6.2.2（wire）・§6.1.5。
-- [ ] **6.6b docs更新**: `PERIPHERAL_DEVELOPMENT.md`（6.3g）、`USER_GUIDE.md`／`SETTINGS.md`（新設定・形式）、`MIGRATION.md`（3DS形式の移行注記）、`TRACEABILITY_*`／`FUNCTION_TRACEABILITY_MATRIX.md`へ行追加（§6更新規則）。
+- [ ] **6.6a SPEC更新**: BACKEND §10（6.2の各API）・§10.5・§6.1.6（capture sizeはFRONTEND）・§11（serial値、通知画像）・§4.6.2（機構変更時の記述更新）。FRONTEND §5・§6（タブ構成・通知・プレビュー）と§9（テーマ記述の整合）。INTEGRATION §6.2.2（wire）・§6.1.5。 進捗: `bd6b19ff`（INTEGRATION §7.4へ実行支援API 6群、FRONTEND §5.4・§6.4.4〜§6.4.7・§6.6.1、TRACEABILITY_FRONTENDへ対応表）。BACKEND §10／§11／§4.6.2は未。
+- [ ] **6.6b docs更新**: `PERIPHERAL_DEVELOPMENT.md`（6.3g）、`USER_GUIDE.md`／`SETTINGS.md`（新設定・形式）、`MIGRATION.md`（3DS形式の移行注記）、`TRACEABILITY_*`／`FUNCTION_TRACEABILITY_MATRIX.md`へ行追加（§6更新規則）。 進捗: `233ff522`（USER_GUIDEへ実行履歴・タグ編集・入力記録・実行リスト/予約・Pythonライブラリの操作手順）、TRACEABILITY_INTEGRATIONへ7.4-38〜43を追記。
 - [ ] **6.6c 検証**: 追加API・形式のfocused test、`codec.rs` golden、PTY経路、`nix run .#compatibility`、`web-check`、aggregate `nix run .#check`、6.1の昇格評価。clean sourceでcommit別remote CIまで取得する。
 - [ ] **6.6d 実施順序（提案）**: 6.1a/b（機構）と6.2a/d/e（小API）→ 6.3a/b（NX・3DS）→ 6.2b/c（Keyboard・合成）→ 6.3d/e/f/g → 6.4.1の小規模群（UI・コマンド）→ 6.5a（バグ修正）→ 6.1c/d（候補評価・昇格）→ 6.4.1の残り（大物UI・音声等）。各段で共通完了ゲートと該当focused gateを通す。着手は利用者の指示に従う。

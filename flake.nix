@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "006c356d2474d242775284c409047a4961dbfc31aea9d2bed9fc22f9f107d965";
+      canonicalFlakeHash = "b6c52bcdad16530046e3c63c371fae438962d361a840060c1c1ea3bf5864cb3e";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -763,7 +763,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "6e0d7612e1c816fbd99867d54e883858a5b5c3932ed4a336d8657c7b83f0f757";
+          expectedAuditTestHash = "da5f9c2959b4d41dd4d3e9fa80b2d024b854f17ad9300ce1831d3bcfffe052ad";
 
           workspaceMemberPaths = [
             "rust/pokecon"

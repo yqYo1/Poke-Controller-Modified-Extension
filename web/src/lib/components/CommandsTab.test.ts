@@ -75,6 +75,17 @@ function commandActions() {
     commandHistory: vi.fn().mockResolvedValue({ entries: [] }),
     controlCommandHistory: vi.fn().mockResolvedValue({ entries: [] }),
     commandPause: vi.fn().mockResolvedValue({ paused: false, frames: [], variables: [] }),
+    inputRecord: vi
+      .fn()
+      .mockResolvedValue({ recording: false, samples: 0, elapsed_ms: 0, limit: 100000 }),
+    controlInputRecord: vi.fn().mockImplementation((request: { action: string }) =>
+      Promise.resolve({
+        snapshot: { recording: false, samples: 0, elapsed_ms: 0, limit: 100000 },
+        saved_path: null,
+        script_path: null,
+        ...(request.action === 'start' ? { request } : {})
+      })
+    ),
     commandTags: vi.fn().mockResolvedValue({ commands: [], tags: [] }),
     applyCommandTags: vi.fn().mockResolvedValue({
       results: [],
@@ -146,6 +157,54 @@ describe('CommandsTab', () => {
     expect(panel.textContent).toContain('/commands/samples/first.py:42');
     expect(panel.textContent).toContain('counter');
     expect(panel.textContent).toContain('3');
+  });
+
+  it('records controller input and generates a replay script', async () => {
+    const { runtime, view } = runtimeView();
+    const actions = commandActions();
+    const empty = { recording: false, samples: 0, elapsed_ms: 0, limit: 100000 };
+    const stopped = { recording: false, samples: 2, elapsed_ms: 1500, limit: 100000 };
+    actions.inputRecord.mockImplementation(() =>
+      Promise.resolve({ ...empty, recording: true })
+    );
+    actions.controlInputRecord.mockImplementation((request: { action: string }) => {
+      if (request.action === 'start') {
+        return Promise.resolve({
+          snapshot: { ...empty, recording: true },
+          saved_path: null,
+          script_path: null
+        });
+      }
+      if (request.action === 'stop') {
+        return Promise.resolve({ snapshot: stopped, saved_path: null, script_path: null });
+      }
+      return Promise.resolve({
+        snapshot: stopped,
+        saved_path: null,
+        script_path: '/data/Commands/PythonCommands/Record/record.py'
+      });
+    });
+    render(CommandsTab, { actions, runtime, view });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Record' }));
+    await waitFor(() =>
+      expect(actions.controlInputRecord).toHaveBeenCalledWith({ action: 'start' })
+    );
+    await fireEvent.click(screen.getByRole('button', { name: /Stop recording/ }));
+    await waitFor(() =>
+      expect(actions.controlInputRecord).toHaveBeenCalledWith({ action: 'stop' })
+    );
+
+    const panel = await screen.findByRole('region', { name: 'Recorded input' });
+    expect(panel.textContent).toContain('2 件を記録しました');
+    await fireEvent.click(screen.getByRole('button', { name: 'Generate script' }));
+    await waitFor(() =>
+      expect(actions.controlInputRecord).toHaveBeenCalledWith({
+        action: 'generate',
+        name: 'record'
+      })
+    );
+    expect(panel.textContent).toContain('/data/Commands/PythonCommands/Record/record.py');
   });
 
   it('writes tag matching and persists shortcut module paths', async () => {

@@ -196,6 +196,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/input-record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["input_record"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/input-record/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["control_input_record"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notifications/test": {
         parameters: {
             query?: never;
@@ -764,6 +796,41 @@ export interface components {
         };
         InputGeneration: {
             generation: string;
+        };
+        /** @description One input recording control request. */
+        InputRecordControlRequest: {
+            /** @enum {string} */
+            action: "start";
+        } | {
+            /** @enum {string} */
+            action: "stop";
+        } | {
+            /** @enum {string} */
+            action: "discard";
+        } | {
+            name: string;
+            /** @enum {string} */
+            action: "save";
+        } | {
+            name: string;
+            /** @enum {string} */
+            action: "generate";
+        };
+        /** @description Result of one recording control request. */
+        InputRecordResult: {
+            snapshot: components["schemas"]["InputRecordSnapshot"];
+            saved_path?: string | null;
+            script_path?: string | null;
+        };
+        /** @description Current controller input recording state. */
+        InputRecordSnapshot: {
+            recording: boolean;
+            /** Format: int64 */
+            samples: number;
+            /** Format: int64 */
+            elapsed_ms: number;
+            /** Format: int64 */
+            limit: number;
         };
         InputSnapshot: {
             generation: string;
@@ -1966,6 +2033,28 @@ export interface components {
             };
         };
         /** @description Common successful JSON envelope. */
+        Success_InputRecordResult: {
+            /** @description Result of one recording control request. */
+            data: {
+                snapshot: components["schemas"]["InputRecordSnapshot"];
+                saved_path?: string | null;
+                script_path?: string | null;
+            };
+        };
+        /** @description Common successful JSON envelope. */
+        Success_InputRecordSnapshot: {
+            /** @description Current controller input recording state. */
+            data: {
+                recording: boolean;
+                /** Format: int64 */
+                samples: number;
+                /** Format: int64 */
+                elapsed_ms: number;
+                /** Format: int64 */
+                limit: number;
+            };
+        };
+        /** @description Common successful JSON envelope. */
         Success_NotificationTestResult: {
             data: {
                 delivered: boolean;
@@ -2616,6 +2705,86 @@ export interface operations {
                 };
             };
             /** @description Dynamic configuration transport failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    input_record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current controller input recording state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_InputRecordSnapshot"];
+                };
+            };
+            /** @description Input recording read failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    control_input_record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InputRecordControlRequest"];
+            };
+        };
+        responses: {
+            /** @description Recording control applied and the snapshot returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_InputRecordResult"];
+                };
+            };
+            /** @description Recording state conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recording input or name is invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Recording write failure */
             500: {
                 headers: {
                     [name: string]: unknown;

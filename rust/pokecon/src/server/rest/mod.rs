@@ -6,6 +6,7 @@ mod command_tags;
 mod commands;
 mod devices;
 mod dynamic_config;
+mod input_record;
 mod notifications;
 mod profiles;
 mod run_lists;
@@ -46,6 +47,7 @@ pub fn router(backend: Arc<dyn RestBackend>) -> Router {
         .merge(command_history::router())
         .merge(command_pause::router())
         .merge(command_tags::router())
+        .merge(input_record::router())
         .merge(devices::router())
         .merge(notifications::router())
         .merge(dynamic_config::router())
@@ -223,6 +225,7 @@ async fn method_not_allowed(uri: Uri) -> Response {
         | "/api/command-history"
         | "/api/command-pause"
         | "/api/command-tags"
+        | "/api/input-record"
         | "/api/run-schedule"
         | "/api/script-creator"
         | "/api/state" => "GET",
@@ -234,6 +237,7 @@ async fn method_not_allowed(uri: Uri) -> Response {
         | "/api/notifications/test"
         | "/api/command-history/control"
         | "/api/command-tags/apply"
+        | "/api/input-record/control"
         | "/api/profiles/generate-launcher"
         | "/api/run-schedule/control"
         | "/api/script-creator/create"
@@ -279,13 +283,14 @@ mod tests {
         CommandHistoryControlRequest, CommandHistorySnapshot, CommandPauseSnapshot, CommandState,
         CommandTagRequest, CommandTagResult, CommandTagSnapshot, DecimalString,
         DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage, GenerateLauncherRequest,
-        GenerateLauncherResult, ImageFormat, NotificationTestRequest, NotificationTestResult,
-        OperationResult, RunListSnapshot, RunListSpec, RunScheduleControlRequest,
-        RunScheduleSnapshot, SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview,
-        ScriptCreatorResult, ScriptCreatorSnapshot, ScriptCreatorSpec, SerialControlRequest,
-        SerialPort, SerialPortTransport, SettingsChange, SettingsPatchRequest,
-        SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause,
-        StatePatch, StateSnapshot, UpdateCheckResult,
+        GenerateLauncherResult, ImageFormat, InputRecordControlRequest, InputRecordResult,
+        InputRecordSnapshot, NotificationTestRequest, NotificationTestResult, OperationResult,
+        RunListSnapshot, RunListSpec, RunScheduleControlRequest, RunScheduleSnapshot,
+        SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult,
+        ScriptCreatorSnapshot, ScriptCreatorSpec, SerialControlRequest, SerialPort,
+        SerialPortTransport, SettingsChange, SettingsPatchRequest, SettingsReadPatchValues,
+        SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch, StateSnapshot,
+        UpdateCheckResult,
     };
     use crate::server::backend::{
         ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload,
@@ -456,6 +461,31 @@ mod tests {
             Ok(RunListSnapshot {
                 lists: Vec::new(),
                 skipped: Vec::new(),
+            })
+        }
+
+        async fn input_record(&self) -> ApiResult<InputRecordSnapshot> {
+            Ok(InputRecordSnapshot {
+                recording: false,
+                samples: 0,
+                elapsed_ms: 0,
+                limit: crate::input_recorder::MAX_SAMPLES as u64,
+            })
+        }
+
+        async fn control_input_record(
+            &self,
+            _request: InputRecordControlRequest,
+        ) -> ApiResult<InputRecordResult> {
+            Ok(InputRecordResult {
+                snapshot: InputRecordSnapshot {
+                    recording: false,
+                    samples: 0,
+                    elapsed_ms: 0,
+                    limit: crate::input_recorder::MAX_SAMPLES as u64,
+                },
+                saved_path: None,
+                script_path: None,
             })
         }
 
@@ -668,7 +698,7 @@ mod tests {
     const STANDARD_METHODS: [&str; 9] = [
         "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT",
     ];
-    const REST_METHOD_MATRIX: [(&str, &[&str]); 25] = [
+    const REST_METHOD_MATRIX: [(&str, &[&str]); 27] = [
         ("/api/camera/retry", &["POST"]),
         ("/api/camera/screenshot", &["POST"]),
         ("/api/command-history", &["GET"]),
@@ -676,6 +706,8 @@ mod tests {
         ("/api/command-pause", &["GET"]),
         ("/api/command-tags", &["GET"]),
         ("/api/command-tags/apply", &["POST"]),
+        ("/api/input-record", &["GET"]),
+        ("/api/input-record/control", &["POST"]),
         ("/api/commands/control", &["POST"]),
         ("/api/commands/reload", &["POST"]),
         ("/api/devices/cameras", &["GET"]),
@@ -775,8 +807,8 @@ mod tests {
             }
         }
 
-        assert_eq!(advertised_count, 27);
-        assert_eq!(rejected_count, 198);
+        assert_eq!(advertised_count, 29);
+        assert_eq!(rejected_count, 214);
     }
 
     #[tokio::test]

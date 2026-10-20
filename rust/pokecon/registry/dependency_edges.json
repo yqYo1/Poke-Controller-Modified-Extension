@@ -162,6 +162,10 @@
       "settings"
     ],
     [
+      "input_recorder",
+      "device"
+    ],
+    [
       "integration_test_support",
       "camera"
     ],

@@ -578,6 +578,96 @@
         }
       }
     },
+    "/api/input-record": {
+      "get": {
+        "tags": [
+          "input_record"
+        ],
+        "operationId": "input_record",
+        "responses": {
+          "200": {
+            "description": "Current controller input recording state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_InputRecordSnapshot"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Input recording read failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/input-record/control": {
+      "post": {
+        "tags": [
+          "input_record"
+        ],
+        "operationId": "control_input_record",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InputRecordControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Recording control applied and the snapshot returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_InputRecordResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Recording state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Recording input or name is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Recording write failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/notifications/test": {
       "post": {
         "tags": [
@@ -2876,6 +2966,152 @@
             "type": "string",
             "minLength": 1,
             "pattern": "^[\\x00-\\x7F]+$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "InputRecordControlRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "start"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "stop"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "discard"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Saves the samples as CSV under the controller log directory.",
+            "required": [
+              "name",
+              "action"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "save"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Generates a replay script under `PythonCommands/Record/`.",
+            "required": [
+              "name",
+              "action"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "generate"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "One input recording control request."
+      },
+      "InputRecordResult": {
+        "type": "object",
+        "description": "Result of one recording control request.",
+        "required": [
+          "snapshot"
+        ],
+        "properties": {
+          "snapshot": {
+            "$ref": "#/components/schemas/InputRecordSnapshot"
+          },
+          "saved_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "script_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "InputRecordSnapshot": {
+        "type": "object",
+        "description": "Current controller input recording state.",
+        "required": [
+          "recording",
+          "samples",
+          "elapsed_ms",
+          "limit"
+        ],
+        "properties": {
+          "recording": {
+            "type": "boolean"
+          },
+          "samples": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "elapsed_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         },
         "additionalProperties": false
@@ -7773,6 +8009,82 @@
         },
         "additionalProperties": false
       },
+      "Success_InputRecordResult": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Result of one recording control request.",
+            "required": [
+              "snapshot"
+            ],
+            "properties": {
+              "snapshot": {
+                "$ref": "#/components/schemas/InputRecordSnapshot"
+              },
+              "saved_path": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "script_path": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_InputRecordSnapshot": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Current controller input recording state.",
+            "required": [
+              "recording",
+              "samples",
+              "elapsed_ms",
+              "limit"
+            ],
+            "properties": {
+              "recording": {
+                "type": "boolean"
+              },
+              "samples": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "elapsed_ms": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "limit": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
       "Success_NotificationTestResult": {
         "type": "object",
         "description": "Common successful JSON envelope.",
@@ -8490,6 +8802,10 @@
     {
       "name": "command_pause",
       "description": "Paused command location and variables"
+    },
+    {
+      "name": "input_record",
+      "description": "Controller input recording and replay script generation"
     },
     {
       "name": "command_tags",

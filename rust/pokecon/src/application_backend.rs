@@ -28,13 +28,14 @@ use crate::server::api::{
     CommandTagOutcome, CommandTagRequest, CommandTagResult, CommandTagSnapshot, CommandTagStatus,
     DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
     GamepadButton, GamepadHat, GamepadInput, GenerateLauncherRequest, GenerateLauncherResult,
-    ImageFormat, InputApplied, InputGeneration, LauncherDestination, NotificationTestRequest,
-    NotificationTestResult, OperationResult, RunListItem, RunListSnapshot, RunListSpec,
-    RunScheduleControlRequest, RunScheduleSnapshot, ScriptCreatorPreview, ScriptCreatorResult,
-    ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult,
-    SerialControlRequest, SerialPort, SerialPortTransport, SettingsChange, SettingsPatchRequest,
-    SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch,
-    StateSnapshot, UpdateCheckResult,
+    ImageFormat, InputApplied, InputGeneration, InputRecordControlRequest, InputRecordResult,
+    InputRecordSnapshot, LauncherDestination, NotificationTestRequest, NotificationTestResult,
+    OperationResult, RunListItem, RunListSnapshot, RunListSpec, RunScheduleControlRequest,
+    RunScheduleSnapshot, ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot,
+    ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort,
+    SerialPortTransport, SettingsChange, SettingsPatchRequest, SettingsReadPatchValues,
+    SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch, StateSnapshot,
+    UpdateCheckResult,
 };
 use crate::server::backend::{
     ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload, LauncherOutput,
@@ -135,6 +136,7 @@ pub(crate) struct ApplicationBackend {
     commands: OnceLock<Arc<CommandService>>,
     profiles: OnceLock<Arc<ProfileService>>,
     tag_editor: crate::command_tags::CommandTagEditor,
+    input_recorder: std::sync::Mutex<crate::input_recorder::InputRecorder>,
     dynamic_watcher: DynamicConfigWatcher,
     watcher_owner: OnceLock<Weak<ApplicationBackend>>,
 }
@@ -178,6 +180,7 @@ impl ApplicationBackend {
             commands: OnceLock::new(),
             profiles: OnceLock::new(),
             tag_editor,
+            input_recorder: std::sync::Mutex::new(crate::input_recorder::InputRecorder::new()),
             dynamic_watcher: DynamicConfigWatcher::new(),
             watcher_owner: OnceLock::new(),
         }
@@ -471,6 +474,11 @@ impl ApplicationBackend {
 
     async fn publish_controller(&self, last_input: Option<String>) -> ApiResult<()> {
         let output = self.arbiter.lock().output();
+        if let Ok(mut recorder) = self.input_recorder.lock()
+            && recorder.is_recording()
+        {
+            let _ignored = recorder.record(&output);
+        }
         if let Err(error) = self.serial.send_controller_state(output).await
             && !matches!(
                 error,
@@ -1004,6 +1012,96 @@ impl RestBackend for ApplicationBackend {
             changed: matches!(result, CommandReloadResult::Published { .. }) && outcome.changed(),
             revision: outcome.revision().clone(),
         })
+    }
+
+    async fn input_record(&self) -> ApiResult<InputRecordSnapshot> {
+        Ok(record_snapshot(&self.input_recorder))
+    }
+
+    async fn control_input_record(
+        &self,
+        request: InputRecordControlRequest,
+    ) -> ApiResult<InputRecordResult> {
+        match request {
+            InputRecordControlRequest::Start => {
+                self.input_recorder
+                    .lock()
+                    .map_err(|_error| internal_failure("input recorder is unavailable"))?
+                    .start()
+                    .map_err(|error| record_failure(&error))?;
+                Ok(InputRecordResult {
+                    snapshot: record_snapshot(&self.input_recorder),
+                    saved_path: None,
+                    script_path: None,
+                })
+            }
+            InputRecordControlRequest::Stop => {
+                self.input_recorder
+                    .lock()
+                    .map_err(|_error| internal_failure("input recorder is unavailable"))?
+                    .stop()
+                    .map_err(|error| record_failure(&error))?;
+                Ok(InputRecordResult {
+                    snapshot: record_snapshot(&self.input_recorder),
+                    saved_path: None,
+                    script_path: None,
+                })
+            }
+            InputRecordControlRequest::Discard => {
+                let mut recorder = self
+                    .input_recorder
+                    .lock()
+                    .map_err(|_error| internal_failure("input recorder is unavailable"))?;
+                if recorder.is_recording() {
+                    recorder.stop().map_err(|error| record_failure(&error))?;
+                }
+                recorder.clear();
+                Ok(InputRecordResult {
+                    snapshot: record_snapshot(&self.input_recorder),
+                    saved_path: None,
+                    script_path: None,
+                })
+            }
+            InputRecordControlRequest::Save { name } => {
+                let safe = record_file_stem(&name).map_err(|error| record_failure(&error))?;
+                let recorder = self
+                    .input_recorder
+                    .lock()
+                    .map_err(|_error| internal_failure("input recorder is unavailable"))?;
+                let path = unique_path(&self.data_root.join("Controller_Log"), &safe, "csv");
+                recorder
+                    .save_csv(&path)
+                    .map_err(|error| record_failure(&error))?;
+                Ok(InputRecordResult {
+                    snapshot: record_snapshot(&self.input_recorder),
+                    saved_path: Some(path.to_string_lossy().into_owned()),
+                    script_path: None,
+                })
+            }
+            InputRecordControlRequest::Generate { name } => {
+                let safe = record_file_stem(&name).map_err(|error| record_failure(&error))?;
+                let recorder = self
+                    .input_recorder
+                    .lock()
+                    .map_err(|_error| internal_failure("input recorder is unavailable"))?;
+                let class_name = record_class_name(&safe);
+                let script =
+                    crate::input_recorder::generate_script(&class_name, &safe, recorder.samples())
+                        .map_err(|error| record_failure(&error))?;
+                let path = unique_path(
+                    &self.data_root.join("Commands/PythonCommands/Record"),
+                    &safe,
+                    "py",
+                );
+                write_atomic(&path, script.as_bytes())
+                    .map_err(|error| internal_failure(&error.to_string()))?;
+                Ok(InputRecordResult {
+                    snapshot: record_snapshot(&self.input_recorder),
+                    saved_path: None,
+                    script_path: Some(path.to_string_lossy().into_owned()),
+                })
+            }
+        }
     }
 
     async fn command_pause(&self) -> ApiResult<CommandPauseSnapshot> {
@@ -2140,6 +2238,94 @@ fn tag_report(
         reload_error,
         snapshot: tag_snapshot(report.snapshot),
     }
+}
+
+fn record_failure(error: &crate::input_recorder::RecordError) -> ApiFailure {
+    match error {
+        crate::input_recorder::RecordError::AlreadyRecording
+        | crate::input_recorder::RecordError::NotRecording
+        | crate::input_recorder::RecordError::LimitReached => ApiFailure::new(
+            ApiFailureStatus::Conflict,
+            ApiErrorCode::CommandStateConflict,
+            error.to_string(),
+        ),
+        crate::input_recorder::RecordError::InvalidName
+        | crate::input_recorder::RecordError::InvalidCsv(_) => ApiFailure::new(
+            ApiFailureStatus::UnprocessableEntity,
+            ApiErrorCode::InvalidRequest,
+            error.to_string(),
+        ),
+        crate::input_recorder::RecordError::Io(_) => ApiFailure::new(
+            ApiFailureStatus::InternalServerError,
+            ApiErrorCode::InternalError,
+            error.to_string(),
+        ),
+    }
+}
+
+fn record_snapshot(
+    recorder: &std::sync::Mutex<crate::input_recorder::InputRecorder>,
+) -> InputRecordSnapshot {
+    let snapshot = match recorder.lock() {
+        Ok(recorder) => recorder.snapshot(),
+        Err(_error) => crate::input_recorder::RecordSnapshot {
+            recording: false,
+            samples: 0,
+            elapsed_ms: 0,
+            limit: crate::input_recorder::MAX_SAMPLES,
+        },
+    };
+    InputRecordSnapshot {
+        recording: snapshot.recording,
+        samples: snapshot.samples as u64,
+        elapsed_ms: snapshot.elapsed_ms,
+        limit: snapshot.limit as u64,
+    }
+}
+
+fn record_file_stem(name: &str) -> Result<String, crate::input_recorder::RecordError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty()
+        || trimmed.len() > 64
+        || !trimmed
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+    {
+        return Err(crate::input_recorder::RecordError::InvalidName);
+    }
+    Ok(trimmed.to_owned())
+}
+
+fn record_class_name(stem: &str) -> String {
+    let mut name = String::from("Recorded_");
+    for character in stem.chars() {
+        name.push(if character.is_ascii_alphanumeric() {
+            character
+        } else {
+            '_'
+        });
+    }
+    name
+}
+
+fn unique_path(directory: &std::path::Path, stem: &str, extension: &str) -> std::path::PathBuf {
+    let mut candidate = directory.join(format!("{stem}.{extension}"));
+    let mut suffix = 2u32;
+    while candidate.exists() {
+        candidate = directory.join(format!("{stem}_{suffix}.{extension}"));
+        suffix += 1;
+    }
+    candidate
+}
+
+fn write_atomic(path: &std::path::Path, content: &[u8]) -> std::io::Result<()> {
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no parent")
+    })?;
+    std::fs::create_dir_all(parent)?;
+    let mut file = atomic_write_file::AtomicWriteFile::open(path)?;
+    std::io::Write::write_all(&mut file, content)?;
+    file.commit()
 }
 
 fn command_failure(error: &CommandServiceError) -> ApiFailure {

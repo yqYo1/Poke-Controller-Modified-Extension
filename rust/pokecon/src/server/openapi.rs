@@ -160,6 +160,8 @@ use crate::server::api::{
         crate::server::paths::command_history,
         crate::server::paths::control_command_history,
         crate::server::paths::command_pause,
+        crate::server::paths::input_record,
+        crate::server::paths::control_input_record,
         crate::server::paths::command_tags,
         crate::server::paths::apply_command_tags,
         crate::server::paths::script_creator_snapshot,
@@ -182,6 +184,7 @@ use crate::server::api::{
         ,(name = "run_schedule", description = "Command start and stop reservations")
         ,(name = "command_history", description = "Recent command run history")
         ,(name = "command_pause", description = "Paused command location and variables")
+        ,(name = "input_record", description = "Controller input recording and replay script generation")
         ,(name = "command_tags", description = "Manual command tag editing")
     )
 )]

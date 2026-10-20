@@ -1301,6 +1301,44 @@ pub struct CommandPauseSnapshot {
     pub variables: Vec<CommandPauseVariable>,
 }
 
+/// Current controller input recording state.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InputRecordSnapshot {
+    pub recording: bool,
+    pub samples: u64,
+    pub elapsed_ms: u64,
+    pub limit: u64,
+}
+
+/// One input recording control request.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum InputRecordControlRequest {
+    Start,
+    Stop,
+    Discard,
+    /// Saves the samples as CSV under the controller log directory.
+    Save {
+        name: String,
+    },
+    /// Generates a replay script under `PythonCommands/Record/`.
+    Generate {
+        name: String,
+    },
+}
+
+/// Result of one recording control request.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InputRecordResult {
+    pub snapshot: InputRecordSnapshot,
+    #[serde(default)]
+    pub saved_path: Option<String>,
+    #[serde(default)]
+    pub script_path: Option<String>,
+}
+
 /// One run-history control request.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]

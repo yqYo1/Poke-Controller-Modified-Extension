@@ -20,6 +20,7 @@ mod diagnostics;
     reason = "worker-only engine helpers are enabled by the worker-binary feature"
 )]
 mod dynamic;
+mod input_recorder;
 pub(crate) use dynamic as dynamic_domain;
 mod dynamic_host;
 mod dynamic_runtime;

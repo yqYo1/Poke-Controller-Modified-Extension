@@ -8,11 +8,12 @@ use crate::server::api::{
     ApiError, ApiErrorCode, CameraDevice, CommandControlRequest, CommandHistoryControlRequest,
     CommandHistorySnapshot, CommandPauseSnapshot, CommandTagRequest, CommandTagResult,
     CommandTagSnapshot, DynamicConfigControlRequest, DynamicConfigResult, GenerateLauncherRequest,
-    GenerateLauncherResult, ImageFormat, NotificationTestRequest, NotificationTestResult,
-    OperationResult, RunListSnapshot, RunListSpec, RunScheduleControlRequest, RunScheduleSnapshot,
-    SavedScreenshot, ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult,
-    ScriptCreatorSnapshot, ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult,
-    SerialControlRequest, SerialPort, SettingsPatchRequest, SettingsSnapshot, UpdateCheckResult,
+    GenerateLauncherResult, ImageFormat, InputRecordControlRequest, InputRecordResult,
+    InputRecordSnapshot, NotificationTestRequest, NotificationTestResult, OperationResult,
+    RunListSnapshot, RunListSpec, RunScheduleControlRequest, RunScheduleSnapshot, SavedScreenshot,
+    ScreenshotRequest, ScriptCreatorPreview, ScriptCreatorResult, ScriptCreatorSnapshot,
+    ScriptCreatorSpec, ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort,
+    SettingsPatchRequest, SettingsSnapshot, UpdateCheckResult,
 };
 use crate::server::state::StateHub;
 
@@ -235,6 +236,27 @@ pub trait RestBackend: Send + Sync + 'static {
             ApiFailureStatus::NotFound,
             ApiErrorCode::ResourceNotFound,
             "command history is not available",
+        ))
+    }
+
+    /// Current controller input recording state.
+    async fn input_record(&self) -> ApiResult<InputRecordSnapshot> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "input recording is not available",
+        ))
+    }
+
+    /// Applies one input recording control request.
+    async fn control_input_record(
+        &self,
+        _request: InputRecordControlRequest,
+    ) -> ApiResult<InputRecordResult> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::NotFound,
+            ApiErrorCode::ResourceNotFound,
+            "input recording is not available",
         ))
     }
 

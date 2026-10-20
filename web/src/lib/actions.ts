@@ -7,6 +7,9 @@ export type CommandHistoryControlRequest = components['schemas']['CommandHistory
 export type CommandHistoryEntry = components['schemas']['CommandHistoryEntry'];
 export type CommandHistorySnapshot = components['schemas']['CommandHistorySnapshot'];
 export type CommandPauseSnapshot = components['schemas']['CommandPauseSnapshot'];
+export type InputRecordControlRequest = components['schemas']['InputRecordControlRequest'];
+export type InputRecordResult = components['schemas']['InputRecordResult'];
+export type InputRecordSnapshot = components['schemas']['InputRecordSnapshot'];
 export type CommandTagCommand = components['schemas']['CommandTagCommand'];
 export type CommandTagEdit = components['schemas']['CommandTagEdit'];
 export type CommandTagInfo = components['schemas']['CommandTagInfo'];
@@ -197,6 +200,17 @@ export class BackendActions {
     return unwrap(
       await this.client.POST('/api/run-schedule/control', { body: request }),
       'run schedule control failed'
+    );
+  }
+
+  async inputRecord(): Promise<InputRecordSnapshot> {
+    return unwrap(await this.client.GET('/api/input-record'), 'input record load failed');
+  }
+
+  async controlInputRecord(request: InputRecordControlRequest): Promise<InputRecordResult> {
+    return unwrap(
+      await this.client.POST('/api/input-record/control', { body: request }),
+      'input record control failed'
     );
   }
 

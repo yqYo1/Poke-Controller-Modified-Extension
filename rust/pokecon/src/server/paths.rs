@@ -243,6 +243,31 @@ pub fn command_pause() {}
 
 #[utoipa::path(
     get,
+    path = "/api/input-record",
+    tag = "input_record",
+    responses(
+        (status = 200, description = "Current controller input recording state", body = Success<crate::server::api::InputRecordSnapshot>),
+        (status = 500, description = "Input recording read failure", body = ErrorEnvelope)
+    )
+)]
+pub fn input_record() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/input-record/control",
+    tag = "input_record",
+    request_body(content = crate::server::api::InputRecordControlRequest, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Recording control applied and the snapshot returned", body = Success<crate::server::api::InputRecordResult>),
+        (status = 409, description = "Recording state conflict", body = ErrorEnvelope),
+        (status = 422, description = "Recording input or name is invalid", body = ErrorEnvelope),
+        (status = 500, description = "Recording write failure", body = ErrorEnvelope)
+    )
+)]
+pub fn control_input_record() {}
+
+#[utoipa::path(
+    get,
     path = "/api/command-tags",
     tag = "command_tags",
     responses(

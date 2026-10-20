@@ -8,6 +8,9 @@
     CommandHistorySnapshot,
     CommandPauseSnapshot,
     CommandTagRequest,
+    InputRecordControlRequest,
+    InputRecordResult,
+    InputRecordSnapshot,
     CommandTagResult,
     CommandTagSnapshot,
     OperationResult,
@@ -37,6 +40,8 @@
   interface CommandActions {
     commandHistory(): Promise<CommandHistorySnapshot>;
     commandPause(): Promise<CommandPauseSnapshot>;
+    inputRecord(): Promise<InputRecordSnapshot>;
+    controlInputRecord(request: InputRecordControlRequest): Promise<InputRecordResult>;
     commandTags(): Promise<CommandTagSnapshot>;
     applyCommandTags(request: CommandTagRequest): Promise<CommandTagResult>;
     controlCommand(request: CommandControlRequest): Promise<OperationResult>;
@@ -72,6 +77,12 @@
   let runListOpen = $state(false);
   let tagOpen = $state(false);
   let pauseInfo = $state<CommandPauseSnapshot | null>(null);
+  let recordInfo = $state<InputRecordSnapshot | null>(null);
+  let recordName = $state('record');
+  let recordBusy = $state(false);
+  let recordMessage = $state<string | null>(null);
+  let recordSavedPath = $state<string | null>(null);
+  let recordScriptPath = $state<string | null>(null);
   let copiedPauseFile = $state<string | null>(null);
   let activeSubtab = $state<Subtab>('python');
   let assigningSlot = $state<ShortcutIndex | null>(null);
@@ -503,6 +514,102 @@
     };
   });
 
+  $effect(() => {
+    if (!recordInfo?.recording) {
+      return;
+    }
+    let active = true;
+    const load = async (): Promise<void> => {
+      try {
+        const snapshot = await actions.inputRecord();
+        if (active) recordInfo = snapshot;
+      } catch {
+        // The recording may be discarded by another client; polling resumes
+        // on the next explicit action.
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 1000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  });
+
+  async function startRecording(): Promise<void> {
+    recordBusy = true;
+    recordMessage = null;
+    recordSavedPath = null;
+    recordScriptPath = null;
+    try {
+      const result = await actions.controlInputRecord({ action: 'start' });
+      recordInfo = result.snapshot;
+    } catch (failure) {
+      recordMessage = failure instanceof Error ? failure.message : '記録を開始できませんでした';
+    } finally {
+      recordBusy = false;
+    }
+  }
+
+  async function stopRecording(): Promise<void> {
+    recordBusy = true;
+    try {
+      const result = await actions.controlInputRecord({ action: 'stop' });
+      recordInfo = result.snapshot;
+    } catch (failure) {
+      recordMessage = failure instanceof Error ? failure.message : '記録を停止できませんでした';
+    } finally {
+      recordBusy = false;
+    }
+  }
+
+  async function saveRecording(): Promise<void> {
+    recordBusy = true;
+    recordMessage = null;
+    try {
+      const result = await actions.controlInputRecord({ action: 'save', name: recordName });
+      recordInfo = result.snapshot;
+      recordSavedPath = result.saved_path ?? null;
+      recordMessage = 'CSVを保存しました';
+    } catch (failure) {
+      recordMessage = failure instanceof Error ? failure.message : 'CSVを保存できませんでした';
+    } finally {
+      recordBusy = false;
+    }
+  }
+
+  async function generateRecording(): Promise<void> {
+    recordBusy = true;
+    recordMessage = null;
+    try {
+      const result = await actions.controlInputRecord({ action: 'generate', name: recordName });
+      recordInfo = result.snapshot;
+      recordScriptPath = result.script_path ?? null;
+      recordMessage = 'スクリプトを生成しました';
+      void reload();
+    } catch (failure) {
+      recordMessage = failure instanceof Error ? failure.message : 'スクリプトを生成できませんでした';
+    } finally {
+      recordBusy = false;
+    }
+  }
+
+  async function discardRecording(): Promise<void> {
+    recordBusy = true;
+    recordMessage = null;
+    try {
+      const result = await actions.controlInputRecord({ action: 'discard' });
+      recordInfo = result.snapshot;
+      recordSavedPath = null;
+      recordScriptPath = null;
+      recordMessage = '記録を破棄しました';
+    } catch (failure) {
+      recordMessage = failure instanceof Error ? failure.message : '記録を破棄できませんでした';
+    } finally {
+      recordBusy = false;
+    }
+  }
+
   async function copyPauseFile(file: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(file);
@@ -528,6 +635,37 @@
     <div class="rounded-lg border border-red/20 bg-red/10 px-3 py-2 text-sm text-red" role="alert">{error}</div>
   {:else if notice !== null}
     <div class="rounded-lg border border-green/20 bg-green/10 px-3 py-2 text-sm text-green" role="status">{notice}</div>
+  {/if}
+
+  {#if recordInfo?.recording}
+    <div class="rounded-lg border border-red/20 bg-red/10 px-3 py-2 text-xs text-red" role="status">
+      入力記録中: {String(recordInfo.samples)} 件 / {String(Math.floor(recordInfo.elapsed_ms / 1000))} 秒（上限 {String(recordInfo.limit)} 件）
+    </div>
+  {/if}
+
+  {#if recordInfo && !recordInfo.recording && recordInfo.samples > 0}
+    <section class="rounded-lg border border-blue/20 bg-blue/10 p-3" aria-label="Recorded input">
+      <h3 class="text-xs font-semibold text-blue">入力記録</h3>
+      <p class="mt-1 text-[11px] text-subtext0">{String(recordInfo.samples)} 件を記録しました。CSV保存またはスクリプト生成を選べます。</p>
+      <div class="mt-2 flex flex-wrap items-end gap-2">
+        <label class="text-xs text-subtext1">
+          Name
+          <input class="mt-1 w-48 rounded-md border border-text/15 bg-crust/40 px-2 py-1 text-sm text-text" aria-label="Record name" value={recordName} oninput={(event) => (recordName = event.currentTarget.value)} />
+        </label>
+        <button type="button" class="rounded-md bg-blue/15 px-2 py-1 text-[11px] text-blue disabled:opacity-40" disabled={recordBusy || recordName.trim().length === 0} onclick={() => void saveRecording()}>Save CSV</button>
+        <button type="button" class="rounded-md bg-green/15 px-2 py-1 text-[11px] text-green disabled:opacity-40" disabled={recordBusy || recordName.trim().length === 0} onclick={() => void generateRecording()}>Generate script</button>
+        <button type="button" class="rounded-md bg-red/10 px-2 py-1 text-[11px] text-red disabled:opacity-40" disabled={recordBusy} onclick={() => void discardRecording()}>Discard</button>
+      </div>
+      {#if recordMessage !== null}
+        <p class="mt-2 text-[11px] text-subtext1" role="status">{recordMessage}</p>
+      {/if}
+      {#if recordSavedPath !== null}
+        <p class="mt-1 break-all text-[11px] text-subtext0">CSV: {recordSavedPath}</p>
+      {/if}
+      {#if recordScriptPath !== null}
+        <p class="mt-1 break-all text-[11px] text-subtext0">Script: {recordScriptPath}</p>
+      {/if}
+    </section>
   {/if}
 
   {#if pauseInfo?.paused}
@@ -720,6 +858,7 @@
     <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-sm text-subtext1" onclick={() => (creatorOpen = true)}>New script</button>
     <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-sm text-subtext1" onclick={() => (runListOpen = true)}>Run lists</button>
     <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-sm text-subtext1" onclick={() => (tagOpen = true)}>Tags</button>
+    <button type="button" class={`rounded-lg px-3 py-2 text-sm ${recordInfo?.recording ? 'bg-red/10 text-red' : 'bg-text/5 text-subtext1'}`} disabled={recordBusy} onclick={() => (recordInfo?.recording ? void stopRecording() : void startRecording())}>{recordInfo?.recording ? `Stop recording (${String(recordInfo.samples)})` : 'Record'}</button>
     <span class="ml-auto text-xs text-subtext0">{selectedCommand?.name ?? backendState?.current_command ?? 'No command selected'}</span>
   </div>
 

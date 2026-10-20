@@ -894,7 +894,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [x] **使用頻度**: 実行回数の記録（プロファイル共通store）と使用頻度ソート。実装: `5c35866`＋`0294d44`（`command_usage.rs`: (種別,クラス名,相対file)キー・`<Config>/profiles/command_usage.json`・原子書込・不正行スキップ・数値文字列許容）＋`55820fd`（`CommandInfo.usage_count`・リロード時充填・API型/TS公開・usage_desc/usage_ascソート（同数は名前順）・ソートセレクタ）。現行ヘッドで再検証: `cargo test command_usage` 8 passed、CommandsTabのusage_desc/usage_ascテストを確認。
 - [x] **検索**: 上流の名前部分一致に相当する機能は現行fuzzy検索で充足（維持、差分は仕様へ記録）。確認: FRONTEND §591に「フロントエンド側の責務（fuse.js部分一致スコアリング、セパレーター除外、空文字で元一覧復元、バックエンド再要求なし）」として記録済み — 上流の名前部分一致はfuzzy検索が上位互換で充足。
 - [x] **Record→スクリプト生成**: 入力記録→press／hold／wait生成（CSV→`PythonCommands/Record/`）。`InputRecorder`相当。実装: `c6f4aa64`（`input_recorder.rs` — 実効コントローラ状態を変化時のみ最大100,000件記録（`time_ms,buttons,hat,left/right stick`のCSV、`<data>/Controller_Log/<name>.csv`へ原子的保存・上書き回避連番）、`generate_script`がタップ≤0.5sを`self.press([...], duration)`、長押しを`self.hold`/`wait`/`self.holdEnd`、無入力区間を`self.wait`へ変換し、`Commands/PythonCommands/Record/<name>.py`へ構築後原子的書込（既存名は`_2`連番）、REST GET `/api/input-record`（recording/samples/elapsed/limit）＋POST `/api/input-record/control`（start/stop/save/generate/discard、名前検証、OpenAPI/TS再生成・security preflight・mod.rs Allow表/REST_METHOD_MATRIX・MockBackend）、`ApplicationBackend::publish_controller`で記録フック、web Commandsタブ「Record」ボタン＋記録中バッジ＋停止後パネル（名前入力・Save CSV・Generate script・Discard・結果パス表示）＋テスト1本。`0097d217`でpause捕捉をpause要求時スタック読取へ修正（import中のpause防止・10/10安定）。検証: fmt・clippy・cargo test（workspace 795 passed、recorder 6本）・pytest 720・ci-fast・ルーティング監査・web-check・変異監査8シャード。CI: `0097d217` required 4/4 success（Normal push `39370403875`／PR `39370408953`、Package push `39370403757`／PR attempt3 `39370408943`。初回はpauseテスト不安定・p95コールド・NSIS/Debian再現性フレークで失敗し、`0097d217`のpause捕捉修正とリランで収束）。
-- [ ] **press判定タイミング**: press実行中はボタンを離してから再開、画像認識は判定前に一時停止する挙動へ。
+- [x] **press判定タイミング**: press実行中はボタンを離してから再開、画像認識は判定前に一時停止する挙動へ。実装: `646d305e`（worker: `_pause_defer_depth`を導入し、`press`のinput→wait→inputEnd区間をdefer（pause要求時もボタンを保持したまま停止しない）、release後の`wait`で初めてチェックポイントがpauseを受理。`isContainTemplate`／`isContainTemplate_max`／`isContainTemplateGPU`／`isContainedImage`の先頭で`_checkpoint()`を呼び、判定前にpauseを反映。回帰テスト `pause_during_press_releases_the_button_before_suspending` はpress中pauseでreleaseが先行することを5/5確認）。検証: fmt・clippy・cargo test（workspace 797 passed）・pytest 720・ci-fast・ルーティング監査・変異監査8シャード。CI: `f5e46644` required 4/4 success（Normal push attempt2 `39379671689`／PR attempt2 `39379676057`、Package push attempt2 `39379671682`／PR attempt2 `39379676058`。初回はp95コールド／NSIS・Debian再現性フレークで失敗し、リランで収束）。
 - [x] **ログファイル名**: `log_プロファイル名_日時.log`へ変更。実装: `8806349`＋`ce8647b`（`diagnostics::log_file_name`（上流`PokeConLogger`準拠: unsafe文字`_`置換・空→`_`・`%Y%m%d-%H%M%S`）、`init_tracing`ファイル層（JSON同時出力・フォルダ自動作成＝6.5bの「logフォルダ不在時の起動」を予防修正）、entrypoint配線（`<data root>/log/` — 上流の`./log`との差はXDG分離方針としてSPEC §7.8.5に記録）、テスト3本＋run_cliピン追随。CI: `a2658f4` required 4/4 success（包含検証）。
 
 UI・表示系:
@@ -940,11 +940,11 @@ UI・表示系:
 
 プロファイル・環境:
 - [ ] **起動時profile選択**: profile未指定かつ複数存在時の選択UI（形態は実装時設計）。
-- [ ] **`--auto`/priority.txt**: 起動時自動選択の優先順。
+- [x] **`--auto`/priority.txt**: 起動時自動選択の優先順。実装: `2c0f8f82`（`--auto`をCLIで受理し、`<config>/priority.txt`の先頭から存在するプロファイルを選択。明示`--profile`／`POKECON_PROFILE`が指定された場合はそちらを優先。コメント行・空行・不正名はスキップ、存在しないプロファイルは次候補へ。テスト1本）。
 - [ ] **2窓read-only**: 同一profileの2つ目インスタンスをread-onlyで開けるようにする（現行lock直列化との整合を設計）。
-- [ ] **プロファイル名ガード**: 文字制限＋Windows予約名拒否（`settings/roots.rs`のSafeComponentへ統合）。
+- [x] **プロファイル名ガード**: 文字制限＋Windows予約名拒否（`settings/roots.rs`のSafeComponentへ統合）。実装: `ffa61b72`（`SafeComponent`で最大64文字・`/\\:<>"|?*`・制御文字・末尾空白/ドットを拒否、Windows予約名CON/PRN/AUX/NUL/COM1-9/LPT1-9を拡張子付き・大小文字不問で拒否。既存テストを更新し予約名/文字種の回帰を追加）。
 - [ ] **ライブラリ増減UI**: `[python.script.packages]`宣言の追加/削除UIと同期結果表示。
-- [ ] **更新確認タグ扱い**: 異常タグの扱いを仕様1行へ明記。
+- [x] **更新確認タグ扱い**: 異常タグの扱いを仕様1行へ明記。実装: `860f5915`（`docs/SPECIFICATION_INTEGRATION.md`の更新確認節へ、意味論的バージョンとして解釈できないタグは更新確認の失敗として扱い（更新なし表示）、アプリ動作へ影響させない旨を追記）。
 
 #### 6.4.2 対応済み・対象外（記録）
 

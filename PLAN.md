@@ -943,7 +943,7 @@ UI・表示系:
 - [x] **`--auto`/priority.txt**: 起動時自動選択の優先順。実装: `2c0f8f82`（`--auto`をCLIで受理し、`<config>/priority.txt`の先頭から存在するプロファイルを選択。明示`--profile`／`POKECON_PROFILE`が指定された場合はそちらを優先。コメント行・空行・不正名はスキップ、存在しないプロファイルは次候補へ。テスト1本）。
 - [ ] **2窓read-only**: 同一profileの2つ目インスタンスをread-onlyで開けるようにする（現行lock直列化との整合を設計）。
 - [x] **プロファイル名ガード**: 文字制限＋Windows予約名拒否（`settings/roots.rs`のSafeComponentへ統合）。実装: `ffa61b72`（`SafeComponent`で最大64文字・`/\\:<>"|?*`・制御文字・末尾空白/ドットを拒否、Windows予約名CON/PRN/AUX/NUL/COM1-9/LPT1-9を拡張子付き・大小文字不問で拒否。既存テストを更新し予約名/文字種の回帰を追加）。
-- [ ] **ライブラリ増減UI**: `[python.script.packages]`宣言の追加/削除UIと同期結果表示。
+- [x] **ライブラリ増減UI**: `[python.script.packages]`宣言の追加/削除UIと同期結果表示。実装: `fea188d5`（OtherTabへ「Pythonライブラリ」セクションを追加 — 名前・バージョン（任意）・extras（カンマ区切り）の行編集、追加/削除、重複名・空名の入力検証、保存時に`python.script.packages.list`を書き込み、次回ワーカー生成時の同期である旨と保存結果を表示。設定のapply失敗/再起動表示は既存の設定ステータス節と共有）。テスト1本。検証: web-check。
 - [x] **更新確認タグ扱い**: 異常タグの扱いを仕様1行へ明記。実装: `860f5915`（`docs/SPECIFICATION_INTEGRATION.md`の更新確認節へ、意味論的バージョンとして解釈できないタグは更新確認の失敗として扱い（更新なし表示）、アプリ動作へ影響させない旨を追記）。
 
 #### 6.4.2 対応済み・対象外（記録）
@@ -958,12 +958,12 @@ UI・表示系:
 
 - [ ] **6.5a 要修正（高）— 7件**:
   - [ ] 保存失敗時表示・無名`saveImage`（`python.rs:2376-2406`）: 失敗時に`capture succeeded`と表示／無名が例外となる現状を、上流（Capture Failed表示・無名は失敗）へ合わせる。
-  - [ ] `holdEnd`未押下（`python.rs:1441-1471`）: 保持なしholdEndは警告＋skip、hold重複は警告し二重送信なし（型込み比較）。
+  - [x] `holdEnd`未押下（`python.rs:1441-1471`）: 保持なしholdEndは警告＋skip、hold重複は警告し二重送信なし（型込み比較）。実装: `dfda0b65`（KeyPressに保持リストを導入し、holdの重複は警告して送信せず、holdEndは一致する保持がない場合に警告＋skip、neutral/endでクリア。回帰テスト3/3）。
   - [ ] ダイアログCancel（`_legacy_result`）: Cancel時にfinish／StopThreadで正常終了扱いへ。
   - [ ] `isContainedImage`矩形起点（`python.rs:3460-3508`）: crop_template起点の表示位置を上流と一致させる。
   - [ ] macOSカメラ列挙（`camera/selector.rs`）: 配布対象はLinuxとWindowsのため現行スコープ外と整理（macOS配布追加時の要対応として記録）。
-  - [ ] シリアルopen失敗の案内（`manager.rs:326-332`＋UI）: 抜き差し・Scan Device・Reload Portの案内文を表示。
-  - [ ] open失敗原因詳細（`manager.rs`／`application_backend.rs:644-652`）: ioエラー詳細を保全してログ／APIへ残す。
+  - [x] シリアルopen失敗の案内（`manager.rs:326-332`＋UI）: 抜き差し・Scan Device・Reload Portの案内文を表示。実装: `b24d1651`（`SerialError::OpenFailed`の表示文言へケーブル確認・Scan Device・Reload Portの案内を追加、UIのエラー表示へ反映）。
+  - [x] open失敗原因詳細（`manager.rs`／`application_backend.rs:644-652`）: ioエラー詳細を保全してログ／APIへ残す。実装: `b24d1651`（open失敗時に`tracing::warn!(error=...)`でioエラー詳細をログへ保全し、公開APIは固定文言のまま秘匿性を維持）。
 - [ ] **6.5b 要検証（回帰テストで確定）— 10件**: 初回スクリプト読込のLoading表示／Webhook URLのHTTP詳細ログ抑制／空設定ファイル読込のfallback／logフォルダ不在時の起動／Captures以外のフォルダopen／カメラ名取得失敗時の番号fallback／設定系Cancelの挙動／Web終了ボタン配線／Windowsメニュー・部品フォーカス中のキー遮断粒度／wait停止の期限。
 - 等価・N/A（記録の要約）: 入力種別分離hold、マスクリスト分岐、GPUスタブ、`saveCapture`のimg優先、baud指定・冪等切断、socket port反映、COM番号なし列挙、git非依存起動、失敗識別コード等は等価を確認した。サンプル整理・転写表示等の未移植概念はN/A。
 

@@ -2243,7 +2243,11 @@ class KeyPress:
             self._held_controls.remove(control)
 
     def holdChange(self, btns):
-        _api.controller_input("press", _controls(btns), False, False)
+        controls = _control_items(btns)
+        for control in controls:
+            if control not in self._held_controls:
+                self._held_controls.append(control)
+        _api.controller_input("press", _json.dumps(controls), False, False)
 
     def neutral(self):
         """この入力源(スクリプト)の入力をすべて離し、合成後の状態を送信する。

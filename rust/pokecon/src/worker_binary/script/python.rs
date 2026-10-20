@@ -384,6 +384,27 @@ impl PythonActor {
     }
 
     pub(super) fn pause(&self) -> bool {
+        if self.state.active_id.load(Ordering::Acquire) == 0
+            || self.state.paused.load(Ordering::Acquire)
+        {
+            return self.state.pause();
+        }
+        // Capture the command stack while the script thread is still running;
+        // the pause flag blocks it at the next checkpoint.
+        for _ in 0..10 {
+            let captured = Python::attach(|py| -> bool {
+                py.import("_pokecon_script")
+                    .and_then(|module| module.getattr("_capture_pause_now"))
+                    .and_then(|function| function.call0())
+                    .ok()
+                    .and_then(|value| value.extract::<bool>().ok())
+                    .unwrap_or(false)
+            });
+            if captured {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
         self.state.pause()
     }
 
@@ -1325,9 +1346,6 @@ class Command(metaclass=CommandMeta):
         return page
 
 
-_pause_capture_generation = 0
-
-
 def _pause_variables(command):
     internal = {
         "_logger",
@@ -1356,39 +1374,106 @@ def _pause_variables(command):
 def _capture_pause_frames():
     frames = []
     variables = []
+    root = _api.command_root()
+    candidates = []
     try:
-        root = _api.command_root()
-        frame = _sys._getframe(1)
-        while frame is not None:
-            filename = frame.f_code.co_filename
-            if filename.startswith(root):
-                frames.append(
-                    {
-                        "file": filename,
-                        "line": int(frame.f_lineno),
-                        "function": frame.f_code.co_name,
-                    }
-                )
-                if not variables:
-                    candidate = frame.f_locals.get("self")
-                    if candidate is not None and hasattr(candidate, "waitWhilePaused"):
-                        variables = _pause_variables(candidate)
-            frame = frame.f_back
+        candidates.append(_sys._current_frames().get(_threading.get_ident()))
+    except Exception:
+        pass
+    try:
+        candidates.append(_sys._getframe(1))
+    except Exception:
+        pass
+    try:
+        for start in candidates:
+            frame = start
+            while frame is not None:
+                filename = frame.f_code.co_filename
+                matches = filename.startswith(root)
+                if not matches:
+                    try:
+                        matches = _os.path.realpath(filename).startswith(
+                            _os.path.realpath(root)
+                        )
+                    except Exception:
+                        matches = False
+                if matches:
+                    frames.append(
+                        {
+                            "file": filename,
+                            "line": int(frame.f_lineno),
+                            "function": frame.f_code.co_name,
+                        }
+                    )
+                    if not variables:
+                        candidate = frame.f_locals.get("self")
+                        if candidate is not None and hasattr(candidate, "waitWhilePaused"):
+                            variables = _pause_variables(candidate)
+                frame = frame.f_back
+            if frames:
+                break
     except Exception:
         return {"frames": [], "variables": []}
     frames.reverse()
     return {"frames": frames[:32], "variables": variables}
 
 
+def _capture_pause_now():
+    """Capture the command thread's stack while it is still running.
+
+    Called from the worker request thread just before the pause flag is set;
+    reading `sys._current_frames()` avoids relying on a monitoring callback
+    frame that may not expose the user stack.
+    """
+    try:
+        root = _api.command_root()
+        real_root = _os.path.realpath(root)
+        for frame in list(_sys._current_frames().values()):
+            stack = []
+            variables = []
+            cursor = frame
+            while cursor is not None:
+                filename = cursor.f_code.co_filename
+                try:
+                    matches = filename.startswith(root) or _os.path.realpath(
+                        filename
+                    ).startswith(real_root)
+                except Exception:
+                    matches = False
+                if matches:
+                    stack.append(
+                        {
+                            "file": filename,
+                            "line": int(cursor.f_lineno),
+                            "function": cursor.f_code.co_name,
+                        }
+                    )
+                    if not variables:
+                        candidate = cursor.f_locals.get("self")
+                        if candidate is not None and hasattr(
+                            candidate, "waitWhilePaused"
+                        ):
+                            variables = _pause_variables(candidate)
+                cursor = cursor.f_back
+            if stack:
+                stack.reverse()
+                _api.record_pause_capture(
+                    _json.dumps(
+                        {"frames": stack[:32], "variables": variables},
+                        ensure_ascii=False,
+                    )
+                )
+                return True
+    except Exception:
+        return False
+    return False
+
+
 def _checkpoint():
-    global _pause_capture_generation
-    generation = int(_api.pause_generation())
-    if generation != _pause_capture_generation:
-        _pause_capture_generation = generation
-        if generation:
-            _api.record_pause_capture(
-                _json.dumps(_capture_pause_frames(), ensure_ascii=False)
-            )
+    # Pause applies to the running command body, never to module import or
+    # class construction.
+    if _active_command is None:
+        return _api.is_alive()
     return _api.execution_checkpoint()
 
 

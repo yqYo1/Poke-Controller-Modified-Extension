@@ -961,7 +961,7 @@ UI・表示系:
   - [x] `holdEnd`未押下（`python.rs:1441-1471`）: 保持なしholdEndは警告＋skip、hold重複は警告し二重送信なし（型込み比較）。実装: `dfda0b65`（KeyPressに保持リストを導入し、holdの重複は警告して送信せず、holdEndは一致する保持がない場合に警告＋skip、neutral/endでクリア。回帰テスト3/3）。
   - [ ] ダイアログCancel（`_legacy_result`）: Cancel時にfinish／StopThreadで正常終了扱いへ。
   - [ ] `isContainedImage`矩形起点（`python.rs:3460-3508`）: crop_template起点の表示位置を上流と一致させる。
-  - [ ] macOSカメラ列挙（`camera/selector.rs`）: 配布対象はLinuxとWindowsのため現行スコープ外と整理（macOS配布追加時の要対応として記録）。
+  - [x] macOSカメラ列挙（`camera/selector.rs`）: 配布対象はLinuxとWindowsのため現行スコープ外と整理（macOS配布追加時の要対応として記録）。実装: `SPECIFICATION_BACKEND.md`のカメラ注記へ、macOSはネイティブ列挙を行わず設定済みセレクターのみ返す旨と整数インデックス指定は継続利用できる旨を明記。
   - [x] シリアルopen失敗の案内（`manager.rs:326-332`＋UI）: 抜き差し・Scan Device・Reload Portの案内文を表示。実装: `b24d1651`（`SerialError::OpenFailed`の表示文言へケーブル確認・Scan Device・Reload Portの案内を追加、UIのエラー表示へ反映）。
   - [x] open失敗原因詳細（`manager.rs`／`application_backend.rs:644-652`）: ioエラー詳細を保全してログ／APIへ残す。実装: `b24d1651`（open失敗時に`tracing::warn!(error=...)`でioエラー詳細をログへ保全し、公開APIは固定文言のまま秘匿性を維持）。
 - [ ] **6.5b 要検証（回帰テストで確定）— 10件**: 初回スクリプト読込のLoading表示／Webhook URLのHTTP詳細ログ抑制／空設定ファイル読込のfallback／logフォルダ不在時の起動／Captures以外のフォルダopen／カメラ名取得失敗時の番号fallback／設定系Cancelの挙動／Web終了ボタン配線／Windowsメニュー・部品フォーカス中のキー遮断粒度／wait停止の期限。

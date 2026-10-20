@@ -642,6 +642,8 @@ type ScreenshotFormat = Literal["png", "jpeg"]
 
 `Camera.set_flip()`のtitlecase正準値は固定ベースラインのユーザースクリプトAPI名を維持する。一方、正準設定`camera.flip_mode`は設定enumの全体規則に従ってlowercaseを使用する。両者は同じ意味へ変換されるが、各公開表面の型ヒントはそれぞれの正準綴りだけを列挙し、大小文字違いの実行時互換入力を`| str`で静的に開放しない。
 
+> **注**: macOSのカメラ列挙は対象外とする。`GET /api/devices/cameras` はmacOS上ではネイティブ列挙を行わず、設定済みセレクターのみを返す（未設定なら空）。`camera.device`の整数（OpenCVインデックス）指定は引き続き利用できる。プラットフォーム固有の列挙レイヤーはLinux（V4L2）とWindows（ネイティブ識別子）に限定する。
+>
 > **注**: `openCamera(cameraId: int | str)`, `destroy()`, `camera_thread_start()`, `camera_thread_stop()`, `camera_update()` はフレームワークが管理する内部メソッド。ユーザースクリプトから直接呼び出すことを想定しないが、互換性のため `self.camera.*` 経由でアクセス可能とする。`openCamera` の `cameraId` は整数（OpenCVインデックス）または文字列（udevパス/Windows識別子）を受け付ける。数値動作は従来通り、Linux文字列はV4L2デバイスパスをサポート、Windows文字列はネイティブ列挙レイヤー経由。
 
 > **注（反転状態の対応）**: `set_flip("Vertical")` は `flip=True`, `flip_mode=0`、`set_flip("Horizontal")` は `flip=True`, `flip_mode=1`、`set_flip("Both")` は `flip=True`, `flip_mode=-1` と対応する。`set_flip("None")` は `flip=False` とし、`flip_mode` の値は参照しない。

@@ -40,6 +40,37 @@ describe('OtherTab', () => {
     expect(clearOutputs).toHaveBeenCalledOnce();
   });
 
+  it('edits and saves the declared python library list', async () => {
+    const { runtime, view } = runtimeView(
+      settingsSnapshot('4', {
+        'python.script.packages.list': [{ name: 'numpy', version: '2.0' }]
+      })
+    );
+    const writeSettings = vi.spyOn(runtime, 'writeSettings').mockResolvedValue({
+      recoveredRevisionConflict: false,
+      snapshot: settingsSnapshot('5')
+    });
+    render(OtherTab, { runtime, view });
+
+    const firstName = screen.getByLabelText('Library name 1');
+    expect(firstName).toHaveProperty('value', 'numpy');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'ライブラリを追加' }));
+    await fireEvent.input(screen.getByLabelText('Library name 2'), {
+      target: { value: 'requests' }
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'ライブラリを保存' }));
+
+    await waitFor(() => {
+      expect(writeSettings).toHaveBeenCalledWith({
+        'python.script.packages.list': [
+          { name: 'numpy', version: '2.0' },
+          { name: 'requests' }
+        ]
+      });
+    });
+  });
+
   it('separates startup-only current and saved values and exposes failures', () => {
     const base = settingsSnapshot('3');
     const { runtime, view } = runtimeView({

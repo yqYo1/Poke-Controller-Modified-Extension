@@ -155,6 +155,102 @@
       error = errorMessage(reason);
     }
   }
+  interface PackageRow {
+    name: string;
+    version: string;
+    extras: string;
+  }
+
+  let packageRows = $state<PackageRow[]>([]);
+  let packageDirty = $state(false);
+  let packageError = $state<string | null>(null);
+  let packageMessage = $state<string | null>(null);
+
+  const savedPackages = $derived(
+    (values?.['python.script.packages.list'] ?? []) as {
+      name: string;
+      version?: string;
+      extras?: string[];
+    }[]
+  );
+
+  $effect(() => {
+    if (!packageDirty) {
+      packageRows = savedPackages.map((entry) => ({
+        name: entry.name,
+        version: entry.version ?? '',
+        extras: (entry.extras ?? []).join(', ')
+      }));
+    }
+  });
+
+  function addPackage(): void {
+    packageRows = [...packageRows, { name: '', version: '', extras: '' }];
+    packageDirty = true;
+    packageError = null;
+  }
+
+  function removePackage(index: number): void {
+    packageRows = packageRows.filter((_row, rowIndex) => rowIndex !== index);
+    packageDirty = true;
+    packageError = null;
+  }
+
+  function updatePackage(index: number, field: keyof PackageRow, value: string): void {
+    packageRows = packageRows.map((row, rowIndex) =>
+      rowIndex === index ? { ...row, [field]: value } : row
+    );
+    packageDirty = true;
+    packageError = null;
+  }
+
+  async function savePackages(): Promise<void> {
+    const names: string[] = [];
+    const output: { name: string; version?: string; extras?: string[] }[] = [];
+    for (const row of packageRows) {
+      const name = row.name.trim();
+      if (name.length === 0) {
+        packageError = t('Every library needs a name.', 'ライブラリ名を入力してください。');
+        return;
+      }
+      if (names.includes(name)) {
+        packageError = t('Library names must be unique.', 'ライブラリ名が重複しています。');
+        return;
+      }
+      names.push(name);
+      const extras = row.extras
+        .split(',')
+        .map((extra) => extra.trim())
+        .filter((extra) => extra.length > 0);
+      const entry: { name: string; version?: string; extras?: string[] } = { name };
+      const version = row.version.trim();
+      if (version.length > 0) {
+        entry.version = version;
+      }
+      if (extras.length > 0) {
+        entry.extras = extras;
+      }
+      output.push(entry);
+    }
+    busy = true;
+    packageError = null;
+    packageMessage = null;
+    try {
+      await runtime.writeSettings({
+        'python.script.packages.list': output
+      });
+      packageDirty = false;
+      packageMessage = t(
+        'Saved. Libraries synchronize at the next worker generation.',
+        '保存しました。次回のワーカー生成時に同期されます。'
+      );
+    } catch (reason: unknown) {
+      packageError = errorMessage(reason);
+    } finally {
+      busy = false;
+    }
+  }
+
 </script>
 
 <div class="space-y-5">
@@ -455,6 +551,41 @@
       </span>
     </label>
   </fieldset>
+
+  <section class="rounded-lg border border-text/10 bg-crust/20 p-4" aria-labelledby="python-libraries">
+    <h3 id="python-libraries" class="text-sm font-semibold text-text">{t('Python libraries', 'Pythonライブラリ')}</h3>
+    <p class="mt-1 text-[11px] text-subtext0">{t('Declared packages synchronize into the script worker environment at the next worker generation.', '宣言したパッケージは次回のワーカー生成時にスクリプト実行環境へ同期されます。')}</p>
+    <div class="mt-3 space-y-2">
+      {#each packageRows as row, index (index)}
+        <div class="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto]">
+          <label class="text-xs text-subtext1">
+            {t('Name', '名前')}
+            <input class="mt-1 w-full rounded-md border border-text/15 bg-crust/40 px-2 py-1 text-sm text-text" aria-label={`Library name ${String(index + 1)}`} value={row.name} oninput={(event) => updatePackage(index, 'name', event.currentTarget.value)} />
+          </label>
+          <label class="text-xs text-subtext1">
+            {t('Version (optional)', 'バージョン（任意）')}
+            <input class="mt-1 w-full rounded-md border border-text/15 bg-crust/40 px-2 py-1 text-sm text-text" aria-label={`Library version ${String(index + 1)}`} value={row.version} oninput={(event) => updatePackage(index, 'version', event.currentTarget.value)} />
+          </label>
+          <label class="text-xs text-subtext1">
+            {t('Extras (comma separated)', 'extras（カンマ区切り）')}
+            <input class="mt-1 w-full rounded-md border border-text/15 bg-crust/40 px-2 py-1 text-sm text-text" aria-label={`Library extras ${String(index + 1)}`} value={row.extras} oninput={(event) => updatePackage(index, 'extras', event.currentTarget.value)} />
+          </label>
+          <button type="button" class="mt-5 rounded-md bg-red/10 px-2 py-1 text-[11px] text-red" aria-label={`Remove library ${String(index + 1)}`} onclick={() => removePackage(index)}>{t('Remove', '削除')}</button>
+        </div>
+      {/each}
+      {#if packageRows.length === 0}
+        <p class="text-xs text-subtext0">{t('No libraries are declared.', 'ライブラリは登録されていません。')}</p>
+      {/if}
+    </div>
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      <button type="button" class="rounded-md bg-text/5 px-2 py-1 text-[11px] text-subtext1" onclick={addPackage}>{t('Add library', 'ライブラリを追加')}</button>
+      <button type="button" class="rounded-md bg-green/15 px-2 py-1 text-[11px] text-green disabled:opacity-40" disabled={busy || !packageDirty} onclick={() => void savePackages()}>{t('Save libraries', 'ライブラリを保存')}</button>
+      {#if packageMessage !== null}<span class="text-[11px] text-green" role="status">{packageMessage}</span>{/if}
+    </div>
+    {#if packageError !== null}
+      <p class="mt-2 text-[11px] text-red" role="alert">{packageError}</p>
+    {/if}
+  </section>
 
   {#if (view.settings?.restart_required.length ?? 0) > 0 || Object.keys(view.settings?.apply_failures ?? {}).length > 0}
     <section class="rounded-lg border border-yellow/20 bg-yellow/[0.06] p-4" aria-labelledby="settings-status">

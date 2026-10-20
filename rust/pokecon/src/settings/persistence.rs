@@ -471,6 +471,20 @@ mod tests {
     }
 
     #[test]
+    fn empty_settings_files_read_as_an_empty_table() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let roots = roots(&temp);
+        roots.ensure().expect("roots must be created");
+        let path = roots.config.join("settings.toml");
+        let store = TomlStore::new(LockManager::new(&roots));
+        for source in ["", "  \n\t\n"] {
+            fs::write(&path, source).expect("fixture must be writable");
+            let document = store.read(&path).expect("empty settings must load");
+            assert_eq!(document.parsed, TomlValue::Table(toml::map::Map::new()));
+        }
+    }
+
+    #[test]
     fn updates_preserve_comments_unknown_keys_and_order() {
         let temp = TempDir::new().expect("temporary directory must exist");
         let roots = roots(&temp);

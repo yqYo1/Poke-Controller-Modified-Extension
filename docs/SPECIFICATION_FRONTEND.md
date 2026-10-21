@@ -854,6 +854,8 @@ Commands/
 │   ├── Discord Check
 │   ├── Generate Bat File & Profile Directory
 │   └── 画面サイズのリセット
+├── 操作
+│   └── すべての入力を離す（実行中は確認）
 ├── 設定（予約）
 ├── File
 │   ├── Load Dynamic Config      ← 新規読み込み（拡張子で自動判別）

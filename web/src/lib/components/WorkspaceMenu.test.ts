@@ -76,6 +76,15 @@ describe('WorkspaceMenu', () => {
     });
   });
 
+  it('releases all inputs from the operations menu', async () => {
+    const { runtime, view } = runtimeView();
+    const neutralizeInput = vi.spyOn(runtime, 'neutralizeInput');
+    render(WorkspaceMenu, { actions: menuActions(), runtime, view });
+    await fireEvent.click(screen.getByText('メニュー'));
+    await fireEvent.click(screen.getByRole('button', { name: 'すべての入力を離す' }));
+    expect(neutralizeInput).toHaveBeenCalledTimes(1);
+  });
+
   it('honors dynamic-config cancellation without sending file content', async () => {
     const { runtime, view } = runtimeView();
     const actions = menuActions();

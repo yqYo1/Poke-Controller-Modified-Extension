@@ -313,6 +313,21 @@
       error = errorMessage(reason);
     }
   }
+
+  function releaseAllInputs(): void {
+    if (
+      view.state?.is_running === true &&
+      !window.confirm(
+        t(
+          'A command is running. Release every input anyway?',
+          'コマンド実行中です。すべての入力を離しますか？'
+        )
+      )
+    ) {
+      return;
+    }
+    runtime.neutralizeInput();
+  }
 </script>
 
 <div class="relative z-30 flex flex-wrap items-center justify-end gap-2">
@@ -326,6 +341,17 @@
       {:else if notice !== null}
         <div class="rounded-lg border border-green/20 bg-green/10 px-3 py-2 text-xs text-green" role="status">{notice}</div>
       {/if}
+
+      <section class="border-t border-text/10 pt-4" aria-labelledby="operations-menu-heading">
+        <h2 id="operations-menu-heading" class="text-xs font-semibold tracking-[0.14em] text-blue uppercase">
+          {t('Operations', '操作')}
+        </h2>
+        <button
+          type="button"
+          class="mt-2 rounded-lg bg-red/10 px-3 py-2 text-xs text-red"
+          onclick={releaseAllInputs}
+        >{t('Release all inputs', 'すべての入力を離す')}</button>
+      </section>
 
       <section aria-labelledby="profile-menu-heading">
         <h2 id="profile-menu-heading" class="text-xs font-semibold tracking-[0.14em] text-blue uppercase">

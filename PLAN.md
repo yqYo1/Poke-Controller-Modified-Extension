@@ -904,7 +904,7 @@ UI・表示系:
 - [x] **仕切り線**: 領域間のドラッグ比率調整＋比率保持＋ダブルクリック復帰（Output#1/#2間含む）。実装: `78cf7c91`（`OutputGroup`へOutput#1/#2間のseparatorを追加。pointer dragで比率を変更し`ui.output_split_ratio`へ保存、ダブルクリックで50へ復帰。行比率テスト更新＋double clickテスト追加、web-check 153 passed・0 warnings、ci-fast 0、FRONTEND §5.7・TRACEABILITY更新）。
 - [ ] **プレビュー**: 領域いっぱいの最大表示（縦横比維持）、Show Sizeによるウィンドウサイズ変更（WebRTC自動フィットとの整合を設計）、明るさGain/Gamma（表示のみ）。
 - [ ] **メニュー**: ファイル／コマンド／表示／接続／操作／ツール／設定／ヘルプの8系統再構築＋キーボードから開ける操作（タブ・ボタン操作のメニュー露出含む）。
-- [ ] **ミニ画面**: コマンド選択・実行中心の狭幅画面。
+- [x] **ミニ画面**: コマンド選択・実行中心の狭幅画面。実装: `b33d72dd`（ヘッダの「ミニ画面」でMain Panel・タブナビ・右パネルを隠し、Commandsタブのみ表示。「通常画面」で元のタブへ復帰し、選択状態を維持。`page.test.ts`追加、web-check 158 passed・0 warnings、ci-fast 0、FRONTEND §5.2・TRACEABILITY更新）。
 - [x] **起動時レイアウト確定後表示**: 配置確定まで非表示にして起動直後のガタつきを防ぐ。実装: `ec1da71b`（`+page.svelte` — view初期化後に2回のanimation frameを待って`layoutReady`を立て、確定前はworkspaceを`opacity-0`・`pointer-events-none`・`aria-busy=true`にする。web-check 148 passed・0 warnings、ci-fast 0、FRONTEND §5.2・TRACEABILITY 6.4.9更新）。
 - [ ] **Screenshotボタン**: アプリウィンドウ全体をCapturesへ保存（WebのOS制約を注記、Tauri優先）。
 - [ ] **Outputのタブ拡張**: Logタブ（レベル色分け・フィルタ・プロファイル毎保存）／Noteタブ（フリーメモ・プロファイル毎保存）／Serialタブ（送信データ表示）、出力全域の文字検索（Ctrl+F、大小切替）。- [x] **Outputのタブ拡張**: Logタブ（レベル色分け・フィルタ・プロファイル毎保存）／Noteタブ（フリーメモ・プロファイル毎保存） 実装: `b6ec4717`（`OutputPanel`へLog／Noteタブを追加。Logは既存のレベル色分け・フィルタ・自動スクロール・コピー・クリアを維持し、Noteはプロファイル別に`localStorage`の`pokecon.output1/2.note.<profile>`へ保存。`OutputPanel.test.ts` 2件、web-check 155 passed・0 warnings、ci-fast 0、FRONTEND §5.7・TRACEABILITY更新）。

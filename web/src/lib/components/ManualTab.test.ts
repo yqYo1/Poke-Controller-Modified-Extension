@@ -45,4 +45,29 @@ describe('ManualTab', () => {
       });
     });
   });
+
+  it('writes the normalized touchscreen rectangle', async () => {
+    const { runtime, view } = runtimeView();
+    const writeSettings = vi.spyOn(runtime, 'writeSettings').mockResolvedValue({
+      recoveredRevisionConflict: false,
+      snapshot: settingsSnapshot('2', {
+        'input.touchscreen_area': { left: 0.1, top: 0.2, right: 0.9, bottom: 0.8 }
+      })
+    });
+    render(ManualTab, { runtime, view });
+
+    await fireEvent.input(screen.getByLabelText('Touch area right'), {
+      target: { value: '0.9' }
+    });
+    await fireEvent.input(screen.getByLabelText('Touch area bottom'), {
+      target: { value: '0.8' }
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Apply touch area' }));
+
+    await waitFor(() => {
+      expect(writeSettings).toHaveBeenCalledWith({
+        'input.touchscreen_area': { left: 0, top: 0, right: 0.9, bottom: 0.8 }
+      });
+    });
+  });
 });

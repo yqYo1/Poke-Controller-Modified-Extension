@@ -237,6 +237,7 @@
 | ハードウェア制御は非表示（グレーアウト不可） | 実装済 | `ManualTab.svelte` に `hardware` 0件、`Software input sources` のみ | — |
 | Switch Controller Simulator（§5.3.1 と同一構成） | 実装済 | `ManualTab.svelte:79-84`（右列の単一 Software-Controller へ誘導、`focusController`→`#software-controller`）; 実体は `RightPanel.svelte` の `ControllerPanel` | — |
 | アクティブキー表示・全入力解放 | 実装済 | `ManualTab.svelte:77-81`（`keyboard_keys` 表示、`runtime.neutralizeInput()`） | — |
+| タッチ操作領域の数値設定（left/top/right/bottom、0〜1、順序検証、PATCH） | 実装済 | `ManualTab.svelte` の Touch screen area section、`ManualTab.test.ts` 追加テスト | 正規化・永続化は backend 所有 |
 
 ### 6.4 Commands タブ
 

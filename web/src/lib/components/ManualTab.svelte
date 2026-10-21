@@ -11,6 +11,25 @@
   let error = $state<string | null>(null);
   let saving = $state(false);
   const keyboardEnabled = $derived(view.settings?.values['input.keyboard_enabled'] ?? true);
+  const savedTouchArea = $derived(
+    view.settings?.values['input.touchscreen_area'] ?? {
+      left: 0,
+      top: 0,
+      right: 1,
+      bottom: 1
+    }
+  );
+  let touchLeft = $state(0);
+  let touchTop = $state(0);
+  let touchRight = $state(1);
+  let touchBottom = $state(1);
+
+  $effect(() => {
+    touchLeft = savedTouchArea.left;
+    touchTop = savedTouchArea.top;
+    touchRight = savedTouchArea.right;
+    touchBottom = savedTouchArea.bottom;
+  });
 
   function neutralize(): void {
     runtime.neutralizeInput();
@@ -43,6 +62,26 @@
       | 'input.right_stick_mouse_enabled'
   ): void {
     void write({ [setting]: (event.currentTarget as HTMLInputElement).checked });
+  }
+
+  function applyTouchArea(): void {
+    const area = [touchLeft, touchTop, touchRight, touchBottom];
+    if (area.some((value) => !Number.isFinite(value) || value < 0 || value > 1)) {
+      error = 'Touch area values must be between 0 and 1';
+      return;
+    }
+    if (touchLeft >= touchRight || touchTop >= touchBottom) {
+      error = 'Touch area must keep left < right and top < bottom';
+      return;
+    }
+    void write({
+      'input.touchscreen_area': {
+        left: touchLeft,
+        top: touchTop,
+        right: touchRight,
+        bottom: touchBottom
+      }
+    });
   }
 </script>
 
@@ -80,6 +119,18 @@
       <button type="button" class="rounded-lg bg-red/10 px-3 py-2 font-medium text-red" onclick={neutralize}>Release all input</button>
     </div>
   </div>
+
+  <section class="rounded-lg border border-text/10 bg-crust/20 p-4" aria-labelledby="touch-area-heading">
+    <h3 id="touch-area-heading" class="text-xs font-semibold tracking-[0.14em] text-subtext1 uppercase">Touch screen area</h3>
+    <p class="mt-1 text-xs text-subtext0">正規化した矩形（0〜1）。left &lt; right、top &lt; bottom を保ちます。</p>
+    <div class="mt-3 grid gap-2 sm:grid-cols-4">
+      <label class="text-xs text-subtext1">Left<input class="mt-1 w-full rounded-md border border-text/15 bg-crust/40 px-2 py-1 text-sm text-text" type="number" min="0" max="1" step="0.01" aria-label="Touch area left" bind:value={touchLeft} /></label>
+      <label class="text-xs text-subtext1">Top<input class="mt-1 w-full rounded-md border border-text/15 bg-crust/40 px-2 py-1 text-sm text-text" type="number" min="0" max="1" step="0.01" aria-label="Touch area top" bind:value={touchTop} /></label>
+      <label class="text-xs text-subtext1">Right<input class="mt-1 w-full rounded-md border border-text/15 bg-crust/40 px-2 py-1 text-sm text-text" type="number" min="0" max="1" step="0.01" aria-label="Touch area right" bind:value={touchRight} /></label>
+      <label class="text-xs text-subtext1">Bottom<input class="mt-1 w-full rounded-md border border-text/15 bg-crust/40 px-2 py-1 text-sm text-text" type="number" min="0" max="1" step="0.01" aria-label="Touch area bottom" bind:value={touchBottom} /></label>
+    </div>
+    <button type="button" class="mt-3 rounded-lg bg-blue/15 px-3 py-2 text-xs font-medium text-blue disabled:opacity-40" disabled={saving} onclick={applyTouchArea}>Apply touch area</button>
+  </section>
 
   <p class="text-xs text-subtext0">Live controller input uses the single Software-Controller in the right column.</p>
 </div>

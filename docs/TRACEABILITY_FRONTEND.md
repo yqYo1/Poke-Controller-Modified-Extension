@@ -314,6 +314,12 @@
 | 開始/停止予約（clock／after_minutes、キャンセル、sleep警告） | 実装済 | `RunListEditorDialog.svelte` の Schedule タブ; `actions.ts` の `runSchedule`／`controlRunSchedule` | ちょうど一方の検証は backend 所有 |
 | `GET/PUT /api/run-lists`、`GET /api/run-schedule`／`POST /api/run-schedule/control` | 実装済 | `actions.ts` | — |
 
+#### 6.4.9 起動時レイアウト確定後表示
+
+| 要求 | 判定 | 直接証拠 | ギャップ・備考 |
+|------|------|----------|----------------|
+| view初期化後2 frame待って可視化、確定前は透明・pointer-events無効・aria-busy | 実装済 | `+page.svelte` の `layoutReady` effect と main の class/aria | 視覚的なちらつき防止のみ |
+
 #### 6.4.8 起動時profile選択
 
 | 要求 | 判定 | 直接証拠 | ギャップ・備考 |

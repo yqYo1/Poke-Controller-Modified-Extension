@@ -36,6 +36,7 @@
   ];
   let activeTab = $state<TabId>('camera');
   let view = $state<RuntimeView>();
+  let layoutReady = $state(false);
   let workspaceElement = $state<HTMLElement>();
   let panelElement = $state<HTMLElement>();
   const unsubscribe = runtime.subscribe((next) => {
@@ -101,13 +102,27 @@
     };
   });
 
+  $effect(() => {
+    if (view === undefined || layoutReady || typeof window === 'undefined') return;
+    let second = 0;
+    const first = window.requestAnimationFrame(() => {
+      second = window.requestAnimationFrame(() => {
+        layoutReady = true;
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(first);
+      window.cancelAnimationFrame(second);
+    };
+  });
+
   onDestroy(unsubscribe);
 </script>
 
 {#if view !== undefined}
   <InputSafety {runtime} {view} />
   <ProfileStartupDialog {runtime} {view} />
-  <main bind:this={workspaceElement} class="mx-auto flex h-screen min-h-0 w-full max-w-[1920px] flex-col overflow-auto p-3 sm:p-5 lg:p-6">
+  <main bind:this={workspaceElement} class="mx-auto flex h-screen min-h-0 w-full max-w-[1920px] flex-col overflow-auto p-3 transition-opacity duration-150 sm:p-5 lg:p-6" class:opacity-0={!layoutReady} class:pointer-events-none={!layoutReady} aria-busy={!layoutReady}>
     <header class="flex flex-wrap items-center justify-between gap-4 border-b border-text/10 px-1 pb-4">
       <div class="flex items-center gap-3">
         <div class="grid size-10 place-items-center rounded-lg border border-blue/30 bg-blue/10 font-bold text-blue" aria-hidden="true">PC</div>

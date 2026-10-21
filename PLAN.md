@@ -925,7 +925,7 @@ UI・表示系:
 コントローラー・入力:
 - [ ] **Software-Controllerレイアウト（5+7）**: レイアウト定義をregistry化して切替可能にする。
 - [ ] **Simulator実寸タッチ**: 実寸（320x240等倍）表示とカメラ映像の重ね表示。
-- [ ] **本体色**: コントローラー本体色の設定（プリセットの書出し含む）。
+- [x] **本体色**: コントローラー本体色の設定（プリセットの書出し含む）。実装: `5cd19bf0`（`ui.controller_body_color`をprofile設定へ追加 — `classic/black/white/red/blue/green/purple`、CLI `--ui-controller-body-color`、env `POKECON_UI_CONTROLLER_BODY_COLOR`。OtherTabの色selectとJSON書出し、ControllerPanelの本体色反映、registry/schema/typings/OpenAPI/SPEC/SETTINGS/TRACEABILITY更新。lib 656 passed、contract_sync 27 passed、web-check 156 passed・0 warnings、ci-fast 0）。
 - [ ] **ControllerProfiles複数対応**: `ControllerProfiles/*.json`方式の機種別マッチングとボタン割当セットアップ。
 - [ ] **機種別KeyConfig**: ゲーム機（Switch／3DS／DS／GameCube）別のキー割当と保存。
 - [ ] **モニター補助ツール**: 複数インスタンス（プロファイル別プロセス）の監視ツールとして読み替えて実装（枠数・All Start／Stop等の詳細は実装時設計）。

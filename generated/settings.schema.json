@@ -690,6 +690,56 @@
         }
       }
     },
+    "camera.prefer_mjpeg": {
+      "type": "boolean",
+      "default": true,
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": true
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "toml": {
+            "name": "camera.prefer_mjpeg",
+            "unsupported_reason": null
+          },
+          "dynamic": {
+            "name": "pokecon.opt.camera.prefer_mjpeg",
+            "unsupported_reason": null
+          },
+          "cli": {
+            "flags": [
+              "--camera-prefer-mjpeg"
+            ],
+            "encoding": "scalar",
+            "discouraged": false
+          },
+          "env": {
+            "name": "POKECON_CAMERA_PREFER_MJPEG",
+            "encoding": "scalar"
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
     "camera.device": {
       "oneOf": [
         {
@@ -4276,6 +4326,7 @@
     "app_name",
     "camera.capture_fps",
     "camera.capture_resolution",
+    "camera.prefer_mjpeg",
     "camera.device",
     "camera.flip_mode",
     "camera.screenshot_format",

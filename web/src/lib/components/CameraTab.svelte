@@ -145,6 +145,7 @@
       | 'ui.camera.guide_visible'
       | 'ui.camera.live_view_enabled'
       | 'ui.camera.pixel_values_visible'
+      | 'camera.prefer_mjpeg'
   ): Promise<void> {
     await write({ [setting]: (event.currentTarget as HTMLInputElement).checked });
   }
@@ -295,6 +296,11 @@
       <select class="mt-1 w-full rounded-lg border border-text/10 bg-surface1 px-3 py-2 text-sm text-text" value={values?.['camera.capture_resolution'] ?? '1280x720'} onchange={(event) => void changeTextSetting(event, 'camera.capture_resolution')}>
         <option value="640x360">640 × 360</option><option value="720x480">720 × 480</option><option value="400x480">400 × 480</option><option value="256x384">256 × 384</option><option value="1280x720">1280 × 720</option><option value="1920x1080">1920 × 1080</option>
       </select>
+    </label>
+
+    <label class="flex items-center gap-2 text-sm text-subtext1">
+      <input type="checkbox" checked={values?.['camera.prefer_mjpeg'] ?? true} onchange={(event) => void changeToggle(event, 'camera.prefer_mjpeg')} />
+      MJPG優先
     </label>
 
     <label>

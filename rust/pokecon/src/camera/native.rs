@@ -42,6 +42,8 @@ mod platform {
     const FRAME_TIMEOUT: Duration = Duration::from_secs(2);
     const FOURCC_PREFERENCE: [[u8; 4]; 6] =
         [*b"MJPG", *b"YUYV", *b"NV12", *b"RGB3", *b"BGR3", *b"GREY"];
+    const FOURCC_PREFERENCE_WITHOUT_MJPG: [[u8; 4]; 6] =
+        [*b"YUYV", *b"NV12", *b"RGB3", *b"BGR3", *b"GREY", *b"MJPG"];
 
     pub(super) fn open(config: &CameraConfig) -> Result<Box<dyn CameraSession>, CameraError> {
         let device = match config.selector() {
@@ -66,6 +68,7 @@ mod platform {
             stream: None,
             source_format: FrameFormat::MJPEG,
             effective: placeholder,
+            prefer_mjpeg: config.prefer_mjpeg(),
         };
         let effective = session.apply(config.requested_fps(), config.resolution())?;
         session.effective = effective;
@@ -79,6 +82,7 @@ mod platform {
         stream: Option<LinuxCaptureStream>,
         source_format: FrameFormat,
         effective: EffectiveCameraConfig,
+        prefer_mjpeg: bool,
     }
 
     impl LinuxCameraSession {
@@ -97,7 +101,12 @@ mod platform {
                 .map(|description| description.fourcc)
                 .collect::<Vec<_>>();
             let mut accepted = None;
-            for code in FOURCC_PREFERENCE {
+            let preference = if self.prefer_mjpeg {
+                FOURCC_PREFERENCE
+            } else {
+                FOURCC_PREFERENCE_WITHOUT_MJPG
+            };
+            for code in preference {
                 let fourcc = FourCC::new(&code);
                 if !supported.contains(&fourcc) {
                     continue;

@@ -183,6 +183,7 @@ class _OptCamera:
     capture_resolution: CameraCaptureResolution
     device: int | str
     flip_mode: CameraFlipMode
+    prefer_mjpeg: bool
     screenshot_format: CameraScreenshotFormat
 
 class _OptCommands:

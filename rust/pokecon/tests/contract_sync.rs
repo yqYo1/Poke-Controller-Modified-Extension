@@ -82,14 +82,14 @@ fn generated_openapi_artifact_is_current() {
 fn canonical_settings_match_every_normative_spec_projection() {
     let validated = settings_registry().expect("canonical settings registry must be valid");
     let settings = validated.settings();
-    assert_eq!(settings.len(), 79);
+    assert_eq!(settings.len(), 80);
 
     let registry_by_id = settings
         .iter()
         .map(|setting| (setting.id.as_str(), setting))
         .collect::<BTreeMap<_, _>>();
     let spec_rows = setting_projection_rows();
-    assert_eq!(spec_rows.len(), 79);
+    assert_eq!(spec_rows.len(), 80);
     assert_eq!(
         registry_by_id.keys().copied().collect::<BTreeSet<_>>(),
         spec_rows

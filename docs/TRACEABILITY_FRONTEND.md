@@ -192,6 +192,7 @@
 | UI 表示 FPS（`ui.fps`/`ui.fps_options`） | 実装済 | `CameraTab.svelte:118-126,281-282`（正整数検証＋即時書込） | — |
 | 取得 FPS（`camera.capture_fps`、既定 60、即時適用） | 実装済 | `CameraTab.svelte:118-126,290`（`type=number min=1`、既定 60） | 即時適用の実体は backend 所有 |
 | 取得解像度（640x360/720x480/400x480/256x384/1280x720/1920x1080、即時適用） | 実装済 | `CameraTab.svelte` の Resolution select（`camera.capture_resolution` 書込） | — |
+| MJPG優先 checkbox（`camera.prefer_mjpeg`、native形式選択の優先） | 実装済 | `CameraTab.svelte` の MJPG優先 checkbox、`actions.ts` の設定書込 | 次回オープン時反映は backend 所有 |
 | フリップ（`none/vertical/horizontal/both`、旧 `set_flip` 互換は backend） | 実装済 | `CameraTab.svelte:135-136,302`（`camera.flip_mode` 書込） | 大文字小文字マッピングは backend 所有 |
 | スクリーンショット形式（`png` 既定/`jpeg`、表示ラベル分離） | 実装済 | `CameraTab.svelte:137-138,309`（`camera.screenshot_format`、既定 `png`：`179,194`） | — |
 | 起動時自動オープン・失敗時は利用不能表示＋他機能継続・暗黙切替なし | 部分的 | 失敗時 UI：`CameraTab.svelte:248-259`（非モーダルエラー＋`Retry camera`＋`Retry WebRTC`、選択肢は操作可能のまま） | 自動オープン本体・トランザクションは backend 所有。frontend のエラー表示は仕様の「対象・秘匿化済み理由・再試行」に対応 |

@@ -1519,6 +1519,7 @@ export interface components {
             "camera.capture_fps"?: number;
             /** @enum {string} */
             "camera.capture_resolution"?: "640x360" | "720x480" | "400x480" | "256x384" | "1280x720" | "1920x1080";
+            "camera.prefer_mjpeg"?: boolean;
             "camera.device"?: number | string;
             /** @enum {string} */
             "camera.flip_mode"?: "none" | "vertical" | "horizontal" | "both";
@@ -1653,6 +1654,7 @@ export interface components {
             "camera.capture_fps": number;
             /** @enum {string} */
             "camera.capture_resolution": "640x360" | "720x480" | "400x480" | "256x384" | "1280x720" | "1920x1080";
+            "camera.prefer_mjpeg": boolean;
             "camera.device": number | string;
             /** @enum {string} */
             "camera.flip_mode": "none" | "vertical" | "horizontal" | "both";
@@ -1798,6 +1800,7 @@ export interface components {
             "camera.capture_fps"?: number;
             /** @enum {string} */
             "camera.capture_resolution"?: "640x360" | "720x480" | "400x480" | "256x384" | "1280x720" | "1920x1080";
+            "camera.prefer_mjpeg"?: boolean;
             "camera.device"?: number | string;
             /** @enum {string} */
             "camera.flip_mode"?: "none" | "vertical" | "horizontal" | "both";

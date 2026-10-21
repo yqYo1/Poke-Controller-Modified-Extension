@@ -112,6 +112,7 @@
 ---@field capture_resolution CameraCaptureResolution
 ---@field device integer|string
 ---@field flip_mode CameraFlipMode
+---@field prefer_mjpeg boolean
 ---@field screenshot_format CameraScreenshotFormat
 
 ---@class PokeconOptCommands

@@ -6113,6 +6113,9 @@
               "1920x1080"
             ]
           },
+          "camera.prefer_mjpeg": {
+            "type": "boolean"
+          },
           "camera.device": {
             "oneOf": [
               {
@@ -6554,6 +6557,9 @@
               "1920x1080"
             ]
           },
+          "camera.prefer_mjpeg": {
+            "type": "boolean"
+          },
           "camera.device": {
             "oneOf": [
               {
@@ -6942,6 +6948,7 @@
           "active_profile",
           "camera.capture_fps",
           "camera.capture_resolution",
+          "camera.prefer_mjpeg",
           "camera.device",
           "camera.flip_mode",
           "camera.screenshot_format",
@@ -7108,6 +7115,9 @@
               "1280x720",
               "1920x1080"
             ]
+          },
+          "camera.prefer_mjpeg": {
+            "type": "boolean"
           },
           "camera.device": {
             "oneOf": [

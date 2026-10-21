@@ -21,6 +21,7 @@ impl CameraSettingsValues {
         let mut selector = self.config.selector().clone();
         let mut fps = self.config.requested_fps();
         let mut resolution = self.config.resolution();
+        let mut prefer_mjpeg = self.config.prefer_mjpeg();
         let mut flip = self.flip;
         let mut screenshot_format = self.screenshot_format;
         let mut jpeg_quality = self.jpeg_quality;
@@ -38,6 +39,9 @@ impl CameraSettingsValues {
                 .ok_or(CameraError::InvalidSettingsValue)?
                 .parse()
                 .map_err(|_| CameraError::InvalidSettingsValue)?;
+        }
+        if let Some(value) = changes.get("camera.prefer_mjpeg") {
+            prefer_mjpeg = value.as_bool().ok_or(CameraError::InvalidSettingsValue)?;
         }
         if let Some(value) = changes.get("camera.flip_mode") {
             flip = FlipMode::from_str(value.as_str().ok_or(CameraError::InvalidSettingsValue)?)
@@ -57,7 +61,7 @@ impl CameraSettingsValues {
             }
         }
         Ok(Self {
-            config: CameraConfig::new(selector, fps, resolution)?,
+            config: CameraConfig::new(selector, fps, resolution)?.with_prefer_mjpeg(prefer_mjpeg),
             flip,
             screenshot_format,
             jpeg_quality,

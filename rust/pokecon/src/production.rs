@@ -1112,13 +1112,15 @@ fn spawn_run_schedule(
 }
 
 fn camera_config(loaded: &LoadedSettings) -> Result<CameraConfig, String> {
-    CameraConfig::new(
+    let prefer_mjpeg = setting_bool(loaded, "camera.prefer_mjpeg")?;
+    let config = CameraConfig::new(
         setting_json(loaded, "camera.device")?,
         setting_u32(loaded, "camera.capture_fps")?,
         CaptureResolution::from_str(setting_text(loaded, "camera.capture_resolution")?)
             .map_err(|_error| "camera resolution setting is invalid".to_owned())?,
     )
-    .map_err(|_error| "camera settings are invalid".to_owned())
+    .map_err(|_error| "camera settings are invalid".to_owned())?;
+    Ok(config.with_prefer_mjpeg(prefer_mjpeg))
 }
 
 fn setting_json<T>(loaded: &LoadedSettings, id: &str) -> Result<T, String>
@@ -1149,6 +1151,13 @@ fn setting_u64(loaded: &LoadedSettings, id: &str) -> Result<u64, String> {
             .map_err(|_error| format!("setting {id} has an invalid type"))?,
     )
     .map_err(|_error| format!("setting {id} is outside its runtime range"))
+}
+
+fn setting_bool(loaded: &LoadedSettings, id: &str) -> Result<bool, String> {
+    loaded
+        .settings
+        .boolean(id)
+        .map_err(|_error| format!("setting {id} is invalid"))
 }
 
 fn setting_u32(loaded: &LoadedSettings, id: &str) -> Result<u32, String> {

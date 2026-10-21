@@ -299,6 +299,26 @@
     },
     {
       "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": true
+      },
+      "id": "camera.prefer_mjpeg",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "read_write",
       "control": "camera_selector",
       "default": {
         "kind": "literal",

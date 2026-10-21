@@ -12,6 +12,7 @@ export function settingsValues(
     auto_reload_config: false,
     'camera.capture_fps': 60,
     'camera.capture_resolution': '1280x720',
+    'camera.prefer_mjpeg': true,
     'camera.device': 0,
     'camera.flip_mode': 'none',
     'camera.screenshot_format': 'png',

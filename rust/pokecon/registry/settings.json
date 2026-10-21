@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "specification_version": "2.2.0",
-  "expected_setting_count": 79,
+  "expected_setting_count": 80,
   "settings": [
     {
       "id": "language",
@@ -610,6 +610,51 @@
         "ui": {
           "access": "read_write",
           "control": "resolution_select"
+        },
+        "openapi": {
+          "access": "read_write",
+          "masked_read": false
+        }
+      },
+      "secret": false,
+      "invalid_toml_value": "use_default",
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ]
+    },
+    {
+      "id": "camera.prefer_mjpeg",
+      "value": {
+        "kind": "boolean"
+      },
+      "default": {
+        "kind": "literal",
+        "value": true
+      },
+      "scope": "global",
+      "mutability": "runtime_immediate",
+      "surfaces": {
+        "toml": {
+          "name": "camera.prefer_mjpeg"
+        },
+        "dynamic": {
+          "name": "pokecon.opt.camera.prefer_mjpeg"
+        },
+        "cli": {
+          "flags": [
+            "--camera-prefer-mjpeg"
+          ],
+          "encoding": "scalar",
+          "discouraged": false
+        },
+        "env": {
+          "name": "POKECON_CAMERA_PREFER_MJPEG",
+          "encoding": "scalar"
+        },
+        "ui": {
+          "access": "read_write",
+          "control": "checkbox"
         },
         "openapi": {
           "access": "read_write",

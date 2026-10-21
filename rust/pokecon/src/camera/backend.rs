@@ -11,6 +11,7 @@ pub struct CameraConfig {
     selector: CameraSelector,
     requested_fps: u32,
     resolution: CaptureResolution,
+    prefer_mjpeg: bool,
 }
 
 impl CameraConfig {
@@ -31,6 +32,7 @@ impl CameraConfig {
             selector,
             requested_fps,
             resolution,
+            prefer_mjpeg: true,
         })
     }
 
@@ -47,6 +49,19 @@ impl CameraConfig {
     #[must_use]
     pub const fn resolution(&self) -> CaptureResolution {
         self.resolution
+    }
+
+    /// Returns whether the native backend prefers the MJPG format.
+    #[must_use]
+    pub const fn prefer_mjpeg(&self) -> bool {
+        self.prefer_mjpeg
+    }
+
+    /// Sets the native capture format preference.
+    #[must_use]
+    pub const fn with_prefer_mjpeg(mut self, prefer_mjpeg: bool) -> Self {
+        self.prefer_mjpeg = prefer_mjpeg;
+        self
     }
 
     /// Returns a copy with new acquisition values.

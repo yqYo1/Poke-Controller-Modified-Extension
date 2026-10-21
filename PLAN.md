@@ -901,7 +901,7 @@ UI・表示系:
 - [ ] **タブ構成**: Status／Camera／Audio／Serial／Touch Screen／Manual Control／Commands／Notification／Mask／Othersの10系統へ整理し配置見直し（FRONTEND §5.2/§6更新）。
 - [ ] **Statusタブ**: カメラ＋Capture Size、音声入出力、シリアル機器・COM・Baud、実行中コマンド＋開始時刻を表示（設定は変えない、約500ms更新）。
 - [ ] **右パネル位置切替**: Output／Software-Controllerを右／下／非表示で切替（通常画面とミニ画面で引継ぎ）。
-- [ ] **仕切り線**: 領域間のドラッグ比率調整＋比率保持＋ダブルクリック復帰（Output#1/#2間含む）。
+- [x] **仕切り線**: 領域間のドラッグ比率調整＋比率保持＋ダブルクリック復帰（Output#1/#2間含む）。実装: `78cf7c91`（`OutputGroup`へOutput#1/#2間のseparatorを追加。pointer dragで比率を変更し`ui.output_split_ratio`へ保存、ダブルクリックで50へ復帰。行比率テスト更新＋double clickテスト追加、web-check 153 passed・0 warnings、ci-fast 0、FRONTEND §5.7・TRACEABILITY更新）。
 - [ ] **プレビュー**: 領域いっぱいの最大表示（縦横比維持）、Show Sizeによるウィンドウサイズ変更（WebRTC自動フィットとの整合を設計）、明るさGain/Gamma（表示のみ）。
 - [ ] **メニュー**: ファイル／コマンド／表示／接続／操作／ツール／設定／ヘルプの8系統再構築＋キーボードから開ける操作（タブ・ボタン操作のメニュー露出含む）。
 - [ ] **ミニ画面**: コマンド選択・実行中心の狭幅画面。

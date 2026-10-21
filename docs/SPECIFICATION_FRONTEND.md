@@ -142,6 +142,8 @@ controller入力遅延とUI応答性は各frontendの該当経路で検証しま
 | 5 | **通知** | Windows通知設定、Discord Webhook（URL、ユーザー名、アバター）、LINE UIは完全に削除 |
 | 6 | **その他** | 出力サイズ調整、stdout出力先、ウィジェットモード選択、ソフトウェアコントローラー位置、ダイアログボタン位置、出力クリア |
 
+**ミニ画面**: ヘッダの「ミニ画面」で、Main Panel・タブナビ・右パネルを隠し、Commandsタブだけを表示するコマンド選択・実行中心の狭幅画面へ切り替える。「通常画面」で元のタブへ復帰し、コマンド選択状態は維持する。
+
 **起動時レイアウト確定後表示**: SPAは実行時viewの初期化完了後、2回のanimation frameで配置を確定してからworkspaceを可視化する。確定前は透明かつpointer-events無効で、`aria-busy=true`を設定し、初期配置のガタつきを見せない。
 
 **起動時プロファイル選択**: 複数のprofileが存在し、有効profileが`default`の場合は、起動直後に選択ダイアログを表示する。利用者は一覧からprofileを選び「切替」で`PATCH /api/settings`の`active_profile`を送信するか、「現在のまま開始」でdialogを閉じる。閉じた選択はブラウザの`localStorage`へ記録し、次回以降は自動表示しない。profileが明示指定された場合とprofileが1件だけの場合は表示しない。

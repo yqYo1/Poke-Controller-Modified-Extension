@@ -35,6 +35,8 @@
     { en: 'Other', id: 'other', ja: 'その他' }
   ];
   let activeTab = $state<TabId>('camera');
+  let miniScreen = $state(false);
+  let previousTab = $state<TabId>('camera');
   let view = $state<RuntimeView>();
   let layoutReady = $state(false);
   let workspaceElement = $state<HTMLElement>();
@@ -49,6 +51,17 @@
 
   function label(tab: (typeof tabs)[number]): string {
     return language === 'en' ? tab.en : tab.ja;
+  }
+
+  function toggleMiniScreen(): void {
+    if (miniScreen) {
+      miniScreen = false;
+      activeTab = previousTab;
+    } else {
+      previousTab = activeTab;
+      miniScreen = true;
+      activeTab = 'commands';
+    }
   }
 
   function handleTabKeydown(event: KeyboardEvent): void {
@@ -144,6 +157,11 @@
             <button type="button" class="rounded-md bg-blue/15 px-2 py-1 text-blue" onclick={() => runtime.reconnectWebSocket()}>Reconnect</button>
           {/if}
         </div>
+        <button
+          type="button"
+          class="rounded-md bg-text/5 px-3 py-1.5 text-xs text-subtext1 hover:bg-text/10"
+          onclick={toggleMiniScreen}
+        >{miniScreen ? (language === 'en' ? 'Normal' : '通常画面') : (language === 'en' ? 'Mini' : 'ミニ画面')}</button>
         <WorkspaceMenu {actions} onresetview={resetView} {runtime} {view} />
       </div>
     </header>
@@ -157,8 +175,11 @@
 
     <div class={`mt-4 grid min-h-0 flex-1 items-stretch gap-4 ${rightPanelPosition === 'right' ? 'lg:grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)] xl:grid-cols-[minmax(0,1fr)_minmax(28rem,44rem)]' : 'grid-cols-1'}`}>
       <div class="flex min-h-0 min-w-0 flex-col gap-4">
-        <MainPanel {actions} onnavigate={navigate} {runtime} {view} />
+        {#if !miniScreen}
+          <MainPanel {actions} onnavigate={navigate} {runtime} {view} />
+        {/if}
 
+        {#if !miniScreen}
         <nav class="shrink-0 overflow-x-auto" aria-label={language === 'en' ? 'Main views' : 'メイン画面'}>
           <div class="flex min-w-max gap-1" role="tablist">
             {#each tabs as tab (tab.id)}
@@ -176,6 +197,7 @@
             {/each}
           </div>
         </nav>
+        {/if}
 
         <div bind:this={panelElement} id={`panel-${activeTab}`} class="min-h-[20rem] min-w-0 flex-1 overflow-auto rounded-lg border border-text/10 bg-mantle/80 p-4 shadow-md shadow-crust/20" role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
           {#key activeTab}
@@ -196,7 +218,7 @@
         </div>
       </div>
 
-      {#if rightPanelPosition !== 'hidden'}
+      {#if !miniScreen && rightPanelPosition !== 'hidden'}
         <RightPanel runtime={runtime} view={view} />
       {/if}
     </div>

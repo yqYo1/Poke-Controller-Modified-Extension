@@ -54,6 +54,21 @@ describe('application shell', () => {
     expect(names).toEqual(['カメラ', 'シリアル', '手動制御', 'コマンド', '通知', 'その他']);
   });
 
+  it('switches to the command-focused mini screen and back', async () => {
+    render(Page);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'ミニ画面' }));
+    expect(screen.queryByRole('region', { name: 'Output #1' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Main Panel' })).toBeNull();
+    expect(document.getElementById('panel-commands')?.getAttribute('aria-labelledby')).toBe(
+      'tab-commands'
+    );
+
+    await fireEvent.click(screen.getByRole('button', { name: '通常画面' }));
+    expect(screen.getByRole('region', { name: 'Output #1' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Main Panel' })).toBeTruthy();
+  });
+
   it('keeps one persistent Main Panel with quick actions and the live camera preview', async () => {
     render(Page);
 

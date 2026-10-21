@@ -140,6 +140,7 @@
 
 | 要求 | 判定 | 直接証拠 | ギャップ・備考 |
 |------|------|----------|----------------|
+| ミニ画面（コマンド中心、Main Panel・タブナビ・右パネル非表示、通常画面へ復帰） | 実装済 | `+page.svelte` の`miniScreen`切替、`page.test.ts` 追加テスト | 状態保持は画面内のみ |
 | 右パネル位置（right／bottom／hidden、即時反映、プロファイル保存） | 実装済 | `OtherTab.svelte` の位置select、`+page.svelte` のgrid切替 | — |
 | コントローラー本体色（7プリセット、即時反映、プロファイル保存、JSON書出し） | 実装済 | `OtherTab.svelte` の色select／Export、`ControllerPanel.svelte` のbody class | — |
 | 7モード切替・正準値・即時反映・プロファイル対応・永続化 | 実装済 | `OtherTab.svelte:52-60,90-92,240-248`（7値＋書込）; `RightPanel.svelte:12,18-27`（`mode` による即時表示切替） | 表示ラベルが仕様と異なる（例: `ALL (default)`→`All`/`すべて`）。機能的差なし |

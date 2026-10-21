@@ -1591,6 +1591,8 @@ export interface components {
             /** @enum {string} */
             "ui.controller_position"?: "top" | "bottom";
             /** @enum {string} */
+            "ui.controller_body_color"?: "classic" | "black" | "white" | "red" | "blue" | "green" | "purple";
+            /** @enum {string} */
             "ui.dialog_button_position"?: "bottom" | "top" | "both";
             "ui.camera.live_view_enabled"?: boolean;
             "ui.camera.pixel_values_visible"?: boolean;
@@ -1725,6 +1727,8 @@ export interface components {
             "ui.stdout_destination": "output_1" | "output_2";
             /** @enum {string} */
             "ui.controller_position": "top" | "bottom";
+            /** @enum {string} */
+            "ui.controller_body_color": "classic" | "black" | "white" | "red" | "blue" | "green" | "purple";
             /** @enum {string} */
             "ui.dialog_button_position": "bottom" | "top" | "both";
             "ui.camera.live_view_enabled": boolean;
@@ -1869,6 +1873,8 @@ export interface components {
             "ui.stdout_destination"?: "output_1" | "output_2";
             /** @enum {string} */
             "ui.controller_position"?: "top" | "bottom";
+            /** @enum {string} */
+            "ui.controller_body_color"?: "classic" | "black" | "white" | "red" | "blue" | "green" | "purple";
             /** @enum {string} */
             "ui.dialog_button_position"?: "bottom" | "top" | "both";
             "ui.camera.live_view_enabled"?: boolean;

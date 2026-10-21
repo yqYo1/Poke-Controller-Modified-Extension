@@ -6356,6 +6356,18 @@
               "bottom"
             ]
           },
+          "ui.controller_body_color": {
+            "type": "string",
+            "enum": [
+              "classic",
+              "black",
+              "white",
+              "red",
+              "blue",
+              "green",
+              "purple"
+            ]
+          },
           "ui.dialog_button_position": {
             "type": "string",
             "enum": [
@@ -6800,6 +6812,18 @@
               "bottom"
             ]
           },
+          "ui.controller_body_color": {
+            "type": "string",
+            "enum": [
+              "classic",
+              "black",
+              "white",
+              "red",
+              "blue",
+              "green",
+              "purple"
+            ]
+          },
           "ui.dialog_button_position": {
             "type": "string",
             "enum": [
@@ -6985,6 +7009,7 @@
           "ui.output_split_ratio",
           "ui.stdout_destination",
           "ui.controller_position",
+          "ui.controller_body_color",
           "ui.dialog_button_position",
           "ui.camera.live_view_enabled",
           "ui.camera.pixel_values_visible",
@@ -7348,6 +7373,18 @@
             "enum": [
               "top",
               "bottom"
+            ]
+          },
+          "ui.controller_body_color": {
+            "type": "string",
+            "enum": [
+              "classic",
+              "black",
+              "white",
+              "red",
+              "blue",
+              "green",
+              "purple"
             ]
           },
           "ui.dialog_button_position": {

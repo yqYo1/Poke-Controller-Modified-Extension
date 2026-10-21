@@ -21,6 +21,31 @@
   let { compact = false, runtime, view }: Props = $props();
   let visuallyReleased = new SvelteSet<GamepadButton>();
   let hatVisuallyReleased = $state(false);
+  const bodyColor = $derived(view.settings?.values['ui.controller_body_color'] ?? 'classic');
+  const sharedBodyClass = $derived.by(() => {
+    switch (bodyColor) {
+      case 'black':
+        return 'bg-[#1f2430] text-white shadow-md shadow-black/30';
+      case 'white':
+        return 'bg-[#e6e9ef] text-crust shadow-md shadow-black/10';
+      case 'red':
+        return 'bg-red/80 text-crust shadow-md shadow-red/20';
+      case 'blue':
+        return 'bg-blue/80 text-crust shadow-md shadow-blue/20';
+      case 'green':
+        return 'bg-green/80 text-crust shadow-md shadow-green/20';
+      case 'purple':
+        return 'bg-[#8b5cf6]/80 text-white shadow-md shadow-[#8b5cf6]/20';
+      default:
+        return '';
+    }
+  });
+  const leftBodyClass = $derived(
+    bodyColor === 'classic' ? 'bg-blue/80 text-crust shadow-md shadow-blue/20' : sharedBodyClass
+  );
+  const rightBodyClass = $derived(
+    bodyColor === 'classic' ? 'bg-red/80 text-crust shadow-md shadow-red/20' : sharedBodyClass
+  );
 
   const buttonFields: Readonly<Record<GamepadButton, keyof ButtonState>> = {
     A: 'a',
@@ -169,7 +194,7 @@
   </div>
 
   <div class={`grid gap-3 p-3 ${compact ? 'grid-cols-[1fr_1.35fr_1fr]' : 'grid-cols-1 sm:grid-cols-[1fr_1.4fr_1fr]'}`}>
-    <div class="rounded-lg bg-blue/80 p-2 text-crust shadow-md shadow-blue/20">
+    <div class={`rounded-lg p-2 ${leftBodyClass}`}>
       <div class="grid grid-cols-2 gap-1">
         {#each leftButtons as button (button)}
           <button
@@ -221,7 +246,7 @@
       <p class="text-center text-[10px] tracking-[0.12em] text-subtext0 uppercase">320 × 240 touch</p>
     </div>
 
-    <div class="rounded-lg bg-red/80 p-2 text-crust shadow-md shadow-red/20">
+    <div class={`rounded-lg p-2 ${rightBodyClass}`}>
       <div class="grid grid-cols-2 gap-1">
         {#each rightButtons as button (button)}
           <button

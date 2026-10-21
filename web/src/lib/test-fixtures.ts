@@ -67,6 +67,7 @@ export function settingsValues(
     'ui.camera.live_view_enabled': true,
     'ui.camera.pixel_values_visible': false,
     'ui.controller_position': 'bottom',
+    'ui.controller_body_color': 'classic',
     'ui.desktop.close_behavior': 'ask',
     'ui.desktop.disable_compositing': false,
     'ui.dialog_button_position': 'bottom',

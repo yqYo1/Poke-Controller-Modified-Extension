@@ -84,6 +84,15 @@ type UiControllerPosition = Literal[
     "top",
     "bottom",
 ]
+type UiControllerBodyColor = Literal[
+    "classic",
+    "black",
+    "white",
+    "red",
+    "blue",
+    "green",
+    "purple",
+]
 type UiDialogButtonPosition = Literal[
     "bottom",
     "top",
@@ -265,6 +274,7 @@ class _OptUiDesktop:
 class _OptUi:
     camera: _OptUiCamera
     desktop: _OptUiDesktop
+    controller_body_color: UiControllerBodyColor
     controller_position: UiControllerPosition
     dialog_button_position: UiDialogButtonPosition
     fps: int

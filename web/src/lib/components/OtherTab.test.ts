@@ -40,6 +40,24 @@ describe('OtherTab', () => {
     expect(clearOutputs).toHaveBeenCalledOnce();
   });
 
+  it('writes the controller body color preset', async () => {
+    const { runtime, view } = runtimeView(
+      settingsSnapshot('1', { 'ui.controller_body_color': 'classic' })
+    );
+    const writeSettings = vi.spyOn(runtime, 'writeSettings').mockResolvedValue({
+      recoveredRevisionConflict: false,
+      snapshot: settingsSnapshot('2', { 'ui.controller_body_color': 'purple' })
+    });
+    render(OtherTab, { runtime, view });
+
+    await fireEvent.change(screen.getByLabelText('コントローラー本体色'), {
+      target: { value: 'purple' }
+    });
+    await waitFor(() => {
+      expect(writeSettings).toHaveBeenCalledWith({ 'ui.controller_body_color': 'purple' });
+    });
+  });
+
   it('edits and saves the declared python library list', async () => {
     const { runtime, view } = runtimeView(
       settingsSnapshot('4', {

@@ -36,6 +36,7 @@
 ---@alias UiWidgetMode "all"|"outputs"|"output_1_controller"|"output_2_controller"|"output_1"|"output_2"|"controller"
 ---@alias UiStdoutDestination "output_1"|"output_2"
 ---@alias UiControllerPosition "top"|"bottom"
+---@alias UiControllerBodyColor "classic"|"black"|"white"|"red"|"blue"|"green"|"purple"
 ---@alias UiDialogButtonPosition "bottom"|"top"|"both"
 ---@alias UiDesktopCloseBehavior "ask"|"shutdown"|"keep_backend"
 ---@alias CommandsTagMatchMode "exact"|"partial"|"prefix"|"suffix"
@@ -194,6 +195,7 @@
 ---@class PokeconOptUi
 ---@field camera PokeconOptUiCamera
 ---@field desktop PokeconOptUiDesktop
+---@field controller_body_color UiControllerBodyColor
 ---@field controller_position UiControllerPosition
 ---@field dialog_button_position UiDialogButtonPosition
 ---@field fps integer

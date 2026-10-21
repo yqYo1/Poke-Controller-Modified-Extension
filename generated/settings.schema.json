@@ -2691,6 +2691,65 @@
         }
       }
     },
+    "ui.controller_body_color": {
+      "type": "string",
+      "enum": [
+        "classic",
+        "black",
+        "white",
+        "red",
+        "blue",
+        "green",
+        "purple"
+      ],
+      "default": "classic",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "classic"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "toml": {
+            "name": "ui.controller_body_color",
+            "unsupported_reason": null
+          },
+          "dynamic": {
+            "name": "pokecon.opt.ui.controller_body_color",
+            "unsupported_reason": null
+          },
+          "cli": {
+            "flags": [
+              "--ui-controller-body-color"
+            ],
+            "encoding": "scalar",
+            "discouraged": false
+          },
+          "env": {
+            "name": "POKECON_UI_CONTROLLER_BODY_COLOR",
+            "encoding": "scalar"
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "color_select",
+            "unsupported_reason": null
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
     "ui.dialog_button_position": {
       "type": "string",
       "enum": [
@@ -4363,6 +4422,7 @@
     "ui.output_split_ratio",
     "ui.stdout_destination",
     "ui.controller_position",
+    "ui.controller_body_color",
     "ui.dialog_button_position",
     "ui.camera.live_view_enabled",
     "ui.camera.pixel_values_visible",

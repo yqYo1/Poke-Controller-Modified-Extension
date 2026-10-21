@@ -8,6 +8,7 @@
     | 'ui.stdout_destination'
     | 'ui.widget_mode'
     | 'ui.controller_position'
+    | 'ui.controller_body_color'
     | 'ui.dialog_button_position'
     | 'ui.desktop.close_behavior'
     | 'language';
@@ -93,6 +94,12 @@
       });
     } else if (setting === 'ui.controller_position') {
       await write({ 'ui.controller_position': value as 'top' | 'bottom' });
+    } else if (setting === 'ui.controller_body_color') {
+      await write({
+        'ui.controller_body_color': value as NonNullable<
+          SettingsWriteValues['ui.controller_body_color']
+        >
+      });
     } else if (setting === 'ui.dialog_button_position') {
       await write({ 'ui.dialog_button_position': value as 'bottom' | 'top' | 'both' });
     } else if (setting === 'ui.desktop.close_behavior') {
@@ -102,6 +109,25 @@
     } else {
       await write({ language: value as 'ja' | 'en' });
     }
+  }
+
+  function exportColorPreset(): void {
+    const body = JSON.stringify(
+      {
+        ui: {
+          controller_body_color: values?.['ui.controller_body_color'] ?? 'classic'
+        }
+      },
+      null,
+      2
+    );
+    const blob = new Blob([body], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'pokecon-controller-color.json';
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   async function changeFps(event: Event): Promise<void> {
@@ -342,6 +368,22 @@
             <option value={mode[0]}>{english ? mode[1] : mode[2]}</option>
           {/each}
         </select>
+      </label>
+      <label>
+        <span class="text-xs font-medium text-subtext1">{t('Controller body color', 'コントローラー本体色')}</span>
+        <div class="mt-1 flex gap-2">
+          <select
+            aria-label={t('Controller body color', 'コントローラー本体色')}
+            class="min-w-0 flex-1 rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text"
+            value={values?.['ui.controller_body_color'] ?? 'classic'}
+            onchange={(event) => void changeSelect(event, 'ui.controller_body_color')}
+          >
+            {#each [['classic', 'Classic'], ['black', 'Black'], ['white', 'White'], ['red', 'Red'], ['blue', 'Blue'], ['green', 'Green'], ['purple', 'Purple']] as color (color[0])}
+              <option value={color[0]}>{color[1]}</option>
+            {/each}
+          </select>
+          <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-xs text-subtext1 hover:bg-text/10" onclick={exportColorPreset}>{t('Export', '書出し')}</button>
+        </div>
       </label>
       <label>
         <span class="text-xs font-medium text-subtext1">{t('Language', '表示言語')}</span>

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "specification_version": "2.2.0",
-  "expected_setting_count": 80,
+  "expected_setting_count": 81,
   "settings": [
     {
       "id": "language",
@@ -2427,6 +2427,61 @@
         "ui": {
           "access": "read_write",
           "control": "radio_group"
+        },
+        "openapi": {
+          "access": "read_write",
+          "masked_read": false
+        }
+      },
+      "secret": false,
+      "invalid_toml_value": "use_default",
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ]
+    },
+    {
+      "id": "ui.controller_body_color",
+      "value": {
+        "kind": "enum",
+        "values": [
+          "classic",
+          "black",
+          "white",
+          "red",
+          "blue",
+          "green",
+          "purple"
+        ],
+        "ascii_case_insensitive": true
+      },
+      "default": {
+        "kind": "literal",
+        "value": "classic"
+      },
+      "scope": "profile",
+      "mutability": "runtime_immediate",
+      "surfaces": {
+        "toml": {
+          "name": "ui.controller_body_color"
+        },
+        "dynamic": {
+          "name": "pokecon.opt.ui.controller_body_color"
+        },
+        "cli": {
+          "flags": [
+            "--ui-controller-body-color"
+          ],
+          "encoding": "scalar",
+          "discouraged": false
+        },
+        "env": {
+          "name": "POKECON_UI_CONTROLLER_BODY_COLOR",
+          "encoding": "scalar"
+        },
+        "ui": {
+          "access": "read_write",
+          "control": "color_select"
         },
         "openapi": {
           "access": "read_write",

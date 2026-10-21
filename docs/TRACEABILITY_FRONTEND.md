@@ -231,6 +231,7 @@
 
 | 要求 | 判定 | 直接証拠 | ギャップ・備考 |
 |------|------|----------|----------------|
+| キーボード素通し規則（Alt/Ctrl/Meta、入力欄、menu/dialog、data-keyboard-ignore） | 実装済 | `input-safety.ts` の `isKeyboardOwnedTarget`、`InputSafety.svelte`、`input-safety.test.ts` 3件 | — |
 | キーボード（`input.keyboard_enabled`、既定 true） | 実装済 | `ManualTab.svelte:13,63`（checkbox、既定 true） | 無効化時の強制解放の実体は backend 所有 |
 | L スティックマウス（既定 false） | 実装済 | `ManualTab.svelte:67`（checkbox、既定 false） | 同上 |
 | R スティックマウス（既定 false） | 実装済 | `ManualTab.svelte:71`（checkbox、既定 false） | 同上 |

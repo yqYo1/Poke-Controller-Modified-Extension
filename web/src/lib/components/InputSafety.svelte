@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
 
+  import { isKeyboardOwnedTarget } from '../input-safety';
+
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
 
   interface Props {
@@ -12,22 +14,6 @@
   const pressedKeys: string[] = [];
   const keyboardEnabled = $derived(view.settings?.values['input.keyboard_enabled'] ?? true);
 
-  function interactiveTarget(target: EventTarget | null): boolean {
-    if (!(target instanceof Element)) return false;
-    if (
-      target instanceof HTMLElement &&
-      (target.isContentEditable ||
-        ['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName))
-    ) {
-      return true;
-    }
-    return (
-      target.closest(
-        'a[href], [role="menu"], [role="menuitem"], [role="dialog"], [aria-modal="true"], [data-keyboard-ignore]'
-      ) !== null
-    );
-  }
-
   function keydown(event: KeyboardEvent): void {
     if (
       !keyboardEnabled ||
@@ -37,7 +23,7 @@
       event.metaKey ||
       event.ctrlKey ||
       event.altKey ||
-      interactiveTarget(event.target) ||
+      isKeyboardOwnedTarget(event.target) ||
       pressedKeys.includes(event.code)
     ) {
       return;

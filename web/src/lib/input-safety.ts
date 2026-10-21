@@ -18,3 +18,21 @@ export function dispatchInputNeutralized(): void {
     window.dispatchEvent(new Event(INPUT_NEUTRALIZED_EVENT));
   }
 }
+
+export function isKeyboardOwnedTarget(target: EventTarget | null): boolean {
+  if (typeof Element === 'undefined' || !(target instanceof Element)) return false;
+  if (
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      target.getAttribute('contenteditable') === '' ||
+      target.getAttribute('contenteditable') === 'true' ||
+      ['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName))
+  ) {
+    return true;
+  }
+  return (
+    target.closest(
+      'a[href], [role="menu"], [role="menuitem"], [role="dialog"], [aria-modal="true"], [data-keyboard-ignore]'
+    ) !== null
+  );
+}

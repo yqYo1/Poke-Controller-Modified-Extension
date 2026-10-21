@@ -14,6 +14,17 @@
 | 共通 stage | web 配布物、managed runtime、offline wheelhouse、`pokecon-worker` | `package-smoke`／`package-install-smoke` で監査 | `resource-manifest.json`（`content_sha256`）、SPA 検証、wheelhouse 検証 | 各 installer に同梱 |
 | Nix | `.#pokecon`、`.#web` ほか flake apps | `nix build` | store path（build log） | 開発・CI 内 |
 
+## AR-11-30 配布形態の確定
+
+| 区分 | build | package | runtime | 検証 |
+| --- | --- | --- | --- | --- |
+| Linux（Nix） | `nix build .#pokecon`／`nix run .#tauri-build -- --bundles deb` | Debian `.deb`（`package-linux-x86_64`） | 同梱`pokecon`／`pokecon-worker`＋managed Python環境 | Package CIのDebian bundle、clean-install smoke、再現性検証 |
+| Windows（Nix） | `nix run .#tauri-build -- --bundles nsis` | NSIS `*setup.exe`（`package-windows-x86_64`） | 同梱`pokecon`／`pokecon-worker`＋managed Python環境 | Package CIのNSIS bundle、clean-install smoke、三層再現性検証 |
+| Nix（開発・CI） | `nix build`／flake apps | store path | devShell／CI | `nix flake check`、各gate |
+| non-Nix toolchain | 非サポート | 非サポート | 非サポート | 必須workflowにnon-Nix jobなし。Nix外の互換性は未証明 |
+
+配布はLinux DebianとWindows NSISの2系統とし、両方ともNixから再現可能に生成する。Release workflowはtag起点で同じ検査にchecksumとrelease assetを追加する。non-Nix toolchainでの成果物生成は確定対象に含めず、必要になった時点で別途受入する。
+
 現行dirty worktreeでの追加実体化:
 
 - `nix build .#pokecon --no-link --print-out-paths` は `/nix/store/ph05fczcpc976ksxg0wcd2mjnizzpgvk-pokecon-0.1.0` を生成し、`bin/pokecon --help`（exit 0）と`--version`（`pokecon 0.1.0`）を確認した。NAR hashは `sha256-br1bIhWCFb4KzPJQsBfrGmTfWxnuEjiggkuhi2Abc2E=`。

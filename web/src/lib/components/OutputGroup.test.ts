@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/svelte';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ApplicationRuntime, type RuntimeView } from '../runtime';
+import { settingsSnapshot } from '../test-fixtures';
 import OutputGroup from './OutputGroup.svelte';
 
 function idleView(): { runtime: ApplicationRuntime; view: RuntimeView } {
@@ -33,7 +34,7 @@ describe('OutputGroup', () => {
     expect(stack?.className).not.toContain('xl:grid-cols');
     const style = stack?.getAttribute('style') ?? '';
     expect(style).toContain('grid-template-rows');
-    expect(style).toContain('minmax(8rem, 26fr) minmax(8rem, 74fr)');
+    expect(style).toContain('minmax(8rem, 26fr) 6px minmax(8rem, 74fr)');
     expect(style).toContain('--output-one: 26%');
   });
 
@@ -49,5 +50,23 @@ describe('OutputGroup', () => {
 
     expect(screen.getByRole('region', { name: 'Output #1' })).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'Output #2' })).toBeNull();
+  });
+
+  it('resets the split on double click', async () => {
+    const { runtime, view } = idleView();
+    const writeSettings = vi.spyOn(runtime, 'writeSettings').mockResolvedValue({
+      recoveredRevisionConflict: false,
+      snapshot: settingsSnapshot('2', { 'ui.output_split_ratio': 50 })
+    });
+    render(OutputGroup, {
+      runtime,
+      showOutput1: true,
+      showOutput2: true,
+      splitRatio: 20,
+      view
+    });
+
+    await fireEvent.dblClick(screen.getByRole('separator', { name: 'Output split' }));
+    expect(writeSettings).toHaveBeenCalledWith({ 'ui.output_split_ratio': 50 });
   });
 });

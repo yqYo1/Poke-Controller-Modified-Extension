@@ -143,6 +143,7 @@
 | 7モード切替・正準値・即時反映・プロファイル対応・永続化 | 実装済 | `OtherTab.svelte:52-60,90-92,240-248`（7値＋書込）; `RightPanel.svelte:12,18-27`（`mode` による即時表示切替） | 表示ラベルが仕様と異なる（例: `ALL (default)`→`All`/`すべて`）。機能的差なし |
 | 設定表面（TOML/動的パス/CLI/env/OpenAPI）は backend 所有 | 対象外 | frontend は `ui.widget_mode` の参照・送信のみ | — |
 | 既定 `all`、小文字 ASCII・大文字小文字不問正規化 | 対象外 | 正規化は backend 所有。frontend 既定表示は `OtherTab.svelte:242`/`RightPanel.svelte:12` の `?? 'all'` | — |
+| 出力#1/#2の仕切り線ドラッグ・比率保持・ダブルクリック復帰（`ui.output_split_ratio`） | 実装済 | `OutputGroup.svelte` のseparator、`OutputGroup.test.ts`（行比率・double click） | — |
 
 ### 5.6 コントローラー位置
 

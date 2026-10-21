@@ -939,7 +939,7 @@ UI・表示系:
 - [ ] **Discordウィンドウ全体送信**: ツールメニューからのウィンドウ全体送信（OS制約注記）。
 
 プロファイル・環境:
-- [ ] **起動時profile選択**: profile未指定かつ複数存在時の選択UI（形態は実装時設計）。
+- [x] **起動時profile選択**: profile未指定かつ複数存在時の選択UI（形態は実装時設計）。実装: `feb618a3`（`ProfileStartupDialog.svelte` — 複数profileかつ有効profileが`default`の起動時にdialogを表示し、一覧から選択して既存の`active_profile`切替を送信、または「現在のまま開始」で閉じる。閉じた選択は`localStorage`へ記憶。`+page.svelte`へ配置、回帰テスト2件、web-check 147 passed・0 warnings、ci-fast 0、FRONTEND §5.2・TRACEABILITY 6.4.8更新）。
 - [x] **`--auto`/priority.txt**: 起動時自動選択の優先順。実装: `2c0f8f82`（`--auto`をCLIで受理し、`<config>/priority.txt`の先頭から存在するプロファイルを選択。明示`--profile`／`POKECON_PROFILE`が指定された場合はそちらを優先。コメント行・空行・不正名はスキップ、存在しないプロファイルは次候補へ。テスト1本）。
 - [ ] **2窓read-only**: 同一profileの2つ目インスタンスをread-onlyで開けるようにする（現行lock直列化との整合を設計）。
 - [x] **プロファイル名ガード**: 文字制限＋Windows予約名拒否（`settings/roots.rs`のSafeComponentへ統合）。実装: `ffa61b72`（`SafeComponent`で最大64文字・`/\\:<>"|?*`・制御文字・末尾空白/ドットを拒否、Windows予約名CON/PRN/AUX/NUL/COM1-9/LPT1-9を拡張子付き・大小文字不問で拒否。既存テストを更新し予約名/文字種の回帰を追加）。

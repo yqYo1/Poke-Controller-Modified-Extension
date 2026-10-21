@@ -14,6 +14,7 @@
   import MainPanel from '$lib/components/MainPanel.svelte';
   import NotificationsTab from '$lib/components/NotificationsTab.svelte';
   import OtherTab from '$lib/components/OtherTab.svelte';
+  import ProfileStartupDialog from '$lib/components/ProfileStartupDialog.svelte';
   import RightPanel from '$lib/components/RightPanel.svelte';
   import SerialTab from '$lib/components/SerialTab.svelte';
   import ScriptUiLayer from '$lib/components/ScriptUiLayer.svelte';
@@ -105,6 +106,7 @@
 
 {#if view !== undefined}
   <InputSafety {runtime} {view} />
+  <ProfileStartupDialog {runtime} {view} />
   <main bind:this={workspaceElement} class="mx-auto flex h-screen min-h-0 w-full max-w-[1920px] flex-col overflow-auto p-3 sm:p-5 lg:p-6">
     <header class="flex flex-wrap items-center justify-between gap-4 border-b border-text/10 px-1 pb-4">
       <div class="flex items-center gap-3">

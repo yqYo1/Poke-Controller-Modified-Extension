@@ -313,6 +313,12 @@
 | 開始/停止予約（clock／after_minutes、キャンセル、sleep警告） | 実装済 | `RunListEditorDialog.svelte` の Schedule タブ; `actions.ts` の `runSchedule`／`controlRunSchedule` | ちょうど一方の検証は backend 所有 |
 | `GET/PUT /api/run-lists`、`GET /api/run-schedule`／`POST /api/run-schedule/control` | 実装済 | `actions.ts` | — |
 
+#### 6.4.8 起動時profile選択
+
+| 要求 | 判定 | 直接証拠 | ギャップ・備考 |
+|------|------|----------|----------------|
+| 複数profile・default時にdialog、切替/現在のまま開始、localStorage記憶 | 実装済 | `ProfileStartupDialog.svelte`、`+page.svelte` の配置、`ProfileStartupDialog.test.ts` 2件 | profile切替は既存の`PATCH /api/settings`経由 |
+
 ### 6.5 通知タブ
 
 #### 6.5.1 Windows 通知

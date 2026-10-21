@@ -239,6 +239,10 @@ command discoveryではsourceが実行され、execution generationでも再実�
 
 directory走査順は公開契約ではないため、表示順をfilesystem順へ依存させません。
 
+3DS向けserial data formatは、単一の旧6-byte形式からfirmware別の2形式へ置き換わりました。firmwareがx.4以降なら`3ds_x4`、x.3以前なら`3ds_x3`を選びます。旧形式の設定値は移行せず、接続先のfirmwareに合わせて再選択してください。
+
+DS FT形式はFTDI MPSSE対応基板が別途必要です。Linuxでは`ftdi_sio`／`usbserial`がデバイスを確保するため、アプリがopen時にdetachできる権限（udev設定）を用意します。DS FTはbaud rateを使用せず、raw serial書込みも遮断されます。
+
 これらを旧実装へ合わせて無効化せず、安全性と公開互換surfaceの範囲内でsourceを調整します。
 
 ## 問題時にrollbackする

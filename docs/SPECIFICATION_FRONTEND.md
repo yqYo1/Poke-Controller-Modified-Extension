@@ -179,6 +179,7 @@ WebRTC DataChannelからWebSocketへ切り替えるログtransportはWeb browser
 - **出力#2（下部ログパネル）**: セカンダリログ/出力表示。
 - **サイズ調整**: その他タブの「出力サイズ調整」スライダー（0～100）で制御。出力#1と出力#2の比率を決定。両方が表示されている場合は境界の仕切り線をドラッグして比率を変更でき、ダブルクリックで50へ戻す。変更は`ui.output_split_ratio`へ保存する。
 - **ログソース**: バックエンドからWebRTC DataChannel（プライマリ）またはWebSocket（フォールバック）経由で受信したログ。WebRTC DataChannelが利用可能な場合はそちらを優先し、接続断時はWebSocketにフォールバック。
+- **タブ**: 各出力パネルは`Log`と`Note`の2タブを持つ。`Log`はレベル色分け・レベルフィルタ・自動スクロール・コピー・クリアを提供する。`Note`は自由メモを保持し、`localStorage`の`pokecon.output1.note.<profile>`／`pokecon.output2.note.<profile>`へプロファイル別に保存する。
 - **機能**: 自動スクロール、クリアボタン、クリップボードにコピー、ログレベルフィルタリング。
 - **ログレベル**: DEBUG、INFO、WARNING、ERROR、CRITICAL（フィルタリング用）。各レベルの基準:
   - **DEBUG**: 開発時の詳細情報（関数呼び出し、内部状態変化）

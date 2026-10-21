@@ -144,6 +144,7 @@
 | 設定表面（TOML/動的パス/CLI/env/OpenAPI）は backend 所有 | 対象外 | frontend は `ui.widget_mode` の参照・送信のみ | — |
 | 既定 `all`、小文字 ASCII・大文字小文字不問正規化 | 対象外 | 正規化は backend 所有。frontend 既定表示は `OtherTab.svelte:242`/`RightPanel.svelte:12` の `?? 'all'` | — |
 | 出力#1/#2の仕切り線ドラッグ・比率保持・ダブルクリック復帰（`ui.output_split_ratio`） | 実装済 | `OutputGroup.svelte` のseparator、`OutputGroup.test.ts`（行比率・double click） | — |
+| OutputのLog／Noteタブ（レベル色分け・フィルタ・自動スクロール・コピー、Noteのプロファイル別localStorage保存） | 実装済 | `OutputPanel.svelte` のtablist、`OutputPanel.test.ts` 2件 | ログ本体の生成はbackend所有 |
 
 ### 5.6 コントローラー位置
 

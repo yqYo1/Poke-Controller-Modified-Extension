@@ -13,7 +13,9 @@ describe('application shell', () => {
     render(Page);
 
     expect(screen.getByRole('heading', { name: 'Controller workspace' })).toBeTruthy();
-    expect(screen.getAllByRole('tab')).toHaveLength(6);
+    expect(
+      within(screen.getByRole('navigation', { name: 'メイン画面' })).getAllByRole('tab')
+    ).toHaveLength(6);
     expect(screen.getByRole('tab', { name: 'カメラ' }).getAttribute('aria-selected')).toBe(
       'true'
     );
@@ -46,7 +48,9 @@ describe('application shell', () => {
   it('keeps the six settings tabs in the canonical order', () => {
     render(Page);
 
-    const names = screen.getAllByRole('tab').map((tab) => tab.textContent.trim());
+    const names = within(screen.getByRole('navigation', { name: 'メイン画面' }))
+      .getAllByRole('tab')
+      .map((tab) => tab.textContent.trim());
     expect(names).toEqual(['カメラ', 'シリアル', '手動制御', 'コマンド', '通知', 'その他']);
   });
 

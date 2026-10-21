@@ -65,7 +65,7 @@
   style={`grid-template-rows: ${rows}; --output-one: ${String(output1Percent)}%;`}
 >
   {#if showOutput1}
-    <OutputPanel label="Output #1" lines={view.output1} onclear={() => runtime.clearOutput(1)} storageKey="pokecon.output1" />
+    <OutputPanel label="Output #1" lines={view.output1} onclear={() => runtime.clearOutput(1)} storageKey="pokecon.output1" profile={view.state?.active_profile ?? 'default'} />
   {/if}
   {#if showBoth}
     <div
@@ -84,6 +84,6 @@
     ></div>
   {/if}
   {#if showOutput2}
-    <OutputPanel label="Output #2" lines={view.output2} onclear={() => runtime.clearOutput(2)} storageKey="pokecon.output2" />
+    <OutputPanel label="Output #2" lines={view.output2} onclear={() => runtime.clearOutput(2)} storageKey="pokecon.output2" profile={view.state?.active_profile ?? 'default'} />
   {/if}
 </div>

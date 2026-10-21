@@ -920,7 +920,7 @@ UI・表示系:
 - [ ] **ウィンドウ取り込み**: Windows限定の他アプリウィンドウ取り込み（`Window:`候補、非対応OSのフォールバック表示）。
 - [ ] **Audioタブ**: 音声デバイス選択・取込・再生（新規仕様節＋backend＋UI）。
 - [ ] **Mask編集UI**: 矩形／楕円マスクの編集・名前付き保存/読込・Capture反映・一覧管理。
-- [ ] **Touch Screen数値設定**: タッチ範囲の数値入力（既存の正規化rectangle設定との統合）。
+- [x] **Touch Screen数値設定**: タッチ範囲の数値入力（既存の正規化rectangle設定との統合）。実装: `34baee3b`（`ManualTab`へTouch screen areaのleft/top/right/bottom数値入力とApplyを追加。0〜1・left<right・top<bottomを検証し、`input.touchscreen_area`へ書き込み。回帰テスト追加、web-check 149 passed・0 warnings、ci-fast 0、FRONTEND §6.3・TRACEABILITY更新）。
 
 コントローラー・入力:
 - [ ] **Software-Controllerレイアウト（5+7）**: レイアウト定義をregistry化して切替可能にする。

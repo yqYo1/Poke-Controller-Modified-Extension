@@ -35,6 +35,7 @@
 ---@alias NotificationsLineMenuBehavior "message"|"noop"
 ---@alias UiWidgetMode "all"|"outputs"|"output_1_controller"|"output_2_controller"|"output_1"|"output_2"|"controller"
 ---@alias UiStdoutDestination "output_1"|"output_2"
+---@alias UiRightPanelPosition "right"|"bottom"|"hidden"
 ---@alias UiControllerPosition "top"|"bottom"
 ---@alias UiControllerBodyColor "classic"|"black"|"white"|"red"|"blue"|"green"|"purple"
 ---@alias UiDialogButtonPosition "bottom"|"top"|"both"
@@ -201,6 +202,7 @@
 ---@field fps integer
 ---@field fps_options integer[]
 ---@field output_split_ratio integer
+---@field right_panel_position UiRightPanelPosition
 ---@field stdout_destination UiStdoutDestination
 ---@field widget_mode UiWidgetMode
 

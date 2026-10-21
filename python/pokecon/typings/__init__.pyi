@@ -80,6 +80,11 @@ type UiStdoutDestination = Literal[
     "output_1",
     "output_2",
 ]
+type UiRightPanelPosition = Literal[
+    "right",
+    "bottom",
+    "hidden",
+]
 type UiControllerPosition = Literal[
     "top",
     "bottom",
@@ -280,6 +285,7 @@ class _OptUi:
     fps: int
     fps_options: list[int]
     output_split_ratio: int
+    right_panel_position: UiRightPanelPosition
     stdout_destination: UiStdoutDestination
     widget_mode: UiWidgetMode
 

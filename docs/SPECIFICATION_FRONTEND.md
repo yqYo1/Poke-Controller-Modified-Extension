@@ -717,6 +717,7 @@ Commands/
 | **最終ウィンドウを閉じる動作** | 正準値`ask`／`shutdown`／`keep_backend`を選択するコンボボックス。表示ラベルは「毎回確認」／「すべて終了」／「バックエンドを継続」。正準ID: `ui.desktop.close_behavior`。変更は以後のウィンドウ閉じる操作へ即時反映し、グローバル`settings.toml`へ保存する | Combobox |
 | **デスクトップコンポジット無効化** (`disable_compositing`) | デスクトップモード（Tauri/WebView）のウィンドウ合成を無効化するチェックボックス。正準ID: `ui.desktop.disable_compositing`。グローバル専用、再起動必須（startup-only/restart-required）。変更時はチェック状態をグローバル`settings.toml`へ保存するが現在のプロセスには適用せず、「再起動後に反映」する旨をUI上に表示する。Webモードでは値を保持するが効果を持たない | Checkbox |
 | **Pythonライブラリ** | `python.script.packages.list`へ宣言済みライブラリを追加・削除するセクション。名前・バージョン（任意）・extras（カンマ区切り）を編集し、重複名と空名を拒否する。保存は次回ワーカー生成時の同期として扱い、保存結果を表示する | リスト編集＋追加/削除/保存 |
+| **右パネル位置** | コンボボックス | `ui.right_panel_position`。`right`（右）／`bottom`（下）／`hidden`（非表示）を選択し、Output／Software-Controllerの配置へ即時反映する |
 | **コントローラー本体色** | コンボボックス | `ui.controller_body_color`。`classic`／`black`／`white`／`red`／`blue`／`green`／`purple`のプリセットから選択し、即時反映する。「書出し」で現在のプリセットをJSONとして保存できる |
 | **表示言語** | 日本語／英語を選択するコンボボックス。正準ID: `language`。表示ラベルは「日本語」／「English」、保存値は`ja`／`en`。変更は全UIへ即時反映し、グローバル`settings.toml`へ保存する | Combobox |
 

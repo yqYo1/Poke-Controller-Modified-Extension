@@ -140,6 +140,7 @@
 
 | 要求 | 判定 | 直接証拠 | ギャップ・備考 |
 |------|------|----------|----------------|
+| 右パネル位置（right／bottom／hidden、即時反映、プロファイル保存） | 実装済 | `OtherTab.svelte` の位置select、`+page.svelte` のgrid切替 | — |
 | コントローラー本体色（7プリセット、即時反映、プロファイル保存、JSON書出し） | 実装済 | `OtherTab.svelte` の色select／Export、`ControllerPanel.svelte` のbody class | — |
 | 7モード切替・正準値・即時反映・プロファイル対応・永続化 | 実装済 | `OtherTab.svelte:52-60,90-92,240-248`（7値＋書込）; `RightPanel.svelte:12,18-27`（`mode` による即時表示切替） | 表示ラベルが仕様と異なる（例: `ALL (default)`→`All`/`すべて`）。機能的差なし |
 | 設定表面（TOML/動的パス/CLI/env/OpenAPI）は backend 所有 | 対象外 | frontend は `ui.widget_mode` の参照・送信のみ | — |

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "specification_version": "2.2.0",
-  "expected_setting_count": 81,
+  "expected_setting_count": 82,
   "settings": [
     {
       "id": "language",
@@ -2372,6 +2372,57 @@
         },
         "env": {
           "name": "POKECON_UI_STDOUT_DESTINATION",
+          "encoding": "scalar"
+        },
+        "ui": {
+          "access": "read_write",
+          "control": "radio_group"
+        },
+        "openapi": {
+          "access": "read_write",
+          "masked_read": false
+        }
+      },
+      "secret": false,
+      "invalid_toml_value": "use_default",
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ]
+    },
+    {
+      "id": "ui.right_panel_position",
+      "value": {
+        "kind": "enum",
+        "values": [
+          "right",
+          "bottom",
+          "hidden"
+        ],
+        "ascii_case_insensitive": true
+      },
+      "default": {
+        "kind": "literal",
+        "value": "right"
+      },
+      "scope": "profile",
+      "mutability": "runtime_immediate",
+      "surfaces": {
+        "toml": {
+          "name": "ui.right_panel_position"
+        },
+        "dynamic": {
+          "name": "pokecon.opt.ui.right_panel_position"
+        },
+        "cli": {
+          "flags": [
+            "--ui-right-panel-position"
+          ],
+          "encoding": "scalar",
+          "discouraged": false
+        },
+        "env": {
+          "name": "POKECON_UI_RIGHT_PANEL_POSITION",
           "encoding": "scalar"
         },
         "ui": {

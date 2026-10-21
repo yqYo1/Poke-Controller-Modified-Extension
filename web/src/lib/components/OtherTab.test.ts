@@ -40,6 +40,24 @@ describe('OtherTab', () => {
     expect(clearOutputs).toHaveBeenCalledOnce();
   });
 
+  it('writes the right panel position', async () => {
+    const { runtime, view } = runtimeView(
+      settingsSnapshot('1', { 'ui.right_panel_position': 'right' })
+    );
+    const writeSettings = vi.spyOn(runtime, 'writeSettings').mockResolvedValue({
+      recoveredRevisionConflict: false,
+      snapshot: settingsSnapshot('2', { 'ui.right_panel_position': 'bottom' })
+    });
+    render(OtherTab, { runtime, view });
+
+    await fireEvent.change(screen.getByLabelText('右パネル位置'), {
+      target: { value: 'bottom' }
+    });
+    await waitFor(() => {
+      expect(writeSettings).toHaveBeenCalledWith({ 'ui.right_panel_position': 'bottom' });
+    });
+  });
+
   it('writes the controller body color preset', async () => {
     const { runtime, view } = runtimeView(
       settingsSnapshot('1', { 'ui.controller_body_color': 'classic' })

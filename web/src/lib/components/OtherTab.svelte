@@ -7,6 +7,7 @@
   type SelectSetting =
     | 'ui.stdout_destination'
     | 'ui.widget_mode'
+    | 'ui.right_panel_position'
     | 'ui.controller_position'
     | 'ui.controller_body_color'
     | 'ui.dialog_button_position'
@@ -91,6 +92,12 @@
     } else if (setting === 'ui.widget_mode') {
       await write({
         'ui.widget_mode': value as NonNullable<SettingsWriteValues['ui.widget_mode']>
+      });
+    } else if (setting === 'ui.right_panel_position') {
+      await write({
+        'ui.right_panel_position': value as NonNullable<
+          SettingsWriteValues['ui.right_panel_position']
+        >
       });
     } else if (setting === 'ui.controller_position') {
       await write({ 'ui.controller_position': value as 'top' | 'bottom' });
@@ -367,6 +374,19 @@
           {#each widgetModes as mode (mode[0])}
             <option value={mode[0]}>{english ? mode[1] : mode[2]}</option>
           {/each}
+        </select>
+      </label>
+      <label>
+        <span class="text-xs font-medium text-subtext1">{t('Right panel position', '右パネル位置')}</span>
+        <select
+          aria-label={t('Right panel position', '右パネル位置')}
+          class="mt-1 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text"
+          value={values?.['ui.right_panel_position'] ?? 'right'}
+          onchange={(event) => void changeSelect(event, 'ui.right_panel_position')}
+        >
+          <option value="right">{t('Right', '右')}</option>
+          <option value="bottom">{t('Bottom', '下')}</option>
+          <option value="hidden">{t('Hidden', '非表示')}</option>
         </select>
       </label>
       <label>

@@ -2637,6 +2637,61 @@
         }
       }
     },
+    "ui.right_panel_position": {
+      "type": "string",
+      "enum": [
+        "right",
+        "bottom",
+        "hidden"
+      ],
+      "default": "right",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "right"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "toml": {
+            "name": "ui.right_panel_position",
+            "unsupported_reason": null
+          },
+          "dynamic": {
+            "name": "pokecon.opt.ui.right_panel_position",
+            "unsupported_reason": null
+          },
+          "cli": {
+            "flags": [
+              "--ui-right-panel-position"
+            ],
+            "encoding": "scalar",
+            "discouraged": false
+          },
+          "env": {
+            "name": "POKECON_UI_RIGHT_PANEL_POSITION",
+            "encoding": "scalar"
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "radio_group",
+            "unsupported_reason": null
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
     "ui.controller_position": {
       "type": "string",
       "enum": [
@@ -4421,6 +4476,7 @@
     "ui.widget_mode",
     "ui.output_split_ratio",
     "ui.stdout_destination",
+    "ui.right_panel_position",
     "ui.controller_position",
     "ui.controller_body_color",
     "ui.dialog_button_position",

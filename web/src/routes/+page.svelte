@@ -43,6 +43,9 @@
     view = next;
   });
   const language = $derived(view?.settings?.values.language ?? 'ja');
+  const rightPanelPosition = $derived(
+    view?.settings?.values['ui.right_panel_position'] ?? 'right'
+  );
 
   function label(tab: (typeof tabs)[number]): string {
     return language === 'en' ? tab.en : tab.ja;
@@ -152,7 +155,7 @@
       </div>
     {/if}
 
-    <div class="mt-4 grid min-h-0 flex-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)] xl:grid-cols-[minmax(0,1fr)_minmax(28rem,44rem)]">
+    <div class={`mt-4 grid min-h-0 flex-1 items-stretch gap-4 ${rightPanelPosition === 'right' ? 'lg:grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)] xl:grid-cols-[minmax(0,1fr)_minmax(28rem,44rem)]' : 'grid-cols-1'}`}>
       <div class="flex min-h-0 min-w-0 flex-col gap-4">
         <MainPanel {actions} onnavigate={navigate} {runtime} {view} />
 
@@ -193,7 +196,9 @@
         </div>
       </div>
 
-      <RightPanel runtime={runtime} view={view} />
+      {#if rightPanelPosition !== 'hidden'}
+        <RightPanel runtime={runtime} view={view} />
+      {/if}
     </div>
   </main>
   <ScriptUiLayer {actions} {view} />

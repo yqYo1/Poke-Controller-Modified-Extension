@@ -908,7 +908,7 @@ UI・表示系:
 - [x] **起動時レイアウト確定後表示**: 配置確定まで非表示にして起動直後のガタつきを防ぐ。実装: `ec1da71b`（`+page.svelte` — view初期化後に2回のanimation frameを待って`layoutReady`を立て、確定前はworkspaceを`opacity-0`・`pointer-events-none`・`aria-busy=true`にする。web-check 148 passed・0 warnings、ci-fast 0、FRONTEND §5.2・TRACEABILITY 6.4.9更新）。
 - [ ] **Screenshotボタン**: アプリウィンドウ全体をCapturesへ保存（WebのOS制約を注記、Tauri優先）。
 - [ ] **Outputのタブ拡張**: Logタブ（レベル色分け・フィルタ・プロファイル毎保存）／Noteタブ（フリーメモ・プロファイル毎保存）／Serialタブ（送信データ表示）、出力全域の文字検索（Ctrl+F、大小切替）。
-- [ ] **キーボード素通し規則**: Alt/Ctrl押下中、入力欄、キー消費部品フォーカス中、メニュー操作中（Windows）はゲーム機へ送らない（`input-safety.ts`の部品粒度拡張）。
+- [x] **キーボード素通し規則**: Alt/Ctrl押下中、入力欄、キー消費部品フォーカス中、メニュー操作中（Windows）はゲーム機へ送らない（`input-safety.ts`の部品粒度拡張）。実装: `e66d3a35`（`input-safety.ts`へ`isKeyboardOwnedTarget`を抽出 — Meta/Ctrl/Alt、BUTTON/INPUT/SELECT/TEXTAREA/contenteditable、`a[href]`・`role=menu/menuitem/dialog`・`aria-modal`・`data-keyboard-ignore`。`InputSafety.svelte`から使用し、単体テスト3件追加。web-check 152 passed・0 warnings、ci-fast 0）。
 - [x] **すべての入力を離す**: メニュー「操作」から既存の全解放経路を呼出し（実行中は確認）。実装: `9bd2566a`（`WorkspaceMenu`へOperationsセクションと「すべての入力を離す」を追加。`runtime.neutralizeInput()`を呼び、`is_running`時は確認。回帰テスト追加、web-check 148 passed・0 warnings、ci-fast 0。FRONTEND §11.5.7.1とTRACEABILITY更新）。
 - [ ] **テーマ**: 同梱テーマ（デフォルト・ダーク3種・明色5種）＋プロファイル毎保存＋テーマ作成/編集UI＋themesフォルダのユーザーテーマ。SPEC §4.7/§9の「将来」を実装へ更新。
 - [ ] **環境の診断**: バージョン・書込可否・シリアル／カメラ等の診断＋マスクコピー（旧Version確認の廃止方針を維持）。

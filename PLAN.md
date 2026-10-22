@@ -929,7 +929,7 @@ UI・表示系:
 - [ ] **ControllerProfiles複数対応**: `ControllerProfiles/*.json`方式の機種別マッチングとボタン割当セットアップ。
 - [ ] **機種別KeyConfig**: ゲーム機（Switch／3DS／DS／GameCube）別のキー割当と保存。
 - [ ] **モニター補助ツール**: 複数インスタンス（プロファイル別プロセス）の監視ツールとして読み替えて実装（枠数・All Start／Stop等の詳細は実装時設計）。
-- [ ] **Keyboardウィンドウ**: ソフトウェアキーボード（かな→ローマ字、モード自動切替）。6.2b／6.3aの後。
+- [x] **Keyboardウィンドウ**: ソフトウェアキーボード（かな→ローマ字、モード自動切替）。6.2b／6.3aの後。実装: `547d2e1b`（`SoftwareKeyboard` — ASCII QWERTYと五十音配列、かな入力検出でかな→ローマ字へ自動切替、既存キーボード入力APIへkey down/up送信。Manualタブへ統合、回帰テスト追加、web-check 162 passed・0 warnings、ci-fast 0、FRONTEND §6.3・TRACEABILITY更新）。
 - [ ] **入力優先度・合成モデル**（2026-10-12利用者承認: 手動優先へ変更）: 連続系の同一element競合は**手動優先**とする（上流`COMMAND(0)<KEYBOARD(1)<MOUSE(2)<PROCON(3)`準拠、ボタンは論理和のまま）。互換面の`InputSource`値は上流の0〜3をそのまま公開し、内部`InputPriority`は「手動系＞script系（UserScript／DynamicConfig）」の方向へ再設計（手動内の順序・追加ソースの位置は実装時に決定）。`InputArbiter`・arbiterテスト（現行のscript優先固定を更新）・FRONTEND §5.3／BACKEND §10.4-§10.5／INTEGRATION §7.3・トレーサビリティへ反映する。
 - [x] **Data Format拡張のUI接続**: `SerialTab`のoption順とNX／3DS選択肢を6.3と一体で更新。確認: `SerialTab.svelte` のData formatは`default`→`nx`→`qingpi`→`3ds_x4`→`3ds_x3`→（FTDI検出時のみ）`ds_ft_rev3`→`rev2`→`rev1`の順で提示し、検出ゲートも実装済み（`d72ad13`のregistry順・`b16a713`のavailabilityゲート）。追加コード変更なし。
 

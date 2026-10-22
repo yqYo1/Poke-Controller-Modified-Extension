@@ -911,7 +911,7 @@ UI・表示系:
 - [x] **キーボード素通し規則**: Alt/Ctrl押下中、入力欄、キー消費部品フォーカス中、メニュー操作中（Windows）はゲーム機へ送らない（`input-safety.ts`の部品粒度拡張）。実装: `e66d3a35`（`input-safety.ts`へ`isKeyboardOwnedTarget`を抽出 — Meta/Ctrl/Alt、BUTTON/INPUT/SELECT/TEXTAREA/contenteditable、`a[href]`・`role=menu/menuitem/dialog`・`aria-modal`・`data-keyboard-ignore`。`InputSafety.svelte`から使用し、単体テスト3件追加。web-check 152 passed・0 warnings、ci-fast 0）。
 - [x] **すべての入力を離す**: メニュー「操作」から既存の全解放経路を呼出し（実行中は確認）。実装: `9bd2566a`（`WorkspaceMenu`へOperationsセクションと「すべての入力を離す」を追加。`runtime.neutralizeInput()`を呼び、`is_running`時は確認。回帰テスト追加、web-check 148 passed・0 warnings、ci-fast 0。FRONTEND §11.5.7.1とTRACEABILITY更新）。
 - [ ] **テーマ**: 同梱テーマ（デフォルト・ダーク3種・明色5種）＋プロファイル毎保存＋テーマ作成/編集UI＋themesフォルダのユーザーテーマ。SPEC §4.7/§9の「将来」を実装へ更新。
-- [ ] **環境の診断**: バージョン・書込可否・シリアル／カメラ等の診断＋マスクコピー（旧Version確認の廃止方針を維持）。
+- [x] **環境の診断**: バージョン・書込可否・シリアル／カメラ等の診断＋マスクコピー（旧Version確認の廃止方針を維持）。実装: `045b2f01`（`DiagnosticsDialog` — package version、profile、設定revision、serial接続、camera、command、realtime/mediaを表示。現行言語設定の再書込で書込可否を確認し、secretを含まないJSONをクリップボードへコピー。`DiagnosticsDialog.test.ts`、web-check 160 passed・0 warnings、ci-fast 0、FRONTEND §6.6・TRACEABILITY更新）。
 - [ ] **ヘルプ/マニュアル**: Instruction Manual・機能紹介のビューワ（スクロール・今後は表示しない・URLリンク化）、Discord通知設定／ハードウェア設定項の追記。
 
 カメラ・映像・音声:

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { SettingsWriteValues } from '../api';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
+  import SoftwareKeyboard from './SoftwareKeyboard.svelte';
 
   interface Props {
     runtime: ApplicationRuntime;
@@ -11,6 +12,7 @@
   let error = $state<string | null>(null);
   let saving = $state(false);
   const keyboardEnabled = $derived(view.settings?.values['input.keyboard_enabled'] ?? true);
+  const language = $derived(view.settings?.values.language ?? 'ja');
   const savedTouchArea = $derived(
     view.settings?.values['input.touchscreen_area'] ?? {
       left: 0,
@@ -111,6 +113,10 @@
       <span><span class="block text-sm font-medium text-text">R-stick mouse</span><span class="text-xs text-subtext0">Camera canvas の右ドラッグ</span></span>
     </label>
   </fieldset>
+
+  <div class="flex flex-wrap items-center gap-2">
+    <SoftwareKeyboard {runtime} {language} />
+  </div>
 
   <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-text/10 bg-crust/20 px-4 py-3 text-xs">
     <span class="text-subtext1">Active keyboard codes: {view.input.snapshot.keyboard_keys.length === 0 ? 'none' : view.input.snapshot.keyboard_keys.join(', ')}</span>

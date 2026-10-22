@@ -21,6 +21,8 @@ extend-exclude = [
     "SerialController/db/pokedex.json",
     # Source-generated dependency names are exact registry metadata, not prose.
     "docs/licenses/gpui-selected-closure-license-report.json",
+    # Kana-to-romaji table contains intentional romanization, not prose.
+    "web/src/lib/components/SoftwareKeyboard.svelte",
 ]
 
 [default]

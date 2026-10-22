@@ -85,4 +85,15 @@ describe('ControllerPanel', () => {
       [null]
     ]);
   });
+
+  it('switches the touchpad to actual size', async () => {
+    const { runtime, view } = createRuntime();
+    const rendered = render(ControllerPanel, { runtime, view });
+    const checkbox = screen.getByRole('checkbox');
+    await fireEvent.click(checkbox);
+
+    const touch = rendered.container.querySelector('[aria-label^="Touchscreen"]');
+    expect(touch?.parentElement?.className).toContain('h-[240px]');
+    expect(screen.getByText('320 × 240 actual size')).toBeTruthy();
+  });
 });

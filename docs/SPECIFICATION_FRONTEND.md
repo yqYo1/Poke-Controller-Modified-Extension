@@ -417,6 +417,7 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 | **カラーピッカー** | Ctrl+クリック | クリック位置の色の値を取得 ※ブラウザのコンテキストメニューと競合する可能性あり。対応例: `event.preventDefault()` の使用 |
 | **範囲スクリーンショット** | Ctrl+Shift+ドラッグ | キャンバス上の選択矩形を`POST /api/camera/screenshot`の`destination="captures"`で保存する ※ブラウザのテキスト選択と競合する可能性あり。対応例: `event.preventDefault()` の使用 |
 | **名前付き保存** | Ctrl+Alt+ドラッグ | 選択領域を[連携定義書](SPECIFICATION_INTEGRATION.md) §7.4のスクリーンショットAPIで保存する。Tauriはネイティブ保存ダイアログ後に`destination="path"`、Webはブラウザ保存ダイアログを使用する`destination="download"`とする。初期ファイル名は `capture_YYYYMMDD_HHMMSS`（拡張子なし）。実効 `camera.screenshot_format` を初期選択し、PNG/JPEGの一回限り上書きが可能。[連携定義書](SPECIFICATION_INTEGRATION.md) §6.1.5参照 ※ブラウザのショートカットと競合する可能性あり（特にLinux/ChromeでOSレベルのウィンドウ移動に使用される場合）。対応例: `event.preventDefault()` の使用、またはユーザー設定で別のキーコンボに変更可能 |
+| **Simulator実寸タッチ** | チェックボックス | Software-ControllerのTouch Screenを`320 × 240`の実寸で表示し、利用可能なカメラstreamを同じ領域へ重ねる。通常時は領域幅に追従する4:3表示 |
 | **タッチ操作領域の数値設定** | 数値入力 | `input.touchscreen_area`の`left`／`top`／`right`／`bottom`を0〜1で入力し、`left < right`かつ`top < bottom`を検証して適用する。適用成功時は即座にアクティブプロファイルTOMLへ永続化する |
 | **タッチ操作領域選択** | Ctrl+右ドラッグ | キャンバス上の矩形領域を選択して `input.touchscreen_area`（[バックエンド定義書](SPECIFICATION_BACKEND.md) §11.4.2参照）を設定。ドラッグ座標は実際のソース画像コンテンツボックス（レターボックス／ピラーボックスを除外した描画領域）へクランプしてから正規化する。逆方向ドラッグは左上／右下を自動ソートする。ドラッグ結果が退化（幅または高さゼロ）した場合は変更を拒否して旧領域を維持する。変更成功時は即座にアクティブプロファイルTOMLへ永続化する。座標変換は[バックエンド定義書](SPECIFICATION_BACKEND.md) §11.4.1.6参照 |
 ### 6.2 シリアルタブ

@@ -141,6 +141,7 @@
 | 要求 | 判定 | 直接証拠 | ギャップ・備考 |
 |------|------|----------|----------------|
 | ミニ画面（コマンド中心、Main Panel・タブナビ・右パネル非表示、通常画面へ復帰） | 実装済 | `+page.svelte` の`miniScreen`切替、`page.test.ts` 追加テスト | 状態保持は画面内のみ |
+| Simulator実寸タッチ（320×240固定、カメラstreamオーバーレイ） | 実装済 | `TouchPad.svelte` のactualSize/stream、`ControllerPanel.test.ts` 追加テスト | streamなし時は背景のみ |
 | 環境の診断（バージョン／書込可否／serial／camera／command、マスク済みコピー） | 実装済 | `DiagnosticsDialog.svelte`、`DiagnosticsDialog.test.ts` | 旧Version確認の代替ではない |
 | コントローラーレイアウト（5種、即時反映、プロファイル保存） | 実装済 | `OtherTab.svelte` のレイアウトselect、`ControllerPanel.svelte` のgrid class | — |
 | 右パネル位置（right／bottom／hidden、即時反映、プロファイル保存） | 実装済 | `OtherTab.svelte` の位置select、`+page.svelte` のgrid切替 | — |

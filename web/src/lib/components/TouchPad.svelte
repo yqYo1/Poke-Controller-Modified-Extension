@@ -9,10 +9,19 @@
   interface Props {
     onchange: (touch: TouchPoint | null) => void;
     touch: TouchPoint | null;
+    actualSize?: boolean;
+    stream?: MediaStream | null;
   }
 
-  let { onchange, touch }: Props = $props();
+  let { onchange, touch, actualSize = false, stream = null }: Props = $props();
   let activePointer: number | null = null;
+  let video = $state<HTMLVideoElement>();
+
+  $effect(() => {
+    if (video === undefined) return;
+    video.srcObject = actualSize ? stream : null;
+    if (actualSize && stream !== null) void video.play().catch(() => undefined);
+  });
 
   function point(event: PointerEvent): TouchPoint {
     const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -54,15 +63,19 @@
   onDestroy(neutralize);
 </script>
 
-<button
-  type="button"
-  class="relative aspect-[4/3] w-full touch-none overflow-hidden rounded-lg border border-text/15 bg-crust/30"
-  aria-label={touch === null ? 'Touchscreen 320 × 240' : `Touchscreen X ${String(touch.x)} Y ${String(touch.y)}`}
-  onpointercancel={release}
-  onpointerdown={handlePointerDown}
-  onpointermove={handlePointerMove}
-  onpointerup={release}
->
+<div class={`relative touch-none overflow-hidden rounded-lg border border-text/15 bg-crust/30 ${actualSize ? 'h-[240px] w-[320px]' : 'aspect-[4/3] w-full'}`}>
+  {#if actualSize && stream !== null}
+    <video bind:this={video} class="absolute inset-0 h-full w-full object-cover" muted playsinline aria-hidden="true"></video>
+  {/if}
+  <button
+    type="button"
+    class="absolute inset-0 size-full touch-none"
+    aria-label={touch === null ? 'Touchscreen 320 × 240' : `Touchscreen X ${String(touch.x)} Y ${String(touch.y)}`}
+    onpointercancel={release}
+    onpointerdown={handlePointerDown}
+    onpointermove={handlePointerMove}
+    onpointerup={release}
+  >
   <span class="absolute inset-0 bg-[linear-gradient(90deg,transparent_49%,rgba(255,255,255,.06)_50%,transparent_51%),linear-gradient(0deg,transparent_49%,rgba(255,255,255,.06)_50%,transparent_51%)] bg-[size:25%_25%]" aria-hidden="true"></span>
   {#if touch !== null}
     <span
@@ -71,4 +84,5 @@
       aria-hidden="true"
     ></span>
   {/if}
-</button>
+  </button>
+</div>

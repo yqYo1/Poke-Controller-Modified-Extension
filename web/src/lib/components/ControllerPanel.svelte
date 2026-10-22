@@ -21,6 +21,7 @@
   let { compact = false, runtime, view }: Props = $props();
   let visuallyReleased = new SvelteSet<GamepadButton>();
   let hatVisuallyReleased = $state(false);
+  let actualSize = $state(false);
   const bodyColor = $derived(view.settings?.values['ui.controller_body_color'] ?? 'classic');
   const layoutGrid = $derived.by(() => {
     const layout = view.settings?.values['ui.controller_layout'] ?? 'standard';
@@ -256,10 +257,15 @@
 
     <div class="flex min-w-0 flex-col justify-center gap-2 rounded-lg border border-text/10 bg-crust/20 p-2">
       <TouchPad
+        actualSize={actualSize}
         onchange={changeTouch}
+        stream={view.media.stream}
         touch={view.input.snapshot.touch}
       />
-      <p class="text-center text-[10px] tracking-[0.12em] text-subtext0 uppercase">320 × 240 touch</p>
+      <label class="mt-1 flex items-center justify-center gap-1 text-[10px] text-subtext0">
+        <input type="checkbox" bind:checked={actualSize} />
+        {actualSize ? '320 × 240 actual size' : '320 × 240 touch'}
+      </label>
     </div>
 
     <div class={`rounded-lg p-2 ${rightBodyClass}`}>

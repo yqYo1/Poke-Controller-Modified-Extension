@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "boundaries": [
+    {
+      "id": "worker-process",
+      "kind": "process",
+      "necessity": "Python/Lua user code must not share address space with hardware owners; crash and timeout isolation per generation.",
+      "trust": "Worker holds no camera/serial/socket handle; every value crosses via typed MessagePack IPC and is validated at decode.",
+      "distribution": "n/a (same package: [[bin]] pokecon-worker + worker-binary feature, not a separate crate).",
+      "evidence": {
+        "source_refs": [
+          "rust/pokecon/src/worker/supervisor.rs:63",
+          "rust/pokecon/src/worker/supervisor.rs:355",
+          "rust/pokecon/src/worker/supervisor.rs:541",
+          "rust/pokecon/Cargo.toml:19-38"
+        ],
+        "registry_refs": ["rust/pokecon/registry/ipc_boundary.json"],
+        "check_refs": ["worker_ipc_deployment_boundary_is_pinned"],
+        "symbol_anchors": [
+          "pub fn managed",
+          "WorkerSupervisor",
+          "fn build_command",
+          "kill_on_drop(true)"
+        ]
+      }
+    },
+    {
+      "id": "ipc-wire-value",
+      "kind": "trust",
+      "necessity": "Only closed, typed values may cross the process boundary; native handles and private objects are rejected at decode, never serialized.",
+      "trust": "Envelope 5 kind, IpcValue 9 closed values, 1048576B上限, 6 forbidden wire markers, 7 non-public payload cases rejected at decode.",
+      "distribution": "n/a (wire schema pinned in-registry; generated artifacts must not redefine it).",
+      "evidence": {
+        "source_refs": [
+          "rust/pokecon/src/worker/ipc/schema.rs:45",
+          "rust/pokecon/src/worker/ipc/codec.rs:10"
+        ],
+        "registry_refs": [
+          "rust/pokecon/registry/ipc_boundary.json",
+          "rust/pokecon/registry/protocol.json"
+        ],
+        "check_refs": [
+          "worker_ipc_deployment_boundary_is_pinned",
+          "public_wire_contracts_exclude_native_handles_and_private_paths"
+        ],
+        "symbol_anchors": [
+          "MAX_PAYLOAD_BYTES",
+          "IpcValue"
+        ]
+      }
+    },
+    {
+      "id": "lan-http-trust",
+      "kind": "trust",
+      "necessity": "LAN-exposed HTTP surface serves untrusted networks and untrusted dynamic load_content intake; every request is allowlisted before it reaches handlers.",
+      "trust": "Host/Origin allowlist with VARY Origin; load_content is untrusted intake validated before commit, never a direct state write.",
+      "distribution": "n/a (transport policy, not a packaged artifact).",
+      "evidence": {
+        "source_refs": [
+          "rust/pokecon/src/server/security.rs:1",
+          "rust/pokecon/src/server/security.rs:229",
+          "rust/pokecon/src/server/rest/mod.rs:662",
+          "rust/pokecon/src/dynamic/control.rs:88"
+        ],
+        "registry_refs": [],
+        "check_refs": [
+          "public_wire_contracts_exclude_native_handles_and_private_paths"
+        ],
+        "symbol_anchors": [
+          "RequestSecurity",
+          "enforce_security",
+          "VARY"
+        ]
+      }
+    },
+    {
+      "id": "os-platform-conditional",
+      "kind": "platform",
+      "necessity": "Serial enumeration, notifications, and shared-memory teardown differ per OS; cfg-gated code keeps one crate while honoring each platform's API.",
+      "trust": "n/a (platform selection, not a trust boundary; wrong-platform code must not compile in).",
+      "distribution": "n/a (same crate; per-OS packaging is os-bundle-distribution).",
+      "evidence": {
+        "source_refs": [
+          "rust/pokecon/src/device/serial/selector.rs:1",
+          "rust/pokecon/src/device/notification.rs:365",
+          "rust/pokecon/src/camera/shared_ring.rs:343",
+          "rust/pokecon/src/production.rs:449"
+        ],
+        "registry_refs": [],
+        "check_refs": [],
+        "symbol_anchors": [
+          "cfg(target_os",
+          "enumerate_linux",
+          "show_windows_toast",
+          "unlink_name_for_shutdown"
+        ]
+      }
+    },
+    {
+      "id": "os-bundle-distribution",
+      "kind": "distribution",
+      "necessity": "Each OS installs through its native bundle format with signed provenance; the runtime must never redefine the distribution manifest.",
+      "trust": "signing-inputs.json policy with canonical_sha256 and per-file sha256/size; payload, expanded-tree, and outer-installer manifests compared in three layers.",
+      "distribution": "Per-OS bundles (deb via tauri-build --bundles deb, NSIS *setup.exe) + signing provenance, no runtime manifest redefinition.",
+      "evidence": {
+        "source_refs": [
+          "docs/ARTIFACT_MANIFEST.md:12",
+          "flake.nix:4444",
+          "scripts/release/signing_manifest.py:1"
+        ],
+        "registry_refs": [],
+        "check_refs": ["package-reproducibility-check"],
+        "symbol_anchors": [
+          "signing-input-manifest",
+          "package-reproducibility-check",
+          "*setup.exe"
+        ]
+      }
+    }
+  ],
+  "non_boundaries": [
+    "separate-crate",
+    "public-rust-api",
+    "server-pub-mod",
+    "python-cdylib"
+  ],
+  "non_boundary_note": "Separate Rust crates are not a boundary: single package, root Cargo.toml members = [\"rust/pokecon\"]. Public Rust library API is not a boundary: src/lib.rs crate-private modules, only MainError/run_cli re-exported. server pub mod is crate-internal (lib.rs declares `mod server;`, handoff 5.1). Python cdylib/binding crate is retired (8726b23).",
+  "note": "Scope limits: source_refs line anchors are range-checked only (file must exist, anchor line must be within range); symbol_anchors regexes are the primary liveness signal. Closed-world marker classes: [[bin]] names in rust/pokecon/Cargo.toml, cfg(target_os sites, WorkerLaunch::managed spawn constructor, security.rs enforcement, worker IPC schema/codec, dist/tauri + signing manifests. Test-only bins (fault fixtures) and macro-generated code are out of scope and documented in the contract_sync check."
+}

@@ -1,0 +1,277 @@
+import { ApiRequestError, api, responseError, type ApiClient } from './api';
+import type { components } from './api/openapi';
+
+export type CameraDevice = components['schemas']['CameraDevice'];
+export type CommandControlRequest = components['schemas']['CommandControlRequest'];
+export type CommandHistoryControlRequest = components['schemas']['CommandHistoryControlRequest'];
+export type CommandHistoryEntry = components['schemas']['CommandHistoryEntry'];
+export type CommandHistorySnapshot = components['schemas']['CommandHistorySnapshot'];
+export type CommandPauseSnapshot = components['schemas']['CommandPauseSnapshot'];
+export type InputRecordControlRequest = components['schemas']['InputRecordControlRequest'];
+export type InputRecordResult = components['schemas']['InputRecordResult'];
+export type InputRecordSnapshot = components['schemas']['InputRecordSnapshot'];
+export type CommandTagCommand = components['schemas']['CommandTagCommand'];
+export type CommandTagEdit = components['schemas']['CommandTagEdit'];
+export type CommandTagInfo = components['schemas']['CommandTagInfo'];
+export type CommandTagOutcome = components['schemas']['CommandTagOutcome'];
+export type CommandTagRequest = components['schemas']['CommandTagRequest'];
+export type CommandTagResult = components['schemas']['CommandTagResult'];
+export type CommandTagSnapshot = components['schemas']['CommandTagSnapshot'];
+export type CommandTagStatus = components['schemas']['CommandTagStatus'];
+export type DynamicConfigControlRequest = components['schemas']['DynamicConfigControlRequest'];
+export type DynamicConfigResult = components['schemas']['DynamicConfigResult'];
+export type GenerateLauncherRequest = components['schemas']['GenerateLauncherRequest'];
+export type GenerateLauncherResult = components['schemas']['GenerateLauncherResult'];
+export type NotificationTestRequest = components['schemas']['NotificationTestRequest'];
+export type NotificationTestResult = components['schemas']['NotificationTestResult'];
+export type OperationResult = components['schemas']['OperationResult'];
+export type RunListItem = components['schemas']['RunListItem'];
+export type RunListSaveRequest = components['schemas']['RunListSaveRequest'];
+export type RunListSnapshot = components['schemas']['RunListSnapshot'];
+export type RunListSpec = components['schemas']['RunListSpec'];
+export type RunScheduleControlRequest = components['schemas']['RunScheduleControlRequest'];
+export type RunScheduleSnapshot = components['schemas']['RunScheduleSnapshot'];
+export type SavedScreenshot = components['schemas']['SavedScreenshot'];
+export type ScreenshotRequest = components['schemas']['ScreenshotRequest'];
+export type ScriptCreatorPreview = components['schemas']['ScriptCreatorPreview'];
+export type ScriptCreatorResult = components['schemas']['ScriptCreatorResult'];
+export type ScriptCreatorSnapshot = components['schemas']['ScriptCreatorSnapshot'];
+export type ScriptCreatorSpec = components['schemas']['ScriptCreatorSpec'];
+export type ScriptUiAction = components['schemas']['ScriptUiAction'];
+export type ScriptUiActionResult = components['schemas']['ScriptUiActionResult'];
+export type SerialControlRequest = components['schemas']['SerialControlRequest'];
+export type SerialPort = components['schemas']['SerialPort'];
+export type UpdateCheckResult = components['schemas']['UpdateCheckResult'];
+
+type DownloadScreenshotRequest = Extract<ScreenshotRequest, { destination: 'download' }>;
+type SavedScreenshotRequest = Exclude<ScreenshotRequest, DownloadScreenshotRequest>;
+type DownloadLauncherRequest = GenerateLauncherRequest & {
+  destination: { kind: 'download' };
+};
+type PathLauncherRequest = GenerateLauncherRequest & {
+  destination: { kind: 'path' };
+};
+
+export interface DownloadResult {
+  readonly blob: Blob;
+  readonly contentDisposition: string | null;
+}
+
+interface EnvelopeResponse<T> {
+  readonly data?: { readonly data: T };
+  readonly error?: unknown;
+  readonly response: Response;
+}
+
+function unwrap<T>(result: EnvelopeResponse<T>, fallback: string): T {
+  if (result.data === undefined) {
+    throw responseError(result.error, result.response.status, fallback);
+  }
+  return result.data.data;
+}
+
+function unexpectedResponse(message: string, response: Response): ApiRequestError {
+  return new ApiRequestError(message, { status: response.status });
+}
+
+export class BackendActions {
+  constructor(private readonly client: ApiClient = api) {}
+
+  async retryCamera(): Promise<OperationResult> {
+    return unwrap(
+      await this.client.POST('/api/camera/retry', { body: {} }),
+      'camera retry failed'
+    );
+  }
+
+  async saveScreenshot(request: SavedScreenshotRequest): Promise<SavedScreenshot> {
+    const result = await this.client.POST('/api/camera/screenshot', { body: request });
+    if (result.data === undefined) {
+      throw responseError(result.error, result.response.status, 'screenshot failed');
+    }
+    if (Array.isArray(result.data) || !('data' in result.data)) {
+      throw unexpectedResponse('screenshot returned an unexpected response', result.response);
+    }
+    return result.data.data;
+  }
+
+  async downloadScreenshot(request: DownloadScreenshotRequest): Promise<DownloadResult> {
+    const result = await this.client.POST('/api/camera/screenshot', {
+      body: request,
+      parseAs: 'blob'
+    });
+    if (result.data === undefined) {
+      throw responseError(result.error, result.response.status, 'screenshot download failed');
+    }
+    return {
+      blob: result.data,
+      contentDisposition: result.response.headers.get('Content-Disposition')
+    };
+  }
+
+  async commandHistory(): Promise<CommandHistorySnapshot> {
+    return unwrap(await this.client.GET('/api/command-history'), 'command history load failed');
+  }
+
+  async controlCommandHistory(
+    request: CommandHistoryControlRequest
+  ): Promise<CommandHistorySnapshot> {
+    return unwrap(
+      await this.client.POST('/api/command-history/control', { body: request }),
+      'command history update failed'
+    );
+  }
+
+  async controlCommand(request: CommandControlRequest): Promise<OperationResult> {
+    return unwrap(
+      await this.client.POST('/api/commands/control', { body: request }),
+      'command control failed'
+    );
+  }
+
+  async reloadCommands(): Promise<OperationResult> {
+    return unwrap(
+      await this.client.POST('/api/commands/reload', { body: {} }),
+      'command reload failed'
+    );
+  }
+
+  async cameras(): Promise<readonly CameraDevice[]> {
+    return unwrap(await this.client.GET('/api/devices/cameras'), 'camera enumeration failed');
+  }
+
+  async serialPorts(): Promise<readonly SerialPort[]> {
+    return unwrap(
+      await this.client.GET('/api/devices/serial-ports'),
+      'serial-port enumeration failed'
+    );
+  }
+
+  async controlDynamicConfig(request: DynamicConfigControlRequest): Promise<DynamicConfigResult> {
+    return unwrap(
+      await this.client.POST('/api/dynamic-config/control', { body: request }),
+      'dynamic configuration operation failed'
+    );
+  }
+
+  async testNotification(request: NotificationTestRequest): Promise<NotificationTestResult> {
+    return unwrap(
+      await this.client.POST('/api/notifications/test', { body: request }),
+      'notification test failed'
+    );
+  }
+
+  async scriptCreatorSnapshot(): Promise<ScriptCreatorSnapshot> {
+    return unwrap(await this.client.GET('/api/script-creator'), 'script creator snapshot failed');
+  }
+
+  async previewScriptCreation(request: ScriptCreatorSpec): Promise<ScriptCreatorPreview> {
+    return unwrap(
+      await this.client.POST('/api/script-creator/preview', { body: request }),
+      'script preview failed'
+    );
+  }
+
+  async createScript(request: ScriptCreatorSpec): Promise<ScriptCreatorResult> {
+    return unwrap(
+      await this.client.POST('/api/script-creator/create', { body: request }),
+      'script creation failed'
+    );
+  }
+
+  async runLists(): Promise<RunListSnapshot> {
+    return unwrap(await this.client.GET('/api/run-lists'), 'run list load failed');
+  }
+
+  async saveRunLists(request: RunListSaveRequest): Promise<RunListSnapshot> {
+    return unwrap(
+      await this.client.PUT('/api/run-lists', { body: request }),
+      'run list save failed'
+    );
+  }
+
+  async runSchedule(): Promise<RunScheduleSnapshot> {
+    return unwrap(await this.client.GET('/api/run-schedule'), 'run schedule load failed');
+  }
+
+  async controlRunSchedule(
+    request: RunScheduleControlRequest
+  ): Promise<RunScheduleSnapshot> {
+    return unwrap(
+      await this.client.POST('/api/run-schedule/control', { body: request }),
+      'run schedule control failed'
+    );
+  }
+
+  async inputRecord(): Promise<InputRecordSnapshot> {
+    return unwrap(await this.client.GET('/api/input-record'), 'input record load failed');
+  }
+
+  async controlInputRecord(request: InputRecordControlRequest): Promise<InputRecordResult> {
+    return unwrap(
+      await this.client.POST('/api/input-record/control', { body: request }),
+      'input record control failed'
+    );
+  }
+
+  async commandPause(): Promise<CommandPauseSnapshot> {
+    return unwrap(await this.client.GET('/api/command-pause'), 'pause info load failed');
+  }
+
+  async commandTags(): Promise<CommandTagSnapshot> {
+    return unwrap(await this.client.GET('/api/command-tags'), 'command tag load failed');
+  }
+
+  async applyCommandTags(request: CommandTagRequest): Promise<CommandTagResult> {
+    return unwrap(
+      await this.client.POST('/api/command-tags/apply', { body: request }),
+      'command tag update failed'
+    );
+  }
+
+  async scriptUiAction(request: ScriptUiAction): Promise<ScriptUiActionResult> {
+    return unwrap(
+      await this.client.POST('/api/script-ui/action', { body: request }),
+      'script UI interaction failed'
+    );
+  }
+
+  async generateLauncher(request: PathLauncherRequest): Promise<GenerateLauncherResult> {
+    const result = await this.client.POST('/api/profiles/generate-launcher', { body: request });
+    if (result.data === undefined) {
+      throw responseError(result.error, result.response.status, 'launcher generation failed');
+    }
+    if (Array.isArray(result.data) || !('data' in result.data)) {
+      throw unexpectedResponse('launcher generation returned an unexpected response', result.response);
+    }
+    return result.data.data;
+  }
+
+  async downloadLauncher(request: DownloadLauncherRequest): Promise<DownloadResult> {
+    const result = await this.client.POST('/api/profiles/generate-launcher', {
+      body: request,
+      parseAs: 'blob'
+    });
+    if (result.data === undefined) {
+      throw responseError(result.error, result.response.status, 'launcher download failed');
+    }
+    return {
+      blob: result.data,
+      contentDisposition: result.response.headers.get('Content-Disposition')
+    };
+  }
+
+  async controlSerial(request: SerialControlRequest): Promise<OperationResult> {
+    return unwrap(
+      await this.client.POST('/api/serial/control', { body: request }),
+      'serial control failed'
+    );
+  }
+
+  async checkUpdate(): Promise<UpdateCheckResult> {
+    return unwrap(
+      await this.client.POST('/api/update/check', { body: {} }),
+      'update check failed'
+    );
+  }
+}

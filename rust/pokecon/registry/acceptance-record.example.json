@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "specification_version": "2.2.0",
+  "source_commit": "0000000000000000000000000000000000000000",
+  "capability": "capture_device_with_known_frame_fixture",
+  "platform": "linux",
+  "started_at": "2026-01-01T00:00:00Z",
+  "completed_at": "2026-01-01T00:05:00Z",
+  "operator": "example-only-not-acceptance-evidence",
+  "environment": {
+    "os_name": "Example Linux",
+    "os_version": "0",
+    "app_mode": "desktop",
+    "build_identity": "example-only",
+    "artifact_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "device_inventory": ["example capture device; serial number redacted"]
+  },
+  "requirement_ids": ["§6.1", "§7.9"],
+  "steps": [
+    {
+      "id": "known_frame_capture",
+      "result": "failed",
+      "evidence": ["example-only; replace with artifact-relative evidence paths"]
+    }
+  ],
+  "measurements": [],
+  "result": "failed",
+  "notes": "Schema example only. It is never valid release evidence.",
+  "diagnostic_ids": []
+}

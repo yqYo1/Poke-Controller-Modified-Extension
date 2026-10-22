@@ -1,0 +1,12 @@
+{
+  "name": "pokecon-api-contract",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.13",
+  "engines": {
+    "bun": ">=1.3.13"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0"
+  }
+}

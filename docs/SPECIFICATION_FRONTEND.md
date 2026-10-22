@@ -718,6 +718,7 @@ Commands/
 | **動的設定の自動リロード** | グローバル`init.py`／`init.lua`のファイル監視を有効化するチェックボックス。正準ID: `auto_reload_config`。変更は単一のグローバルファイルウォッチャーへ即時反映し、グローバル`settings.toml`へ保存する | Checkbox |
 | **最終ウィンドウを閉じる動作** | 正準値`ask`／`shutdown`／`keep_backend`を選択するコンボボックス。表示ラベルは「毎回確認」／「すべて終了」／「バックエンドを継続」。正準ID: `ui.desktop.close_behavior`。変更は以後のウィンドウ閉じる操作へ即時反映し、グローバル`settings.toml`へ保存する | Combobox |
 | **デスクトップコンポジット無効化** (`disable_compositing`) | デスクトップモード（Tauri/WebView）のウィンドウ合成を無効化するチェックボックス。正準ID: `ui.desktop.disable_compositing`。グローバル専用、再起動必須（startup-only/restart-required）。変更時はチェック状態をグローバル`settings.toml`へ保存するが現在のプロセスには適用せず、「再起動後に反映」する旨をUI上に表示する。Webモードでは値を保持するが効果を持たない | Checkbox |
+| **環境の診断** | ダイアログ | バージョン、profile、設定revision、シリアル接続状態、カメラ状態、コマンド状態、realtime/mediaを表示する。「書込可否を確認」で現行言語設定の再書込を試し、「マスク済み診断をコピー」でsecretを含まないJSONをコピーする。旧Version確認の代替ではなく、起動可否の診断に限定する |
 | **Pythonライブラリ** | `python.script.packages.list`へ宣言済みライブラリを追加・削除するセクション。名前・バージョン（任意）・extras（カンマ区切り）を編集し、重複名と空名を拒否する。保存は次回ワーカー生成時の同期として扱い、保存結果を表示する | リスト編集＋追加/削除/保存 |
 | **コントローラーレイアウト** | コンボボックス | `ui.controller_layout`。`standard`（標準）／`wide_center`（中央広幅）／`left_heavy`（左広幅）／`right_heavy`（右広幅）／`stacked`（縦積み）を選択し、即時反映する |
 | **右パネル位置** | コンボボックス | `ui.right_panel_position`。`right`（右）／`bottom`（下）／`hidden`（非表示）を選択し、Output／Software-Controllerの配置へ即時反映する |

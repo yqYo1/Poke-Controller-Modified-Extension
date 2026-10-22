@@ -2,6 +2,7 @@
   import { browser } from '$app/environment';
 
   import type { SettingsWriteValues } from '../api';
+  import DiagnosticsDialog from './DiagnosticsDialog.svelte';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
 
   type SelectSetting =
@@ -670,6 +671,8 @@
       <p class="mt-2 text-[11px] text-red" role="alert">{packageError}</p>
     {/if}
   </section>
+
+  <DiagnosticsDialog {runtime} {view} />
 
   {#if (view.settings?.restart_required.length ?? 0) > 0 || Object.keys(view.settings?.apply_failures ?? {}).length > 0}
     <section class="rounded-lg border border-yellow/20 bg-yellow/[0.06] p-4" aria-labelledby="settings-status">

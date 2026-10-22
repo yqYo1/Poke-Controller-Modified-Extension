@@ -924,7 +924,7 @@ UI・表示系:
 
 コントローラー・入力:
 - [x] **Software-Controllerレイアウト（5+7）**: レイアウト定義をregistry化して切替可能にする。実装: `39f62b99`（`ui.controller_layout`をprofile設定へ追加 — `standard`／`wide_center`／`left_heavy`／`right_heavy`／`stacked`、CLI `--ui-controller-layout`、env `POKECON_UI_CONTROLLER_LAYOUT`。OtherTabのレイアウトselect、ControllerPanelのgrid切替（既存7 widget modesと併用）。registry/schema/typings/OpenAPI/SPEC/SETTINGS/TRACEABILITY更新。lib 656 passed、contract_sync 27 passed、web-check 159 passed・0 warnings、ci-fast 0）。
-- [ ] **Simulator実寸タッチ**: 実寸（320x240等倍）表示とカメラ映像の重ね表示。
+- [x] **Simulator実寸タッチ**: 実寸（320x240等倍）表示とカメラ映像の重ね表示。実装: `4669d7a8`（TouchPadへactualSize/streamを追加し、320×240固定表示時に利用可能なMediaStreamをvideoで重ねる。ControllerPanelに実寸チェックボックス、回帰テスト追加。web-check 161 passed・0 warnings、ci-fast 0、FRONTEND §6.3・TRACEABILITY更新）。
 - [x] **本体色**: コントローラー本体色の設定（プリセットの書出し含む）。実装: `5cd19bf0`（`ui.controller_body_color`をprofile設定へ追加 — `classic/black/white/red/blue/green/purple`、CLI `--ui-controller-body-color`、env `POKECON_UI_CONTROLLER_BODY_COLOR`。OtherTabの色selectとJSON書出し、ControllerPanelの本体色反映、registry/schema/typings/OpenAPI/SPEC/SETTINGS/TRACEABILITY更新。lib 656 passed、contract_sync 27 passed、web-check 156 passed・0 warnings、ci-fast 0）。
 - [ ] **ControllerProfiles複数対応**: `ControllerProfiles/*.json`方式の機種別マッチングとボタン割当セットアップ。
 - [ ] **機種別KeyConfig**: ゲーム機（Switch／3DS／DS／GameCube）別のキー割当と保存。

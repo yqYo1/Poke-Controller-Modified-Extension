@@ -2752,7 +2752,7 @@ mod tests {
         let loaded = SettingsPipeline::new(request(&temp, &["pokecon"], &[]))
             .load()
             .expect("pipeline must resolve");
-        assert_eq!(loaded.settings.values().len(), 82);
+        assert_eq!(loaded.settings.values().len(), 83);
         let names = loaded
             .settings
             .registry()
@@ -2760,6 +2760,6 @@ mod tests {
             .iter()
             .map(|setting| setting.surfaces.env.name.as_str())
             .collect::<BTreeSet<_>>();
-        assert_eq!(names.len(), 82);
+        assert_eq!(names.len(), 83);
     }
 }

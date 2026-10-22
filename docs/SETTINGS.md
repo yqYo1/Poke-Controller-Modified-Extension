@@ -314,6 +314,7 @@ profile切替は旧script workerの停止、新profileの検証、設定適用�
 | `ui.output_split_ratio` | `20` | 0から100 | I | あり |
 | `ui.stdout_destination` | `output_1` | `output_1`、`output_2` | I | あり |
 | `ui.right_panel_position` | `right` | `right`、`bottom`、`hidden` | P | あり |
+| `ui.controller_layout` | `standard` | `standard`、`wide_center`、`left_heavy`、`right_heavy`、`stacked` | P | あり |
 | `ui.controller_position` | `bottom` | `top`、`bottom` | I | あり |
 | `ui.controller_body_color` | `classic` | `classic`、`black`、`white`、`red`、`blue`、`green`、`purple` | P | あり |
 | `ui.dialog_button_position` | `bottom` | `bottom`、`top`、`both` | I | あり |

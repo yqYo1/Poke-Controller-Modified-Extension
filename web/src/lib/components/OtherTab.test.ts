@@ -40,6 +40,24 @@ describe('OtherTab', () => {
     expect(clearOutputs).toHaveBeenCalledOnce();
   });
 
+  it('writes the controller layout', async () => {
+    const { runtime, view } = runtimeView(
+      settingsSnapshot('1', { 'ui.controller_layout': 'standard' })
+    );
+    const writeSettings = vi.spyOn(runtime, 'writeSettings').mockResolvedValue({
+      recoveredRevisionConflict: false,
+      snapshot: settingsSnapshot('2', { 'ui.controller_layout': 'stacked' })
+    });
+    render(OtherTab, { runtime, view });
+
+    await fireEvent.change(screen.getByLabelText('コントローラーレイアウト'), {
+      target: { value: 'stacked' }
+    });
+    await waitFor(() => {
+      expect(writeSettings).toHaveBeenCalledWith({ 'ui.controller_layout': 'stacked' });
+    });
+  });
+
   it('writes the right panel position', async () => {
     const { runtime, view } = runtimeView(
       settingsSnapshot('1', { 'ui.right_panel_position': 'right' })

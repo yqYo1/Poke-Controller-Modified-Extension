@@ -1589,6 +1589,8 @@ export interface components {
             /** @enum {string} */
             "ui.stdout_destination"?: "output_1" | "output_2";
             /** @enum {string} */
+            "ui.controller_layout"?: "standard" | "wide_center" | "left_heavy" | "right_heavy" | "stacked";
+            /** @enum {string} */
             "ui.right_panel_position"?: "right" | "bottom" | "hidden";
             /** @enum {string} */
             "ui.controller_position"?: "top" | "bottom";
@@ -1727,6 +1729,8 @@ export interface components {
             "ui.output_split_ratio": number;
             /** @enum {string} */
             "ui.stdout_destination": "output_1" | "output_2";
+            /** @enum {string} */
+            "ui.controller_layout": "standard" | "wide_center" | "left_heavy" | "right_heavy" | "stacked";
             /** @enum {string} */
             "ui.right_panel_position": "right" | "bottom" | "hidden";
             /** @enum {string} */
@@ -1875,6 +1879,8 @@ export interface components {
             "ui.output_split_ratio"?: number;
             /** @enum {string} */
             "ui.stdout_destination"?: "output_1" | "output_2";
+            /** @enum {string} */
+            "ui.controller_layout"?: "standard" | "wide_center" | "left_heavy" | "right_heavy" | "stacked";
             /** @enum {string} */
             "ui.right_panel_position"?: "right" | "bottom" | "hidden";
             /** @enum {string} */

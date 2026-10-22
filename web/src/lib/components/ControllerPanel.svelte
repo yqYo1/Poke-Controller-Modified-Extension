@@ -22,6 +22,22 @@
   let visuallyReleased = new SvelteSet<GamepadButton>();
   let hatVisuallyReleased = $state(false);
   const bodyColor = $derived(view.settings?.values['ui.controller_body_color'] ?? 'classic');
+  const layoutGrid = $derived.by(() => {
+    const layout = view.settings?.values['ui.controller_layout'] ?? 'standard';
+    if (compact && layout === 'standard') return 'grid-cols-[1fr_1.35fr_1fr]';
+    switch (layout) {
+      case 'wide_center':
+        return 'grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]';
+      case 'left_heavy':
+        return 'grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)]';
+      case 'right_heavy':
+        return 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.35fr)]';
+      case 'stacked':
+        return 'grid-cols-1';
+      default:
+        return 'grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]';
+    }
+  });
   const sharedBodyClass = $derived.by(() => {
     switch (bodyColor) {
       case 'black':
@@ -193,7 +209,7 @@
     </span>
   </div>
 
-  <div class={`grid gap-3 p-3 ${compact ? 'grid-cols-[1fr_1.35fr_1fr]' : 'grid-cols-1 sm:grid-cols-[1fr_1.4fr_1fr]'}`}>
+  <div class={`grid gap-3 p-3 ${layoutGrid}`}>
     <div class={`rounded-lg p-2 ${leftBodyClass}`}>
       <div class="grid grid-cols-2 gap-1">
         {#each leftButtons as button (button)}

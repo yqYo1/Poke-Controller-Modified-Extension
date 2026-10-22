@@ -80,6 +80,13 @@ type UiStdoutDestination = Literal[
     "output_1",
     "output_2",
 ]
+type UiControllerLayout = Literal[
+    "standard",
+    "wide_center",
+    "left_heavy",
+    "right_heavy",
+    "stacked",
+]
 type UiRightPanelPosition = Literal[
     "right",
     "bottom",
@@ -280,6 +287,7 @@ class _OptUi:
     camera: _OptUiCamera
     desktop: _OptUiDesktop
     controller_body_color: UiControllerBodyColor
+    controller_layout: UiControllerLayout
     controller_position: UiControllerPosition
     dialog_button_position: UiDialogButtonPosition
     fps: int

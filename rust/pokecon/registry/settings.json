@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "specification_version": "2.2.0",
-  "expected_setting_count": 82,
+  "expected_setting_count": 83,
   "settings": [
     {
       "id": "language",
@@ -2377,6 +2377,59 @@
         "ui": {
           "access": "read_write",
           "control": "radio_group"
+        },
+        "openapi": {
+          "access": "read_write",
+          "masked_read": false
+        }
+      },
+      "secret": false,
+      "invalid_toml_value": "use_default",
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ]
+    },
+    {
+      "id": "ui.controller_layout",
+      "value": {
+        "kind": "enum",
+        "values": [
+          "standard",
+          "wide_center",
+          "left_heavy",
+          "right_heavy",
+          "stacked"
+        ],
+        "ascii_case_insensitive": true
+      },
+      "default": {
+        "kind": "literal",
+        "value": "standard"
+      },
+      "scope": "profile",
+      "mutability": "runtime_immediate",
+      "surfaces": {
+        "toml": {
+          "name": "ui.controller_layout"
+        },
+        "dynamic": {
+          "name": "pokecon.opt.ui.controller_layout"
+        },
+        "cli": {
+          "flags": [
+            "--ui-controller-layout"
+          ],
+          "encoding": "scalar",
+          "discouraged": false
+        },
+        "env": {
+          "name": "POKECON_UI_CONTROLLER_LAYOUT",
+          "encoding": "scalar"
+        },
+        "ui": {
+          "access": "read_write",
+          "control": "select"
         },
         "openapi": {
           "access": "read_write",

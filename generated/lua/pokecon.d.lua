@@ -35,6 +35,7 @@
 ---@alias NotificationsLineMenuBehavior "message"|"noop"
 ---@alias UiWidgetMode "all"|"outputs"|"output_1_controller"|"output_2_controller"|"output_1"|"output_2"|"controller"
 ---@alias UiStdoutDestination "output_1"|"output_2"
+---@alias UiControllerLayout "standard"|"wide_center"|"left_heavy"|"right_heavy"|"stacked"
 ---@alias UiRightPanelPosition "right"|"bottom"|"hidden"
 ---@alias UiControllerPosition "top"|"bottom"
 ---@alias UiControllerBodyColor "classic"|"black"|"white"|"red"|"blue"|"green"|"purple"
@@ -197,6 +198,7 @@
 ---@field camera PokeconOptUiCamera
 ---@field desktop PokeconOptUiDesktop
 ---@field controller_body_color UiControllerBodyColor
+---@field controller_layout UiControllerLayout
 ---@field controller_position UiControllerPosition
 ---@field dialog_button_position UiDialogButtonPosition
 ---@field fps integer

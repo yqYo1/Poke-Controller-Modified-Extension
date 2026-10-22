@@ -8,6 +8,7 @@
     | 'ui.stdout_destination'
     | 'ui.widget_mode'
     | 'ui.right_panel_position'
+    | 'ui.controller_layout'
     | 'ui.controller_position'
     | 'ui.controller_body_color'
     | 'ui.dialog_button_position'
@@ -92,6 +93,12 @@
     } else if (setting === 'ui.widget_mode') {
       await write({
         'ui.widget_mode': value as NonNullable<SettingsWriteValues['ui.widget_mode']>
+      });
+    } else if (setting === 'ui.controller_layout') {
+      await write({
+        'ui.controller_layout': value as NonNullable<
+          SettingsWriteValues['ui.controller_layout']
+        >
       });
     } else if (setting === 'ui.right_panel_position') {
       await write({
@@ -374,6 +381,21 @@
           {#each widgetModes as mode (mode[0])}
             <option value={mode[0]}>{english ? mode[1] : mode[2]}</option>
           {/each}
+        </select>
+      </label>
+      <label>
+        <span class="text-xs font-medium text-subtext1">{t('Controller layout', 'コントローラーレイアウト')}</span>
+        <select
+          aria-label={t('Controller layout', 'コントローラーレイアウト')}
+          class="mt-1 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text"
+          value={values?.['ui.controller_layout'] ?? 'standard'}
+          onchange={(event) => void changeSelect(event, 'ui.controller_layout')}
+        >
+          <option value="standard">{t('Standard', '標準')}</option>
+          <option value="wide_center">{t('Wide center', '中央広幅')}</option>
+          <option value="left_heavy">{t('Left heavy', '左広幅')}</option>
+          <option value="right_heavy">{t('Right heavy', '右広幅')}</option>
+          <option value="stacked">{t('Stacked', '縦積み')}</option>
         </select>
       </label>
       <label>

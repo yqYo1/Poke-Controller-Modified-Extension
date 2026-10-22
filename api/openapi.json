@@ -6349,6 +6349,16 @@
               "output_2"
             ]
           },
+          "ui.controller_layout": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "wide_center",
+              "left_heavy",
+              "right_heavy",
+              "stacked"
+            ]
+          },
           "ui.right_panel_position": {
             "type": "string",
             "enum": [
@@ -6813,6 +6823,16 @@
               "output_2"
             ]
           },
+          "ui.controller_layout": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "wide_center",
+              "left_heavy",
+              "right_heavy",
+              "stacked"
+            ]
+          },
           "ui.right_panel_position": {
             "type": "string",
             "enum": [
@@ -7024,6 +7044,7 @@
           "ui.widget_mode",
           "ui.output_split_ratio",
           "ui.stdout_destination",
+          "ui.controller_layout",
           "ui.right_panel_position",
           "ui.controller_position",
           "ui.controller_body_color",
@@ -7383,6 +7404,16 @@
             "enum": [
               "output_1",
               "output_2"
+            ]
+          },
+          "ui.controller_layout": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "wide_center",
+              "left_heavy",
+              "right_heavy",
+              "stacked"
             ]
           },
           "ui.right_panel_position": {

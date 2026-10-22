@@ -3001,7 +3001,7 @@ validate_http_contract() {
     and (.data.instance_id | length) > 0
     and (.data.revision | type) == "string"
     and (.data.values | type) == "object"
-    and (.data.values | length) == 74
+    and (.data.values | length) == 75
     and (.data.pending_restart_values | type) == "object"
     and (.data.restart_required | type) == "array"
     and (.data.apply_failures | type) == "object"
